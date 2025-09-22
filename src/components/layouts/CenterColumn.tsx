@@ -8,7 +8,7 @@ import VoiceModeUI from '../molecules/VoiceModeUI.tsx';
 import { promptStore } from "@/stores/promptStore.ts";
 import { useToast } from '@/hooks/useToast.ts';
 import { digitalBrainAPI } from '@/api/mockDigitalBrainApi';
-import { MessageSquare, Mic, MicOff } from 'lucide-react';
+import { MessageSquare, Mic, MicOff, X } from 'lucide-react';
 
 const CenterColumn: React.FC = () => {
     const { user } = useAuth();
@@ -86,11 +86,10 @@ const CenterColumn: React.FC = () => {
             .replace(/([.!?])?\s*$/, match => match.includes('.') || match.includes('!') || match.includes('?') ? match : '.');
     };
 
-    // Auto-engage chat when voice mode is activated
+    // Consolidated interaction mode management
     useEffect(() => {
-        if (isVoiceMessage || isListening) {
+        if (isListening || isVoiceMessage) {
             setInteractionMode('voice');
-            
             // Automatically open chat interface when voice mode starts
             if (!isConversationStarted) {
                 toggleConversationStarted();
@@ -101,17 +100,6 @@ const CenterColumn: React.FC = () => {
             setInteractionMode('idle');
         }
     }, [isListening, isVoiceMessage, isConversationStarted, history.length, toggleConversationStarted]);
-
-    // Update interaction mode based on current state
-    useEffect(() => {
-        if (isListening || isVoiceMessage) {
-            setInteractionMode('voice');
-        } else if (isConversationStarted || history.length > 0) {
-            setInteractionMode('chat');
-        } else {
-            setInteractionMode('idle');
-        }
-    }, [isListening, isVoiceMessage, isConversationStarted, history.length]);
 
     const handleSendMessage = () => {
         if (!input.message.trim()) return;
@@ -178,17 +166,21 @@ What specific aspect would you like to focus on first?`;
 What would you like to work on today?`;
     };
 
+    const showVoiceNotSupportedToast = () => {
+        toast({
+            title: "Voice Recognition Not Available",
+            description: "Voice input is not supported in this browser. Please try Chrome, Edge, or Safari.",
+            duration: 30000,
+        });
+    };
+
     const handleSphereClick = () => {
         if (!isSupported) {
-            toast({
-                title: "Voice Recognition Not Available",
-                description: "Voice input is not supported in this browser. Please try Chrome, Edge, or Safari.",
-                duration: 30000,
-            });
+            showVoiceNotSupportedToast();
             return;
         }
 
-        // Enter/exit true voice-to-voice mode (keeps sphere visible above chat)
+        // Toggle voice-to-voice mode (sphere interaction)
         setVoiceSource('sphere');
         if (isListening) {
             stopListening();
@@ -198,57 +190,46 @@ What would you like to work on today?`;
         toggleVoiceMessage();
     };
 
-    // Chat input microphone: trigger voice-to-text, stay in chat mode, do not auto-send.
     const handleChatMicClick = () => {
         if (!isSupported) {
-            toast({
-                title: "Voice Recognition Not Available",
-                description: "Voice input is not supported in this browser. Please try Chrome, Edge, or Safari.",
-                duration: 30000,
-            });
+            showVoiceNotSupportedToast();
             return;
         }
+
+        // Voice-to-text mode (chat input mic)
         setVoiceSource('chat');
         if (isListening) {
             stopListening();
         } else {
             startListening();
         }
-        // Ensure chat is open
+
+        // Ensure chat is open for voice-to-text
         if (!isConversationStarted) {
             toggleConversationStarted();
         }
-        setInteractionMode('chat');
     };
 
-    // NEW: Handle stopping voice mode completely
     const handleStopVoiceMode = () => {
-        // Stop listening if active
+        // Stop listening and clear all voice-related state
         if (isListening) {
             stopListening();
         }
-        
-        // Clear any pending timeouts
+
+        // Clear any pending auto-send timeouts
         if (transcriptTimeoutRef.current) {
             clearTimeout(transcriptTimeoutRef.current);
             transcriptTimeoutRef.current = null;
         }
-        
-        // Reset voice state
+
+        // Reset all voice states
         if (isVoiceMessage) {
             toggleVoiceMessage();
         }
         setVoiceSource(null);
-        
-        // Reset transcription state
         setIsTranscribing(false);
-        
-        // Return to chat mode if conversation exists, otherwise idle
-        if (isConversationStarted || history.length > 0) {
-            setInteractionMode('chat');
-        } else {
-            setInteractionMode('idle');
-        }
+
+        // Mode will be updated by the useEffect based on conversation state
     };
 
     const handleStartChat = () => {
@@ -287,10 +268,10 @@ What would you like to work on today?`;
     }, [voiceError, isListening, isVoiceMessage, isSupported, toast]);
 
     return (
-        <div className="h-full flex items-start justify-center relative pt-20">
+        <div className="h-full flex items-start justify-center relative pt-20 transition-all duration-500 ease-in-out">
             {/* Central Sphere - The Avatar (hidden when chat is active) - Horizontally adjusted */}
             {interactionMode === 'idle' && (
-                <div className="flex flex-col items-center translate-x-12">
+                <div className="flex flex-col items-center translate-x-12 animate-in fade-in-0 slide-in-from-bottom-4 duration-700">
                     <div className="relative transition-all duration-700 ease-out mb-16 transform translate-y-0 scale-125">
                         <SphereChat
                             size={260}
@@ -343,9 +324,9 @@ What would you like to work on today?`;
                 </div>
             )}
 
-            {/* Voice Mode UI - NEW: Enhanced UX with stop control */}
+            {/* Voice Mode UI - Enhanced UX with stop control */}
             {interactionMode === 'voice' && (
-                <div className="absolute inset-x-0 top-0 bottom-0 flex flex-col items-center justify-start pt-16 animate-in fade-in-0 duration-500">
+                <div className="absolute inset-x-0 top-0 bottom-0 flex flex-col items-center justify-start pt-16 animate-in fade-in-0 slide-in-from-top-4 duration-500">
                     {/* Voice Mode Interface */}
                     <div className="mb-8">
                         <VoiceModeUI
@@ -358,7 +339,7 @@ What would you like to work on today?`;
 
                     {/* Auto-engaged Chat Interface - appears below voice UI */}
                     <div className="w-full h-3/5 mx-4 flex items-center justify-center">
-                        <div className="bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6 w-full h-full shadow-2xl flex flex-col">
+                        <div className="bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6 w-full h-full shadow-2xl flex flex-col transition-all duration-300 hover:border-slate-600/50">
                             {/* Chat Header */}
                             <div className="flex items-center justify-between mb-4 flex-shrink-0">
                                 <div className="flex items-center gap-3">
@@ -375,10 +356,11 @@ What would you like to work on today?`;
                                 <Button
                                     onClick={handleStopVoiceMode}
                                     variant="ghost"
-                                    size="sm"
-                                    className="text-slate-400 hover:text-white"
+                                    size="icon"
+                                    aria-label="Exit voice mode"
+                                    className="text-slate-400 hover:text-red-400 transition-colors duration-200"
                                 >
-                                    Exit Voice
+                                    <X className="w-4 h-4" />
                                 </Button>
                             </div>
 
@@ -408,10 +390,22 @@ What would you like to work on today?`;
 
             {/* Chat Interface - Sheet Style (when not in voice mode) */}
             {interactionMode === 'chat' && (
-                <div className="absolute inset-x-0 top-0 bottom-0 flex items-center justify-center animate-in fade-in-0 duration-500">
+                <div className="absolute inset-x-0 top-0 bottom-0 flex flex-col items-center justify-center animate-in fade-in-0 slide-in-from-right-4 duration-500 pt-24">
+                    {/* Avatar positioned above chat - no overlap */}
+                    <div className="mb-4 transition-all duration-500">
+                        <SphereChat
+                            size={120}
+                            onClick={handleSphereClick}
+                            voiceSupported={isSupported}
+                            isListening={isVoiceMessage || isListening}
+                            isThinking={isResponding}
+                            isResponding={isConversationStarted && !isResponding && history.length > 0}
+                        />
+                    </div>
+
                     {/* Chat Sheet - Full Width */}
-                    <div className="relative w-full h-full mx-4 flex items-center justify-center">
-                        <div className="bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6 w-full h-5/6 shadow-2xl flex flex-col">
+                    <div className="relative w-full h-full mx-4 flex items-start justify-center">
+                        <div className="bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6 w-full h-full shadow-2xl flex flex-col max-h-[70vh] transition-all duration-300 hover:border-slate-600/50">
                             {/* Chat Header */}
                             <div className="flex items-center justify-between mb-4 flex-shrink-0">
                                 <div className="flex items-center gap-3">
@@ -438,10 +432,11 @@ What would you like to work on today?`;
                                     <Button
                                         onClick={handleEndChat}
                                         variant="ghost"
-                                        size="sm"
-                                        className="text-slate-400 hover:text-white"
+                                        size="icon"
+                                        aria-label="Close chat"
+                                        className="text-slate-400 hover:text-red-400 transition-colors duration-200"
                                     >
-                                        Minimize
+                                        <X className="w-4 h-4" />
                                     </Button>
                                 </div>
                             </div>
@@ -463,22 +458,6 @@ What would you like to work on today?`;
                                     isMicSupported={isSupported}
                                 />
                             </div>
-                        </div>
-
-                        {/* Avatar positioned 1/4 in, 3/4 out on top edge, horizontally adjusted 3rem right */}
-                        <div className="absolute top-0 left-1/2 transform -translate-x-1/2 translate-x-12 -translate-y-1/4 z-10">
-                            <div className="animate-pulse-soft">
-                                <SphereChat
-                                    onClick={handleSphereClick}
-                                    voiceSupported={isSupported}
-                                    isListening={isVoiceMessage || isListening}
-                                    isThinking={isResponding}
-                                    isResponding={isConversationStarted && !isResponding && history.length > 0}
-                                />
-                            </div>
-                            {/* Enhanced glow effect */}
-                            <div className="absolute inset-0 -z-10 bg-[#FF7000]/25 rounded-full blur-xl animate-pulse-soft"></div>
-                            <div className="absolute inset-0 -z-20 bg-[#FF7000]/10 rounded-full blur-2xl scale-150 animate-pulse-soft"></div>
                         </div>
                     </div>
                 </div>

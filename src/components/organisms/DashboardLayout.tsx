@@ -14,7 +14,7 @@ import ErrorBoundary from '@/components/atoms/ErrorBoundary.tsx';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/atoms/Dialog.tsx';
 import ProjectForm from '@/components/molecules/ProjectForm.tsx';
 import FlowerOfLife from '@/components/atoms/FlowerOfLife.tsx';
-import SacredModal from '@/components/molecules/SacredModal.tsx';
+import GetCenteredCard from '@/components/molecules/GetCenteredCard.tsx';
 
 interface DashboardLayoutProps {
   userName: string;
@@ -146,126 +146,33 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ userName }) => {
             />
           </div>
 
-          {/* Two-Column Layout with Top Row */}
-          <div className="flex-1 flex flex-col space-y-6">
-            {/* Active Projects Card - Match Daily Snapshot width */}
-            <div className="flex-shrink-0 flex justify-center">
-              <div className="w-full max-w-sm">
-                <AtmoCard variant="orange" className="w-full h-48" hover={true}>
-                  <CardHeader className="pb-3 pt-4 px-6">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-lg bg-[#FF5F1F]/20">
-                          <Target className="w-5 h-5 text-[#FF5F1F]" />
-                        </div>
-                        <div>
-                          <span className="text-sm font-semibold text-white">Active Projects</span>
-                          <p className="text-xs text-slate-300">Current work in progress</p>
-                        </div>
-                      </div>
-                      
-                      {/* Compact Analytics - Same Row */}
-                      <div className="flex items-center gap-8">
-                        <div className="text-right">
-                          <div className="text-base font-bold text-[#FF5F1F]">{completionRate}%</div>
-                          <div className="text-xs text-slate-400">Progress</div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-base font-bold text-green-400">{completedTasks}</div>
-                          <div className="text-xs text-slate-400">Done</div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-base font-bold text-red-400">{highPriorityTasks}</div>
-                          <div className="text-xs text-slate-400">High</div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-base font-bold text-yellow-400">{mediumPriorityTasks}</div>
-                          <div className="text-xs text-slate-400">Medium</div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-base font-bold text-blue-400">{activeProjects.length}</div>
-                          <div className="text-xs text-slate-400">Projects</div>
-                        </div>
-                      </div>
+          {/* Main Content Layout - Centered */}
+          <div className="flex-1 flex items-center justify-center">
+            <div className="w-full max-w-7xl grid grid-cols-12 gap-8">
+              {/* Main Column - Chat */}
+              <div className="col-span-8 flex flex-col">
+                <ErrorBoundary fallback={
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-center text-white/60">
+                      <p>Chat interface temporarily unavailable</p>
                     </div>
-                  </CardHeader>
-                  <CardContent className="px-6 pb-4 pt-0">
-                    {/* Projects List - Horizontal Fill First */}
-                    <HorizontalScrollGrid
-                      emptyState={
-                        <div className="h-full flex items-center justify-center">
-                          <div className="text-center">
-                            <Target className="w-8 h-8 text-slate-500 mx-auto mb-3" />
-                            <p className="text-slate-400 text-sm mb-3">No active projects</p>
-                            <Button
-                              size="sm"
-                              className="bg-[#FF7000]/20 hover:bg-[#FF7000]/30 text-[#FF7000] border border-[#FF7000]/30 gap-2"
-                              onClick={() => setShowNewProjectModal(true)}
-                            >
-                              <Plus className="w-3 h-3" />
-                              New Project
-                            </Button>
-                          </div>
-                        </div>
-                      }
-                    >
-                      {activeProjects.map((project) => (
-                        <div key={project.id} className="flex-shrink-0 w-32 p-3 bg-black/20 rounded-lg hover:bg-black/30 transition-colors">
-                          <div className="flex items-center gap-2 mb-2">
-                            <div className="w-2 h-2 rounded-full bg-[#FF5F1F]"></div>
-                            <h4 className="text-white text-xs font-medium truncate flex-1">{project.name}</h4>
-                          </div>
-                          <div className="text-xs text-[#FF5F1F] font-medium mb-2">{project.progress || 0}%</div>
-                          <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
-                            <div 
-                              className="h-full bg-[#FF5F1F] rounded-full transition-all duration-500"
-                              style={{ width: `${project.progress || 0}%` }}
-                            />
-                          </div>
-                        </div>
-                      ))}
-                      {/* Add Project Button */}
-                      <div 
-                        className="flex-shrink-0 w-32 p-3 bg-black/10 border border-dashed border-[#FF5F1F]/30 rounded-lg hover:bg-black/20 hover:border-[#FF5F1F]/50 transition-colors flex flex-col items-center justify-center cursor-pointer"
-                        onClick={() => setShowNewProjectModal(true)}
-                      >
-                        <Plus className="w-4 h-4 text-[#FF5F1F]/60 mb-1" />
-                        <span className="text-xs text-[#FF5F1F]/60">Add Project</span>
-                      </div>
-                    </HorizontalScrollGrid>
-                  </CardContent>
-                </AtmoCard>
+                  </div>
+                }>
+                  <CenterColumn />
+                </ErrorBoundary>
               </div>
-            </div>
 
-            {/* Main Content Row - Centered Two-Column Layout */}
-            <div className="flex-1 flex justify-center">
-              <div className="w-full max-w-7xl grid grid-cols-12 gap-8">
-                {/* Main Column - Chat */}
-                <div className="col-span-8 flex flex-col">
-                  <ErrorBoundary fallback={
-                    <div className="flex items-center justify-center h-full">
-                      <div className="text-center text-white/60">
-                        <p>Chat interface temporarily unavailable</p>
+              {/* Companion Column - Daily Information */}
+              <div className="col-span-4 flex flex-col">
+                <div className="h-full flex items-center justify-center">
+                  <div className="w-full max-w-sm">
+                    <ErrorBoundary fallback={
+                      <div className="bg-slate-800/20 rounded-xl p-4 text-center text-white/60">
+                        <p>Daily snapshot temporarily unavailable</p>
                       </div>
-                    </div>
-                  }>
-                    <CenterColumn />
-                  </ErrorBoundary>
-                </div>
-
-                {/* Companion Column - Daily Information */}
-                <div className="col-span-4 flex flex-col">
-                  <div className="h-full flex items-start justify-center pt-4">
-                    <div className="w-full max-w-sm">
-                      <ErrorBoundary fallback={
-                        <div className="bg-slate-800/20 rounded-xl p-4 text-center text-white/60">
-                          <p>Daily snapshot temporarily unavailable</p>
-                        </div>
-                      }>
-                        <CompactDailySnapshot />
-                      </ErrorBoundary>
-                    </div>
+                    }>
+                      <CompactDailySnapshot />
+                    </ErrorBoundary>
                   </div>
                 </div>
               </div>
@@ -274,9 +181,9 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ userName }) => {
         </div>
       </div>
 
-      {/* Sacred Geometry Modal */}
-      <SacredModal 
-        isOpen={showSacredModal} 
+      {/* Get Centered Card */}
+      <GetCenteredCard
+        isOpen={showSacredModal}
         onClose={() => setShowSacredModal(false)}
       />
 

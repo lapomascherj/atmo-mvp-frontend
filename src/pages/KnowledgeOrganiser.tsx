@@ -142,28 +142,42 @@ const KnowledgeOrganiser: React.FC = () => {
         const fetchData = async () => {
             if (pb && user && mounted) {
                 try {
-                    await fetchProjects(user.iam); // Use user IAM as token
-                    await fetchIntegrations(pb);
-                    
-                    // Initialize PersonasStore to load knowledge items
-                    if (!currentPersona && !personasLoading) {
-                        // Fetch persona data which includes expanded knowledge items
-                        fetchPersonaByIam(pb, user.iam).catch(error => {
-                            console.debug("PersonasStore initialization auto-cancelled or failed");
-                        });
+                    console.log('🔄 KnowledgeOrganiser: Starting data fetch for user:', user.iam);
+
+                    // Fetch projects and integrations in parallel
+                    const [projectsResult, integrationsResult] = await Promise.allSettled([
+                        fetchProjects(user.iam),
+                        fetchIntegrations(pb)
+                    ]);
+
+                    console.log('✅ KnowledgeOrganiser: Projects and integrations fetched');
+
+                    // Initialize PersonasStore only once
+                    if (!currentPersona && !personasLoading && mounted) {
+                        console.log('🔄 KnowledgeOrganiser: Fetching persona data');
+                        try {
+                            await fetchPersonaByIam(pb, user.iam);
+                        } catch (error) {
+                            console.log('⚠️ KnowledgeOrganiser: Persona fetch failed (expected for demo)');
+                        }
                     }
+
+                    console.log('✅ KnowledgeOrganiser: Data fetch completed');
                 } catch (error) {
-                    console.debug('Data fetch completed with potential auto-cancellations');
+                    console.log('⚠️ KnowledgeOrganiser: Data fetch completed with errors (expected for demo)');
                 }
             }
         };
 
-        fetchData();
+        // Only fetch data once when component mounts
+        if (pb && user) {
+            fetchData();
+        }
 
         return () => {
             mounted = false;
         };
-    }, [pb, user, fetchProjects, fetchIntegrations, currentPersona, personasLoading, fetchPersonaByIam]);
+    }, []); // Empty dependency array to prevent infinite loops
 
     // Helper function to get items by project (for compatibility with existing code)
     const getItemsByProject = (projectId: string): KnowledgeItem[] => {

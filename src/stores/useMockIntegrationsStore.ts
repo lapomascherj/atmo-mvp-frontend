@@ -25,8 +25,7 @@ export const useIntegrationsStore = create<MockIntegrationsStoreState>((set) => 
   
   fetchIntegrations: async () => {
     set({ loading: true });
-    // Mock delay
-    await new Promise(resolve => setTimeout(resolve, 500));
+    // Return immediately for demo
     set({ loading: false, integrations: [] });
   },
   

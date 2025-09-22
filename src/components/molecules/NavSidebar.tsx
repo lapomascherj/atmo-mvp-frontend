@@ -14,11 +14,17 @@ interface NavItemProps {
 }
 
 const NavItem = ({icon, label, to, isActive, isCollapsed}: NavItemProps) => {
+    const handleClick = (e: React.MouseEvent) => {
+        console.log('NavItem clicked:', { label, to, isActive });
+        // Let the Link handle navigation normally
+    };
+
     return (
         <Link
             to={to}
+            onClick={handleClick}
             className={cn(
-                'flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-300 group relative',
+                'flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-300 group relative cursor-pointer',
                 isCollapsed ? 'justify-center' : '',
                 isActive
                     ? 'bg-[#010024]/60 text-[#E3E3E3] shadow-inner shadow-white/5'
@@ -60,7 +66,6 @@ const NavSidebar: React.FC = () => {
     const navItems = [
         {icon: <LayoutDashboard size={20}/>, label: 'Dashboard', to: '/'},
         {icon: <Brain size={20}/>, label: 'Digital Brain', to: '/knowledge-organiser'},
-        {icon: <FileText size={20}/>, label: 'New Page', to: '/new-page'},
         {icon: <Calendar size={20}/>, label: 'Calendar', to: '/calendar'},
     ];
 
@@ -71,19 +76,21 @@ const NavSidebar: React.FC = () => {
     const userName = user?.nickname || user?.email?.split('@')[0] || 'User';
     const avatarUrl = user?.avatar_url || null;
 
-    // Handle hover expansion
+    // Handle hover expansion with better logic
     const handleMouseEnter = () => {
         setIsHovering(true);
         if (isCollapsed) {
-            setIsCollapsed(false);
+            setTimeout(() => setIsCollapsed(false), 100);
         }
     };
 
     const handleMouseLeave = () => {
         setIsHovering(false);
-        if (!isCollapsed && isHovering) {
-            setIsCollapsed(true);
-        }
+        setTimeout(() => {
+            if (isHovering === false) {
+                setIsCollapsed(true);
+            }
+        }, 300);
     };
 
     return (

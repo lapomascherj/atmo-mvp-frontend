@@ -237,6 +237,51 @@ export const usePersonasStore = create<PersonasStoreState>((set, get) => ({
       return currentPersona;
     }
 
+    // Return mock data immediately for demo
+    if (iam === 'demo-user-iam') {
+      const mockPersona = {
+        id: 'demo-persona-1',
+        iam: 'demo-user-iam',
+        nickname: 'Demo User',
+        onboarding_completed: true,
+        expand: {
+          projects: [
+            {
+              id: 'demo-project-1',
+              name: 'Sample Project',
+              description: 'A demonstration project for the MVP',
+              status: 'active',
+              priority: 'medium',
+              progress: 45,
+              startDate: new Date().toISOString(),
+              expand: {
+                goals: [],
+                items: [],
+                milestones: []
+              }
+            }
+          ],
+          items: [
+            {
+              id: 'demo-item-1',
+              title: 'Welcome to ATMO',
+              content: 'This is a sample knowledge item to demonstrate the Digital Brain functionality.',
+              type: 'note',
+              source: 'manual',
+              tags: ['demo', 'welcome'],
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            }
+          ],
+          integrations: []
+        }
+      } as ExpandedPersona;
+
+      set({ currentPersona: mockPersona, loading: false });
+      console.log("✅ PERSONA STORE: Loaded mock persona for demo");
+      return mockPersona;
+    }
+
     const result = await withPocketBase(
       async () => {
         set({ loading: true, error: null });
@@ -253,24 +298,16 @@ export const usePersonasStore = create<PersonasStoreState>((set, get) => ({
         );
         const authenticatedPb = await getAuthenticatedPocketBase();
 
-        // Add timeout to prevent getting stuck
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error("Persona fetch timeout")), 5000);
-        });
-
         try {
-          const fetchPromise = authenticatedPb
+          console.debug("🔍 PERSONA STORE: Making PocketBase request for personas");
+
+          const existingPersonas = await authenticatedPb
             .collection("personas")
             .getList<ExpandedPersona>(1, 1, {
               filter: `iam = "${iam}"`,
               expand:
                 "integrations,items,projects,projects.goals,projects.goals.tasks,projects.milestones,projects.items",
             });
-
-          const existingPersonas = (await Promise.race([
-            fetchPromise,
-            timeoutPromise,
-          ])) as any;
 
           const persona = existingPersonas.items[0] || null;
 

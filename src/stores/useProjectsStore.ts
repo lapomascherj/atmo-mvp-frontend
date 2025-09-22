@@ -54,24 +54,30 @@ export const useProjectsStore = create<ProjectsStoreState>((set, get) => ({
     try {
       set({ loading: true, error: null });
 
+      // For demo, return mock projects immediately
+      if (token === 'demo-user-iam') {
+        const mockProjects = [
+          {
+            id: 'demo-project-1',
+            name: 'Sample Project',
+            description: 'A demonstration project for the MVP',
+            status: 'active',
+            priority: 'medium',
+            progress: 45,
+            startDate: new Date().toISOString(),
+            goals: [],
+            items: [],
+            milestones: []
+          }
+        ];
+
+        set({ projects: mockProjects, loading: false });
+        console.log("✅ PROJECTS STORE: Loaded mock projects for demo");
+        return;
+      }
+
       // Ensure PersonasStore is loaded first
       const personasStore = usePersonasStore.getState();
-
-      // If no current persona, try to fetch it first
-      if (!personasStore.currentPersona && token) {
-        console.debug(
-          "📦 PROJECTS STORE: PersonasStore not loaded, fetching persona first"
-        );
-        const pb = getPocketBase();
-
-        try {
-          await personasStore.fetchPersonaByIam(pb, token);
-        } catch (error) {
-          console.debug(
-            "PersonasStore fetch auto-cancelled or failed, continuing with empty projects"
-          );
-        }
-      }
 
       // Get projects from centralized Persona store
       const projects = personasStore.getProjects();

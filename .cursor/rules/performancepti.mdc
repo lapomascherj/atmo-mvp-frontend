@@ -1,0 +1,37 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+Rule Name: performance
+Description: 
+# PERFORMANCE OPTIMIZATION PROTOCOL
+
+1. INITIAL LOAD SPEED: Aim for sub-1.5 second initial load time. Implement:
+   - Code splitting with dynamic imports
+   - Aggressive lazy loading for non-critical components
+   - Preload critical resources
+
+2. BUNDLE SIZE CONTROL: 
+   - Main bundle must stay under 200KB (gzipped)
+   - Monitor bundle size in CI/CD pipeline
+   - Tree-shake all imports rigorously
+
+3. RENDER OPTIMIZATION:
+   - Prevent unnecessary re-renders with memoization
+   - Use virtualization for long lists
+   - Implement proper key usage in lists
+
+4. ANIMATION PERFORMANCE:
+   - Target 60fps for all animations
+   - Use GPU-accelerated properties
+   - Debounce and throttle expensive operations
+
+5. ASSET OPTIMIZATION:
+   - Compress all images appropriately
+   - Use WebP with fallbacks
+   - Implement responsive images
+6. API EFFICIENCY:
+   - Cache responses where appropriate
+   - Implement stale-while-revalidate patterns
+   - Batch API requests where possible

@@ -1,0 +1,61 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+name: atmo_ui_guidelines
+type: always
+description: >
+  ATMO front-end design rules for a clean, dark, futuristic interface. These rules prioritize UI clarity, consistency, and non-intrusive aesthetic flair while maintaining full backend compatibility.
+
+---
+
+## 🎨 DESIGN PHILOSOPHY
+
+- Use a **dark background** as the base (`#0a0a21`, `#111`, or similar).
+- Prioritize **clarity over decoration**. Aesthetic should support function, not distract.
+- Balance between **minimalism** and **futuristic glow** — limited gradients, soft neon shadows, and ambient light effects.
+
+## 🧱 COMPONENT STRUCTURE
+
+### BaseLayout
+- Always maintain **visual hierarchy**. Use large headers, medium subtext, and compact detail text.
+- Spacing is key: maintain **clean margins** and **even vertical rhythm**.
+- Break layout into **clear visual blocks**. Don’t overcrowd.
+
+### Navigation
+- Use a **left vertical sidebar**.
+- Collapsed by default on mobile, with icon-only mode.
+- On hover, sidebar items should expand smoothly with tooltips or labels.
+- Avoid overlapping modals or stacked panes.
+
+### Cards & Modules
+- Rounded corners (`border-radius: 20px`).
+- Use **subtle shadows** and **depth layering** to highlight active components.
+- Each card should serve a specific purpose: **information, interaction, or call-to-action**.
+
+## 🧠 AVATAR & AI ELEMENTS
+
+- The assistant (AI avatar) should appear as a **floating sphere or abstract orb**, placed logically (e.g., bottom right or center modal).
+- Use **animated soft glow** or **pulsing ring** to signal interaction.
+- Color palette: gradients using ATMO's colors — **deep violet, indigo blue, soft orange, cosmic teal**.
+
+## 🔠 TYPOGRAPHY
+
+- Use clean, modern fonts: `Inter`, `Helvetica Neue`, or `Suisse Intl`.
+- Font weights: Light (300) for captions, Regular (400–500) for body, Bold (600+) for titles.
+- Line-height should be optimized for readability in dark UI (~1.4x).
+## 🌐 GENERAL RULES
+
+- All components must be:
+  - Fully **responsive**
+  - **Accessible** (contrast, focus state, keyboard navigation)
+  - Compatible with **PocketBase backend state** — avoid breaking logic via front-end changes.
+
+## 🛠️ TECH STACK ALIGNMENT
+
+- Use **Tailwind CSS** or modular CSS practices.
+- Components are reusable and composable — don’t hardcode styles inline.
+- Maintain separation of concerns: logic in `logic/`, styles in `ui/`, state in `store/`.
+
+---

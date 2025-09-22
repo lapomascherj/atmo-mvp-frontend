@@ -1,0 +1,209 @@
+# ATMO – Design & UX Specification
+
+*Definitive rules for Cursor implementation*
+
+---
+
+## 1. Philosophy
+
+The design is intentional, elegant, and deeply human. Every pixel, motion, and frame is a commitment.
+
+Inspired by the precision of dashboards, the warmth of playful accents, and the boldness of orange against black, ATMO’s interface balances restraint with energy. It must feel like a partner that clears the path, not a tool that clutters it.
+
+Design is not decoration. Design is the guidance for the user, all of it must be very cohesieve.
+
+---
+
+## 2. Visual Identity
+
+### Color Palette
+
+ATMO’s visual language rests on deep blacks and grays, with white as clarity and orange as spark. Purple gradients extend the identity in brand-only contexts.
+
+| Role | HEX | RGB | Usage |
+| --- | --- | --- | --- |
+| **Primary Black** | `#000000` | 0, 0, 0 | Background, the stage |
+| **Dark Gray** | `#333333` | 51, 51, 51 | Panels, containers |
+| **Gray** | `#646464` | 100, 100, 100 | Secondary text, disabled states |
+| **Light Gray** | `#A7A7A7` | 167, 167, 167 | Dividers, placeholders |
+| **White** | `#F9F9F9` | 249, 249, 249 | Primary text, icons |
+| **Brand Orange** | `#E85002` | 232, 80, 20 | CTAs, highlights, active states |
+| **Gradient Mid** | `#C10801` | 193, 8, 1 | Branding gradient, secondary hue |
+| **Gradient End** | `#9D3CAB` | 157, 60, 171 | Branding gradient, halo finishes |
+
+**Rule:** Orange must always sit on black or deep gray. Gradients are used only in branding contexts (hero visuals, orb animations, onboarding). Never in functional UI.
+
+---
+
+### Typography
+
+- **Font Family:** `Inter` (mandatory, no substitutes)
+- **Rendering:** Subpixel anti-aliasing, no tracking adjustments
+- **Weights:**
+    - Bold (700) → Titles, key metrics
+    - Medium (500) → Buttons, labels, navigation
+    - Regular (400) → Body text
+- **Sizes (Desktop):**
+    - H1: 32px / 40px line-height
+    - H2: 24px / 32px line-height
+    - Body: 16px / 24px line-height
+    - Caption: 12–14px / 18px line-height
+
+Typography must remain tight, rational, and unobtrusive. Never playful.
+
+---
+
+## 3. Component Framing & Style
+
+### Cards & Containers
+
+- **Corner Radius:** 16px (consistent across all cards, panels, and modules)
+- **Background:** Dark Gray (`#333333`)
+- **Elevation:** None by default. On hover: subtle shadow `0px 4px 12px rgba(0,0,0,0.25)`
+- **Padding:** 20px inner spacing minimum
+- **Alignment:** Grid-aligned, left-anchored
+- **Framing:** Content should feel modular, each card self-contained but never over-decorated
+
+Cards echo the **Capture IT** and **Ringo dashboard** inspirations: modular, consistent, breathing space around metrics.
+
+---
+
+### Buttons
+
+- **Primary:** Orange background, white text, radius 8px. On hover: slight scale (1.02) + glow `0px 0px 8px rgba(232,80,20,0.5)`
+- **Secondary:** Dark Gray background, white text. On hover: orange outline.
+- **Disabled:** Gray background, opacity 40%.
+
+Buttons must always feel decisive. Never rounded-pill or playful.
+
+---
+
+### Navigation
+
+- **Sidebar:** Black background, fixed left, icon-first with labels appearing on hover/expand.
+- **Top Bar:** Hosts search, profile, and system actions only. Minimal.
+- **Content Area:** Always central focus. No competing chrome.
+
+Prioritisation over density.
+
+---
+
+### Icons
+
+- Monoline stroke-based, geometric minimalism (Lucide recommended).
+- White by default, orange when active.
+- Never filled except in active states.
+
+---
+
+### Tasks & Lists
+
+- Each task appears as a framed card (radius 16px).
+- Time/date anchored right, task label left.
+- Priority states:
+    - High → Orange text badge
+    - Medium → Light Gray badge
+    - Low → White outline badge
+
+Compact but highly legible, anchored in rhythm.
+
+---
+
+### Modals & Overlays
+
+- Background: Black at 80% opacity
+- Modal card: Dark Gray, 16px radius
+- Entry animation: Fade in (300ms ease-out)
+- Exit: Fade out (200ms ease-in)
+
+---
+
+## 4. Layout & Grid
+
+- **Grid:** 12 columns
+- **Gutters:** 24px
+- **Margins:** 40px (desktop)
+- **Spacing scale:** Multiples of 8px only (8, 16, 24, 40)
+
+**Rule:** Never break rhythm. The interface must breathe in increments of 8.
+
+---
+
+## 5. Motion & Feedback
+
+- Transitions: 200–300ms ease-out
+- Hover states: Subtle scale or glow; never harsh inversions
+- Buttons: Glow feedback, not color flip
+- Modals: Fade in/out
+- Lists: Tasks appear with soft vertical slide + opacity fade (no bounce)
+
+---
+
+## 6. Brand Signature
+
+The **orb** — orange into purple gradient — is ATMO’s emblem. It must be treated as sacred.
+
+- Appears only in branding contexts (onboarding, landing, avatars).
+- May softly pulse or rotate, but always subtle.
+- Never inside functional components like buttons, lists, or text.
+
+---
+
+## 7. UX Rules
+
+- The **editor is sacred**: no overlays may obstruct code unless modal.
+- All flows must reduce friction → prioritize keyboard-first.
+- Empty states must guide, not decorate → suggest the next action.
+- Feedback must be immediate, subtle, human.
+
+---
+
+## 8. Non-Negotiables
+
+- No alternate fonts.
+- No off-palette colors.
+- No deviation from 8px rhythm.
+- No gratuitous gradients.
+- No clutter.
+
+---
+
+## 9. Design Tokens (for developers)
+
+```json
+{
+  "colors": {
+    "black": "#000000",
+    "darkGray": "#333333",
+    "gray": "#646464",
+    "lightGray": "#A7A7A7",
+    "white": "#F9F9F9",
+    "orange": "#E85002",
+    "gradientMid": "#C10801",
+    "gradientEnd": "#9D3CAB"
+  },
+  "typography": {
+    "fontFamily": "Inter",
+    "weights": {
+      "bold": 700,
+      "medium": 500,
+      "regular": 400
+    },
+    "sizes": {
+      "h1": {"size": "32px", "lineHeight": "40px"},
+      "h2": {"size": "24px", "lineHeight": "32px"},
+      "body": {"size": "16px", "lineHeight": "24px"},
+      "caption": {"size": "12px", "lineHeight": "18px"}
+    }
+  },
+  "spacing": [8, 16, 24, 40],
+  "radius": {
+    "card": "16px",
+    "button": "8px"
+  },
+  "motion": {
+    "transitionDuration": "200-300ms",
+    "easing": "ease-out"
+  }
+}
+```

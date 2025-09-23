@@ -80,14 +80,18 @@ const NavSidebar: React.FC = () => {
     const handleMouseEnter = () => {
         setIsHovering(true);
         if (isCollapsed) {
-            setTimeout(() => setIsCollapsed(false), 100);
+            setTimeout(() => {
+                if (isHovering) {
+                    setIsCollapsed(false);
+                }
+            }, 100);
         }
     };
 
     const handleMouseLeave = () => {
         setIsHovering(false);
         setTimeout(() => {
-            if (isHovering === false) {
+            if (!isHovering) {
                 setIsCollapsed(true);
             }
         }, 300);

@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import ProjectForm from '@/components/molecules/ProjectForm.tsx';
 import FlowerOfLife from '@/components/atoms/FlowerOfLife.tsx';
 import GetCenteredCard from '@/components/molecules/GetCenteredCard.tsx';
+import InteractiveDivider from '@/components/atoms/InteractiveDivider.tsx';
 
 interface DashboardLayoutProps {
   userName: string;
@@ -39,6 +40,9 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ userName }) => {
   const [showSacredModal, setShowSacredModal] = useState(false);
   const [isFlowerActive, setIsFlowerActive] = useState(false);
   const [hasNewContent, setHasNewContent] = useState(false);
+
+  // Interactive divider state
+  const [dividerPosition, setDividerPosition] = useState(50);
 
   // Check for new mantra content (6am daily)
   React.useEffect(() => {
@@ -121,7 +125,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ userName }) => {
 
   return (
     <>
-      <div className="h-full bg-black relative overflow-hidden">
+      <div className="h-full bg-black relative overflow-hidden ml-[70px]">
         {/* Sophisticated Background Effects with Orange/Indigo Palette */}
         <div className="absolute inset-0 bg-[url('/bg-grid.svg')] bg-fixed opacity-[0.008] pointer-events-none"></div>
         
@@ -134,7 +138,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ userName }) => {
         <div className="fixed top-[80%] left-[60%] -z-10 w-[300px] h-[300px] bg-gradient-to-r from-orange-300/4 via-indigo-400/3 to-orange-200/2 rounded-full blur-[80px] animate-pulse-soft" />
         <div className="fixed top-[30%] left-[80%] -z-10 w-[250px] h-[250px] bg-gradient-to-r from-indigo-300/3 via-orange-300/2 to-white/2 rounded-full blur-[70px] animate-pulse-soft" />
 
-        <div className="h-screen flex flex-col p-8 relative">
+        <div className="h-screen flex flex-col p-4 md:p-8 relative overflow-hidden">
           {/* Flower of Life Button - Top Right */}
           <div className="absolute top-6 right-6 z-20">
             <FlowerOfLife 
@@ -146,26 +150,46 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ userName }) => {
             />
           </div>
 
-          {/* Main Content Layout - Centered */}
-          <div className="flex-1 flex items-center justify-center">
-            <div className="w-full max-w-7xl grid grid-cols-12 gap-8">
-              {/* Main Column - Chat */}
-              <div className="col-span-8 flex flex-col">
-                <ErrorBoundary fallback={
-                  <div className="flex items-center justify-center h-full">
-                    <div className="text-center text-white/60">
-                      <p>Chat interface temporarily unavailable</p>
+          {/* Main Content Layout - Interactive Split with Full-Height Divider */}
+          <div className="flex-1 relative overflow-hidden">
+            <div className="h-full w-full flex relative">
+              
+              {/* Left Section - Avatar & Chat Area - Width Locked */}
+              <div 
+                className="h-full flex flex-col transition-all duration-300 ease-out overflow-hidden"
+                style={{ 
+                  width: `${dividerPosition}%`,
+                  maxWidth: `${dividerPosition}%`,
+                  minWidth: '0',
+                  transform: `scale(${0.85 + (dividerPosition / 50) * 0.15})`,
+                  transformOrigin: 'center center'
+                }}
+              >
+                <div className="w-full h-full overflow-hidden">
+                  <ErrorBoundary fallback={
+                    <div className="flex items-center justify-center h-full">
+                      <div className="text-center text-white/60">
+                        <p>Chat interface temporarily unavailable</p>
+                      </div>
                     </div>
-                  </div>
-                }>
-                  <CenterColumn />
-                </ErrorBoundary>
+                  }>
+                    <CenterColumn maxWidthPercent={dividerPosition} />
+                  </ErrorBoundary>
+                </div>
               </div>
 
-              {/* Companion Column - Daily Information */}
-              <div className="col-span-4 flex flex-col">
-                <div className="h-full flex items-center justify-center">
-                  <div className="w-full max-w-sm">
+              {/* Right Section - Daily Snapshot */}
+              <div 
+                className="h-full flex flex-col justify-center items-center transition-all duration-300 ease-out overflow-hidden"
+                style={{ 
+                  width: `${100 - dividerPosition}%`,
+                  transform: `scale(${0.85 + ((100 - dividerPosition) / 50) * 0.15})`,
+                  transformOrigin: 'center center'
+                }}
+              >
+                <div className="w-full h-full flex flex-col items-center justify-center px-4">
+                  {/* Daily Snapshot */}
+                  <div className="w-full max-w-sm flex-1 flex items-center justify-center">
                     <ErrorBoundary fallback={
                       <div className="bg-slate-800/20 rounded-xl p-4 text-center text-white/60">
                         <p>Daily snapshot temporarily unavailable</p>
@@ -176,6 +200,16 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ userName }) => {
                   </div>
                 </div>
               </div>
+
+              {/* Interactive Full-Height Divider - Enhanced Constraints */}
+              <InteractiveDivider
+                initialPosition={50}
+                minPosition={30}
+                maxPosition={70}
+                onPositionChange={setDividerPosition}
+                className="z-20"
+                showOnMobile={true}
+              />
             </div>
           </div>
         </div>

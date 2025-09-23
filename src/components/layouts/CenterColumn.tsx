@@ -1,16 +1,17 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/hooks/useMockAuth';
-import { Button } from '@/components/atoms/Button.tsx';
 import useVoiceRecognition from '@/hooks/useVoiceRecognition.ts';
 import SphereChat from '../atoms/SphereChat.tsx';
-import ChatBox from '../molecules/ChatBox.tsx';
-import VoiceModeUI from '../molecules/VoiceModeUI.tsx';
+import FullHeightChat from '../molecules/FullHeightChat.tsx';
 import { promptStore } from "@/stores/promptStore.ts";
 import { useToast } from '@/hooks/useToast.ts';
 import { digitalBrainAPI } from '@/api/mockDigitalBrainApi';
-import { MessageSquare, Mic, MicOff, X } from 'lucide-react';
 
-const CenterColumn: React.FC = () => {
+interface CenterColumnProps {
+    maxWidthPercent?: number;
+}
+
+const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) => {
     const { user } = useAuth();
     const { toast } = useToast();
     const [interactionMode, setInteractionMode] = useState<'idle' | 'voice' | 'chat'>('idle');
@@ -32,7 +33,8 @@ const CenterColumn: React.FC = () => {
         clearTaskContext,
         toggleConversationStarted,
         toggleRespondingState,
-        toggleVoiceMessage
+        toggleVoiceMessage,
+        resetConversationState
     } = promptStore();
 
     const { startListening, stopListening, transcript, isListening, error: voiceError, isSupported } = useVoiceRecognition({
@@ -86,6 +88,12 @@ const CenterColumn: React.FC = () => {
             .replace(/([.!?])?\s*$/, match => match.includes('.') || match.includes('!') || match.includes('?') ? match : '.');
     };
 
+    // Reset conversation state on component mount to ensure clean slate
+    useEffect(() => {
+        resetConversationState();
+        setInteractionMode('idle');
+    }, [resetConversationState]); // Only run on mount
+
     // Consolidated interaction mode management
     useEffect(() => {
         if (isListening || isVoiceMessage) {
@@ -94,12 +102,13 @@ const CenterColumn: React.FC = () => {
             if (!isConversationStarted) {
                 toggleConversationStarted();
             }
-        } else if (isConversationStarted || history.length > 0) {
+        } else if (isConversationStarted) {
+            // Only switch to chat if conversation is explicitly started, not based on history
             setInteractionMode('chat');
         } else {
             setInteractionMode('idle');
         }
-    }, [isListening, isVoiceMessage, isConversationStarted, history.length, toggleConversationStarted]);
+    }, [isListening, isVoiceMessage, isConversationStarted, toggleConversationStarted]);
 
     const handleSendMessage = () => {
         if (!input.message.trim()) return;
@@ -175,6 +184,12 @@ What would you like to work on today?`;
     };
 
     const handleSphereClick = () => {
+        // Sphere is voice-only - start conversation if needed
+        if (!isConversationStarted) {
+            toggleConversationStarted();
+        }
+
+        // Handle voice functionality
         if (!isSupported) {
             showVoiceNotSupportedToast();
             return;
@@ -229,7 +244,7 @@ What would you like to work on today?`;
         setVoiceSource(null);
         setIsTranscribing(false);
 
-        // Mode will be updated by the useEffect based on conversation state
+        console.log('Voice mode stopped');
     };
 
     const handleStartChat = () => {
@@ -240,8 +255,9 @@ What would you like to work on today?`;
     };
 
     const handleEndChat = () => {
+        // Reset conversation state and return to idle
+        resetConversationState();
         setInteractionMode('idle');
-        // Don't clear conversation history, just change mode
     };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -267,228 +283,64 @@ What would you like to work on today?`;
         }
     }, [voiceError, isListening, isVoiceMessage, isSupported, toast]);
 
+    // Transform history to chat messages format
+    const chatMessages = history.map((msg, index) => ({
+        id: `msg-${index}`,
+        content: msg.message,
+        sender: msg.sender,
+        timestamp: new Date()
+    }));
+
     return (
-        <div className="h-full flex items-start justify-center relative pt-20 transition-all duration-500 ease-in-out">
-            {/* Central Sphere - The Avatar (hidden when chat is active) - Horizontally adjusted */}
-            {interactionMode === 'idle' && (
-                <div className="flex flex-col items-center translate-x-12 animate-in fade-in-0 slide-in-from-bottom-4 duration-700">
-                    <div className="relative transition-all duration-700 ease-out mb-16 transform translate-y-0 scale-125">
-                        <SphereChat
-                            size={260}
-                            onClick={handleSphereClick}
-                            voiceSupported={isSupported}
-                            isListening={false}
-                            isThinking={isResponding}
-                            isResponding={isConversationStarted && !isResponding && history.length > 0}
-                        />
-                        
-                        {/* Enhanced glow effects for idle mode */}
-                        <div className="absolute inset-0 -z-10 bg-[#FF7000]/20 rounded-full blur-2xl animate-pulse-soft"></div>
-                        <div className="absolute inset-0 -z-20 bg-[#FF7000]/10 rounded-full blur-3xl scale-150 animate-pulse-soft"></div>
-                        <div className="absolute inset-0 -z-30 bg-gradient-to-r from-[#FF7000]/5 to-purple-500/5 rounded-full blur-[100px] scale-200 animate-pulse-soft"></div>
-                    </div>
-
-                    {/* Welcome Message Below Avatar */}
-                    <div className="text-center animate-in fade-in-0 duration-500">
-                        <h2 className="text-3xl font-light text-white mb-4">
-                            Welcome back, {user?.nickname || 'there'}
-                        </h2>
-                        <p className="text-slate-400 mb-6 max-w-md">
-                            I'm your AI mentor. Click me to speak, or start a conversation below.
-                        </p>
-                        
-                        {/* Quick Action Buttons */}
-                        <div className="flex gap-4 justify-center">
-                            <Button
-                                onClick={handleStartChat}
-                                className="bg-[#FF7000]/20 hover:bg-[#FF7000]/30 text-[#FF7000] border border-[#FF7000]/30 gap-2"
-                            >
-                                <MessageSquare className="w-4 h-4" />
-                                Start Chat
-                            </Button>
-                            
-                            {/* Icon-only mic button replacing the labeled Voice Mode */}
-                            {isSupported && (
-                              <Button
-                                onClick={handleSphereClick}
-                                variant="outline"
-                                size="icon"
-                                aria-label="Voice mode"
-                                className="bg-slate-800/30 border-slate-600 text-slate-300 hover:bg-slate-700/40"
-                              >
-                                <Mic className="w-4 h-4" />
-                              </Button>
-                            )}
-                        </div>
-                    </div>
+        <div className="h-full flex flex-col bg-black relative overflow-hidden w-full">
+            {/* Orange Sphere - Lowered position, voice-only interaction */}
+            <div className="flex-shrink-0 flex flex-col items-center pt-12 pb-6 relative z-10">
+                <div className="relative transition-all duration-700 ease-out mb-4">
+                    <SphereChat
+                        size={200}
+                        onClick={handleSphereClick}
+                        voiceSupported={isSupported}
+                        isListening={isListening || isVoiceMessage}
+                        isThinking={isResponding}
+                        isResponding={isConversationStarted && !isResponding && history.length > 0}
+                    />
+                    
+                    {/* Enhanced glow effects */}
+                    <div className="absolute inset-0 -z-10 bg-[#FF7000]/20 rounded-full blur-2xl animate-pulse-soft"></div>
+                    <div className="absolute inset-0 -z-20 bg-[#FF7000]/10 rounded-full blur-3xl scale-150 animate-pulse-soft"></div>
+                    <div className="absolute inset-0 -z-30 bg-gradient-to-r from-[#FF7000]/5 to-purple-500/5 rounded-full blur-[100px] scale-200 animate-pulse-soft"></div>
                 </div>
-            )}
 
-            {/* Voice Mode UI - Enhanced UX with stop control */}
-            {interactionMode === 'voice' && (
-                <div className="absolute inset-x-0 top-0 bottom-0 flex flex-col items-center justify-start pt-16 animate-in fade-in-0 slide-in-from-top-4 duration-500">
-                    {/* Voice Mode Interface */}
-                    <div className="mb-8">
-                        <VoiceModeUI
-                            isListening={isListening}
-                            isSupported={isSupported}
-                            onSphereClick={handleSphereClick}
-                            onStopVoiceMode={handleStopVoiceMode}
-                        />
-                    </div>
+                {/* Voice Control X Button */}
+                {(isListening || isVoiceMessage) && (
+                    <button
+                        onClick={handleStopVoiceMode}
+                        className="w-8 h-8 rounded-full bg-black/80 border border-white/20 flex items-center justify-center text-white/60 hover:text-red-400 hover:border-red-400/40 transition-all duration-200"
+                        aria-label="Stop voice interaction"
+                    >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                )}
+            </div>
 
-                    {/* Auto-engaged Chat Interface - appears below voice UI */}
-                    <div className="w-full h-3/5 mx-4 flex items-center justify-center">
-                        <div className="bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6 w-full h-full shadow-2xl flex flex-col transition-all duration-300 hover:border-slate-600/50">
-                            {/* Chat Header */}
-                            <div className="flex items-center justify-between mb-4 flex-shrink-0">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded-full bg-[#FF7000]/20 flex items-center justify-center">
-                                        <MessageSquare className="w-4 h-4 text-[#FF7000]" />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-white font-medium">ATMO Assistant - Voice Mode</h3>
-                                        <p className="text-slate-400 text-sm">
-                                            {isTranscribing ? 'Transcribing...' : 'Speak naturally, I\'ll understand'}
-                                        </p>
-                                    </div>
-                                </div>
-                                <Button
-                                    onClick={handleStopVoiceMode}
-                                    variant="ghost"
-                                    size="icon"
-                                    aria-label="Exit voice mode"
-                                    className="text-slate-400 hover:text-red-400 transition-colors duration-200"
-                                >
-                                    <X className="w-4 h-4" />
-                                </Button>
-                            </div>
-
-                            {/* Chat Content Area */}
-                            <div className="flex-1 overflow-hidden pb-4">
-                                <ChatBox
-                                    messages={history}
-                                    currentMessage={input.message}
-                                    isResponding={isResponding}
-                                    isConversationStarted={isConversationStarted}
-                                    onMessageChange={addMessageToPrompt}
-                                    onSendMessage={handleSendMessage}
-                                    onKeyDown={handleKeyDown}
-                                    userName={user?.nickname || 'there'}
-                                    placeholder={isTranscribing ? "Transcribing your voice..." : "Voice input will appear here..."}
-                                    disabled={isTranscribing || isListening} // Disable manual input during voice
-                                    // Mic inside ChatBox mirrors sphere voice state
-                                    onMicClick={handleChatMicClick}
-                                    isMicActive={voiceSource === 'chat' && isListening}
-                                    isMicSupported={isSupported}
-                                />
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Chat Interface - Sheet Style (when not in voice mode) */}
-            {interactionMode === 'chat' && (
-                <div className="absolute inset-x-0 top-0 bottom-0 flex flex-col items-center justify-center animate-in fade-in-0 slide-in-from-right-4 duration-500 pt-24">
-                    {/* Avatar positioned above chat - no overlap */}
-                    <div className="mb-4 transition-all duration-500">
-                        <SphereChat
-                            size={120}
-                            onClick={handleSphereClick}
-                            voiceSupported={isSupported}
-                            isListening={isVoiceMessage || isListening}
-                            isThinking={isResponding}
-                            isResponding={isConversationStarted && !isResponding && history.length > 0}
-                        />
-                    </div>
-
-                    {/* Chat Sheet - Full Width */}
-                    <div className="relative w-full h-full mx-4 flex items-start justify-center">
-                        <div className="bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6 w-full h-full shadow-2xl flex flex-col max-h-[70vh] transition-all duration-300 hover:border-slate-600/50">
-                            {/* Chat Header */}
-                            <div className="flex items-center justify-between mb-4 flex-shrink-0">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded-full bg-[#FF7000]/20 flex items-center justify-center">
-                                        <MessageSquare className="w-4 h-4 text-[#FF7000]" />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-white font-medium">ATMO Assistant</h3>
-                                        <p className="text-slate-400 text-sm">Ready to help you plan with intention</p>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    {isSupported && (
-                                        <Button
-                                            onClick={handleSphereClick}
-                                            variant="ghost"
-                                            size="icon"
-                                            aria-label="Voice mode"
-                                            className="text-slate-400 hover:text-white"
-                                        >
-                                            <Mic className="w-4 h-4" />
-                                        </Button>
-                                    )}
-                                    <Button
-                                        onClick={handleEndChat}
-                                        variant="ghost"
-                                        size="icon"
-                                        aria-label="Close chat"
-                                        className="text-slate-400 hover:text-red-400 transition-colors duration-200"
-                                    >
-                                        <X className="w-4 h-4" />
-                                    </Button>
-                                </div>
-                            </div>
-
-                            {/* Chat Content Area - Full Width with Input at Bottom */}
-                            <div className="flex-1 overflow-hidden pb-4">
-                                <ChatBox
-                                    messages={history}
-                                    currentMessage={input.message}
-                                    isResponding={isResponding}
-                                    isConversationStarted={isConversationStarted}
-                                    onMessageChange={addMessageToPrompt}
-                                    onSendMessage={handleSendMessage}
-                                    onKeyDown={handleKeyDown}
-                                    userName={user?.nickname || 'there'}
-                                    placeholder="Share your thoughts or ask for help..."
-                                    onMicClick={handleChatMicClick}
-                                    isMicActive={voiceSource === 'chat' && isListening}
-                                    isMicSupported={isSupported}
-                                />
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Quick Action Suggestions for Chat Mode - Full Width */}
-            {interactionMode === 'chat' && !isConversationStarted && (
-                <div className="absolute bottom-24 left-0 right-0 px-6 z-20">
-                    <div className="flex justify-center gap-3 flex-wrap w-full">
-                        {[
-                            "Plan my day",
-                            "Review my goals", 
-                            "What should I focus on?",
-                            "Help with my project"
-                        ].map((action) => (
-                            <Button
-                                key={action}
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                    addMessageToPrompt(action);
-                                    handleSendMessage();
-                                }}
-                                className="bg-slate-800/40 border-slate-600/40 text-slate-300 hover:bg-slate-700/50 hover:text-white hover:border-[#FF7000]/40 transition-all duration-300 backdrop-blur-sm"
-                            >
-                                {action}
-                            </Button>
-                        ))}
-                    </div>
-                </div>
-            )}
+            {/* Always-On Chat Interface - Width-Locked Panel */}
+            <div className="flex-1 transition-all duration-500 ease-in-out">
+                <FullHeightChat
+                    messages={chatMessages}
+                    currentMessage={input.message}
+                    onMessageChange={addMessageToPrompt}
+                    onSendMessage={handleSendMessage}
+                    onMicClick={handleChatMicClick}
+                    isMicActive={voiceSource === 'chat' && isListening}
+                    isMicSupported={isSupported}
+                    isResponding={isResponding}
+                    disabled={isTranscribing || isListening}
+                    placeholder={isTranscribing ? "Transcribing your voice..." : "Type your message..."}
+                    showWelcome={!isConversationStarted}
+                />
+            </div>
         </div>
     );
 };

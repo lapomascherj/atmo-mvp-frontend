@@ -33,6 +33,7 @@ interface PromptState {
   toggleVoiceMessage: () => void;
   processTaskWithAI: (task: Task) => Promise<void>;
   addAIResponse: (response: string) => void;
+  resetConversationState: () => void;
 }
 
 export const promptStore = create<PromptState>((set) => ({
@@ -237,4 +238,19 @@ Would you like me to help you think through any specific aspect of this task? I'
     addToHistory();
     toggleRespondingState();
   },
+
+  resetConversationState: () =>
+    set(() => ({
+      history: new Array<PromptInput>(),
+      input: {
+        message: "",
+        sender: "user",
+      },
+      isConversationStarted: false,
+      isResponding: false,
+      isVoiceMessage: false,
+      currentTask: undefined,
+      currentGoal: undefined,
+      context: [],
+    })),
 }));

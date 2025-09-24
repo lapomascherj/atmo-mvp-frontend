@@ -2,7 +2,10 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/hooks/useMockAuth';
 import useVoiceRecognition from '@/hooks/useVoiceRecognition.ts';
 import SphereChat from '../atoms/SphereChat.tsx';
-import FullHeightChat from '../molecules/FullHeightChat.tsx';
+import { Button } from '@/components/atoms/Button';
+import { Input } from '@/components/atoms/Input';
+import { Paperclip, Send } from 'lucide-react';
+import { cn } from '@/utils/utils';
 import { promptStore } from "@/stores/promptStore.ts";
 import { useToast } from '@/hooks/useToast.ts';
 import { digitalBrainAPI } from '@/api/mockDigitalBrainApi';
@@ -15,10 +18,11 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
     const { user } = useAuth();
     const { toast } = useToast();
     const [interactionMode, setInteractionMode] = useState<'idle' | 'voice' | 'chat'>('idle');
-    // Track where voice was initiated from: sphere (voice-to-voice) or chat mic (voice-to-text)
     const [voiceSource, setVoiceSource] = useState<'sphere' | 'chat' | null>(null);
     const [isTranscribing, setIsTranscribing] = useState(false);
     const transcriptTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
     
     const {
         history,
@@ -39,239 +43,118 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
 
     const { startListening, stopListening, transcript, isListening, error: voiceError, isSupported } = useVoiceRecognition({
         onResult: (result) => {
-            // Smart transcription logic - clean and format the text
             const cleanedTranscript = cleanTranscript(result);
             
-            // Add to chat input in real-time
-            addMessageToPrompt(cleanedTranscript);
+            if (voiceSource === 'sphere') {
+                // Voice-to-voice: Add to history and get AI response
+                addToHistory(cleanedTranscript, 'user');
+                handleAIResponse(cleanedTranscript);
+            } else {
+                // Voice-to-text: Add to input field
+                addMessageToPrompt(cleanedTranscript, 'user');
+            }
             
-            // Set transcription state
+            setIsTranscribing(false);
+            setVoiceSource(null);
+        },
+        onError: (error) => {
+            console.error('Voice recognition error:', error);
+            setIsTranscribing(false);
+            setVoiceSource(null);
+        }
+    });
+
+    // Reset conversation state on component mount to ensure clean start
+    useEffect(() => {
+        resetConversationState();
+    }, [resetConversationState]);
+
+    // Clean up transcription timeout on unmount
+    useEffect(() => {
+        return () => {
+            if (transcriptTimeoutRef.current) {
+                clearTimeout(transcriptTimeoutRef.current);
+            }
+        };
+    }, []);
+
+    // Handle real-time transcript updates
+    useEffect(() => {
+        if (transcript && isListening) {
             setIsTranscribing(true);
             
-            // Clear any existing timeout
+            // Clear existing timeout
             if (transcriptTimeoutRef.current) {
                 clearTimeout(transcriptTimeoutRef.current);
             }
             
-            // In chat mic mode we DO NOT auto-send. In sphere mode, we keep behavior to auto-send after pause.
-            if (voiceSource === 'sphere') {
-              transcriptTimeoutRef.current = setTimeout(() => {
-                if (cleanedTranscript.trim()) {
-                  handleSendMessage();
-                  setIsTranscribing(false);
-                }
-              }, 3000);
-            }
-        },
-        onStart: () => {
-            setIsTranscribing(false);
-        },
-        onEnd: () => {
-            // Finalize transcription after a short delay
-            setTimeout(() => {
+            // Set new timeout for when transcript stops updating
+            transcriptTimeoutRef.current = setTimeout(() => {
                 setIsTranscribing(false);
-            }, 1000);
+            }, 1500);
         }
-    });
+    }, [transcript, isListening]);
 
-    // Smart transcription cleaning function
-    const cleanTranscript = (rawTranscript: string): string => {
-        return rawTranscript
+    const cleanTranscript = (text: string): string => {
+        return text
             .trim()
-            // Capitalize first letter
-            .replace(/^./, str => str.toUpperCase())
-            // Remove common ASR artifacts
-            .replace(/\buh\b|\bum\b|\ber\b/gi, '')
-            // Clean up multiple spaces
             .replace(/\s+/g, ' ')
-            // Ensure proper punctuation if missing
-            .replace(/([.!?])?\s*$/, match => match.includes('.') || match.includes('!') || match.includes('?') ? match : '.');
-    };
-
-    // Reset conversation state on component mount to ensure clean slate
-    useEffect(() => {
-        resetConversationState();
-        setInteractionMode('idle');
-    }, [resetConversationState]); // Only run on mount
-
-    // Consolidated interaction mode management
-    useEffect(() => {
-        if (isListening || isVoiceMessage) {
-            setInteractionMode('voice');
-            // Automatically open chat interface when voice mode starts
-            if (!isConversationStarted) {
-                toggleConversationStarted();
-            }
-        } else if (isConversationStarted) {
-            // Only switch to chat if conversation is explicitly started, not based on history
-            setInteractionMode('chat');
-        } else {
-            setInteractionMode('idle');
-        }
-    }, [isListening, isVoiceMessage, isConversationStarted, toggleConversationStarted]);
-
-    const handleSendMessage = () => {
-        if (!input.message.trim()) return;
-
-        if (!isConversationStarted) {
-            toggleConversationStarted();
-            setInteractionMode('chat');
-        }
-
-        addToHistory();
-        toggleRespondingState();
-        generateAIResponse();
-    };
-
-    const generateAIResponse = async () => {
-        try {
-            const response = await digitalBrainAPI.getHelp({
-                message: input.message,
-                context: currentTask ? { task: currentTask } : undefined
-            });
-
-            if (response.success && response.data.response) {
-                addMessageToPrompt(response.data.response, 'ai');
-                addToHistory();
-            } else {
-                // Fallback response
-                const fallbackResponse = currentTask 
-                    ? generateTaskSpecificFallback(currentTask, input.message)
-                    : generateGeneralFallback(input.message);
-                
-                addMessageToPrompt(fallbackResponse, 'ai');
-                addToHistory();
-            }
-        } catch (error) {
-            console.error('Error generating AI response:', error);
-            const fallbackResponse = "I'm having trouble connecting right now, but I'm here to help you plan and organize. What would you like to work on?";
-            addMessageToPrompt(fallbackResponse, 'ai');
-            addToHistory();
-        } finally {
-            toggleRespondingState();
-            clearInput();
-        }
-    };
-
-    const generateTaskSpecificFallback = (task: any, message: string) => {
-        return `I can help you with "${task.name}". Here are some suggestions:
-
-• Break it down into smaller, manageable steps
-• Set a specific time block for focused work
-• Consider what resources or tools you might need
-• Think about potential obstacles and how to overcome them
-
-What specific aspect would you like to focus on first?`;
-    };
-
-    const generateGeneralFallback = (message: string) => {
-        return `I'm here to help you plan with intention and achieve your goals. While I'm working on getting fully connected, I can still assist you with:
-
-• Organizing your tasks and priorities
-• Breaking down complex projects
-• Setting realistic timelines
-• Staying motivated and focused
-
-What would you like to work on today?`;
-    };
-
-    const showVoiceNotSupportedToast = () => {
-        toast({
-            title: "Voice Recognition Not Available",
-            description: "Voice input is not supported in this browser. Please try Chrome, Edge, or Safari.",
-            duration: 30000,
-        });
+            .replace(/^(um|uh|er|ah)\s+/i, '')
+            .replace(/\s+(um|uh|er|ah)(\s+|$)/gi, ' ')
+            .trim();
     };
 
     const handleSphereClick = () => {
-        // Sphere is voice-only - start conversation if needed
-        if (!isConversationStarted) {
-            toggleConversationStarted();
-        }
-
-        // Handle voice functionality
-        if (!isSupported) {
-            showVoiceNotSupportedToast();
-            return;
-        }
-
-        // Toggle voice-to-voice mode (sphere interaction)
-        setVoiceSource('sphere');
         if (isListening) {
             stopListening();
-        } else {
-            startListening();
-        }
-        toggleVoiceMessage();
-    };
-
-    const handleChatMicClick = () => {
-        if (!isSupported) {
-            showVoiceNotSupportedToast();
-            return;
-        }
-
-        // Voice-to-text mode (chat input mic)
-        setVoiceSource('chat');
-        if (isListening) {
-            stopListening();
-        } else {
-            startListening();
-        }
-
-        // Enable voice message mode to show avatar is listening
-        if (!isVoiceMessage) {
-            toggleVoiceMessage();
-        }
-
-        // Ensure chat is open for voice-to-text
-        if (!isConversationStarted) {
-            toggleConversationStarted();
-        }
-    };
-
-    const handleStopVoiceMode = () => {
-        console.log('Stopping voice mode - current states:', { isListening, isVoiceMessage, voiceSource });
-
-        // Stop listening and clear all voice-related state
-        if (isListening) {
-            stopListening();
-        }
-
-        // Clear any pending auto-send timeouts
-        if (transcriptTimeoutRef.current) {
-            clearTimeout(transcriptTimeoutRef.current);
-            transcriptTimeoutRef.current = null;
-        }
-
-        // Reset all voice states
-        if (isVoiceMessage) {
-            toggleVoiceMessage();
-        }
-        setVoiceSource(null);
-        setIsTranscribing(false);
-
-        // Force interaction mode back to appropriate state
-        if (isConversationStarted) {
-            setInteractionMode('chat');
-        } else {
             setInteractionMode('idle');
+            setVoiceSource(null);
+        } else if (isSupported) {
+            setVoiceSource('sphere');
+            setInteractionMode('voice');
+            if (!isConversationStarted) {
+                toggleConversationStarted();
+            }
+            startListening();
         }
-
-        console.log('Voice mode stopped successfully');
     };
 
-    const handleStartChat = () => {
-        setInteractionMode('chat');
+    const handleAIResponse = async (userMessage: string) => {
+        try {
+            toggleRespondingState();
+            
+            const response = await digitalBrainAPI.sendMessage(userMessage, {
+                conversationHistory: history,
+                currentTask: currentTask || undefined,
+                userName: user?.nickname || 'User'
+            });
+            
+            addToHistory(response.message, 'ai');
+            
+            if (response.task) {
+                // Handle task context if needed
+            }
+            
+        } catch (error) {
+            console.error('Error getting AI response:', error);
+            addToHistory("I'm having trouble processing your request right now. Please try again.", 'ai');
+        } finally {
+            toggleRespondingState();
+        }
+    };
+
+    const handleSendMessage = async () => {
+        const messageText = input.message?.trim();
+        if (!messageText) return;
+
         if (!isConversationStarted) {
             toggleConversationStarted();
         }
-    };
 
-    const handleEndChat = () => {
-        // Reset conversation state and return to idle
-        resetConversationState();
-        setInteractionMode('idle');
+        addToHistory(messageText, 'user');
+        clearInput();
+
+        await handleAIResponse(messageText);
     };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -281,35 +164,35 @@ What would you like to work on today?`;
         }
     };
 
-    // Show toast notification for voice errors - ONLY when actually triggered
-    useEffect(() => {
-        // Only show error if:
-        // 1. There is actually an error from useVoiceRecognition
-        // 2. User has attempted to use voice recognition (isListening or was listening)
-        // 3. Voice recognition is supported (to avoid showing error for unsupported browsers)
-        if (voiceError && (isListening || isVoiceMessage) && isSupported) {
-            toast({
-                title: "Voice Recognition Issue",
-                description: voiceError,
-                duration: 30000, // 30 seconds
-                variant: "destructive",
-            });
-        }
-    }, [voiceError, isListening, isVoiceMessage, isSupported, toast]);
+    const formatTime = (date: Date) => {
+        return date.toLocaleTimeString('en-US', { 
+            hour: 'numeric', 
+            minute: '2-digit'
+        });
+    };
 
-    // Transform history to chat messages format
-    const chatMessages = history.map((msg, index) => ({
-        id: `msg-${index}`,
-        content: msg.message,
-        sender: msg.sender,
-        timestamp: new Date()
-    }));
+    const handleFileUpload = () => {
+        fileInputRef.current?.click();
+    };
+
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (files && files.length > 0) {
+            // Handle file upload logic here
+            console.log('Files selected:', Array.from(files).map(f => f.name));
+            
+            // Reset file input
+            if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+            }
+        }
+    };
 
     return (
-        <div className="h-full flex flex-col bg-transparent relative overflow-hidden w-full">
-            {/* Orange Sphere - Aligned with right card */}
-            <div className="flex-shrink-0 flex flex-col items-center pt-44 pb-6 relative z-10">
-                <div className="relative transition-all duration-700 ease-out mb-4">
+        <div className="h-full relative bg-transparent overflow-hidden w-full">
+            {/* Fixed Orange Sphere - Always positioned at top - responsive */}
+            <div className="absolute top-32 md:top-44 left-1/2 transform -translate-x-1/2 z-30">
+                <div className="relative transition-all duration-700 ease-out">
                     <SphereChat
                         size={220}
                         onClick={handleSphereClick}
@@ -319,42 +202,152 @@ What would you like to work on today?`;
                         isResponding={isConversationStarted && !isResponding && history.length > 0}
                     />
                     
-                    {/* Enhanced glow effects */}
-                    <div className="absolute inset-0 -z-10 bg-[#FF7000]/20 rounded-full blur-2xl animate-pulse-soft"></div>
-                    <div className="absolute inset-0 -z-20 bg-[#FF7000]/10 rounded-full blur-3xl scale-150 animate-pulse-soft"></div>
+                    {/* Enhanced glow effects with activity pulse */}
+                    <div className={`absolute inset-0 -z-10 bg-[#FF7000]/20 rounded-full blur-2xl transition-all duration-300 ${
+                        isResponding ? 'animate-pulse scale-110' : 'animate-pulse-soft'
+                    }`}></div>
+                    <div className={`absolute inset-0 -z-20 bg-[#FF7000]/10 rounded-full blur-3xl scale-150 transition-all duration-300 ${
+                        isResponding ? 'animate-pulse scale-125' : 'animate-pulse-soft'
+                    }`}></div>
                     <div className="absolute inset-0 -z-30 bg-gradient-to-r from-[#FF7000]/5 to-purple-500/5 rounded-full blur-[100px] scale-200 animate-pulse-soft"></div>
                 </div>
 
                 {/* Enhanced Voice Control X Button */}
                 {(isListening || isVoiceMessage) && (
-                    <button
-                        onClick={handleStopVoiceMode}
-                        className="w-10 h-10 rounded-full bg-red-500/20 border-2 border-red-400/40 flex items-center justify-center text-red-400 hover:bg-red-500/30 hover:border-red-400/60 hover:text-red-300 hover:scale-105 transition-all duration-200 shadow-lg backdrop-blur-sm"
-                        aria-label="Stop voice interaction"
-                    >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
+                    <div className="absolute -bottom-16 left-1/2 transform -translate-x-1/2">
+                        <Button
+                            onClick={() => {
+                                stopListening();
+                                setInteractionMode('idle');
+                                setVoiceSource(null);
+                            }}
+                            variant="ghost"
+                            size="sm"
+                            className="w-10 h-10 rounded-full bg-slate-800/60 hover:bg-slate-700/80 border border-slate-600/40 text-white/80 hover:text-white transition-all duration-200 backdrop-blur-sm shadow-lg"
+                        >
+                            ✕
+                        </Button>
+                    </div>
                 )}
             </div>
 
-            {/* Always-On Chat Interface - Width-Locked Panel */}
-            <div className="flex-1">
-                <FullHeightChat
-                    messages={chatMessages}
-                    currentMessage={input.message}
-                    onMessageChange={addMessageToPrompt}
-                    onSendMessage={handleSendMessage}
-                    onMicClick={handleChatMicClick}
-                    onAttachClick={undefined}
-                    isMicActive={voiceSource === 'chat' && isListening}
-                    isMicSupported={isSupported}
-                    isResponding={isResponding}
-                    disabled={isTranscribing || isListening}
-                    placeholder={isTranscribing ? "Transcribing your voice..." : "Type your message..."}
-                    showWelcome={!isConversationStarted}
-                />
+            {/* Gradient Fade Effect for Messages Area */}
+            <div className="absolute top-0 left-0 right-0 h-80 md:h-96 bg-gradient-to-b from-transparent via-transparent to-black/0 pointer-events-none z-20" 
+                 style={{
+                     background: 'linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 50%, rgba(0,0,0,0.2) 70%, rgba(0,0,0,0.6) 85%, rgba(0,0,0,0.9) 95%, rgba(0,0,0,1) 100%)'
+                 }}>
+            </div>
+
+            {/* Messages Area - Scrollable with padding for sphere */}
+            <div 
+                className="h-full overflow-y-auto pt-96 md:pt-[420px] pb-24"
+            >
+                <div className="px-6 space-y-4">
+                    {history.length === 0 ? (
+                        <div className="text-center text-white/40 text-sm">
+                            Click the orange sphere to start a voice conversation
+                        </div>
+                    ) : (
+                        history.map((message, index) => (
+                            <div
+                                key={index}
+                                className={cn(
+                                    "flex",
+                                    message.sender === 'user' ? "justify-end" : "justify-start"
+                                )}
+                            >
+                                <div className={cn("max-w-[85%] md:max-w-[75%]")}>
+                                    <div
+                                        className={cn(
+                                            "px-5 py-4 text-sm leading-relaxed transition-all duration-200 shadow-lg backdrop-blur-sm",
+                                            message.sender === 'user'
+                                                ? "bg-orange-500/10 border border-orange-500/20 text-white rounded-2xl rounded-br-md"
+                                                : "bg-white/5 border border-white/10 text-white rounded-2xl rounded-bl-md"
+                                        )}
+                                        style={{
+                                            lineHeight: '1.7',
+                                            wordSpacing: '0.05em',
+                                            letterSpacing: '0.01em'
+                                        }}
+                                    >
+                                        <div 
+                                            className="whitespace-pre-wrap break-words font-normal"
+                                            style={{
+                                                fontSize: '14px',
+                                                lineHeight: '1.7'
+                                            }}
+                                        >
+                                            {message.message}
+                                        </div>
+                                    </div>
+                                    <div className={cn(
+                                        "text-xs text-white/30 mt-1",
+                                        message.sender === 'user' ? "text-right" : "text-left"
+                                    )}>
+                                        {formatTime(new Date())}
+                                    </div>
+                                </div>
+                            </div>
+                        ))
+                    )}
+
+                    {/* Typing Indicator */}
+                    {isResponding && (
+                        <div className="flex justify-start">
+                            <div className="max-w-[85%] md:max-w-[75%]">
+                                <div className="bg-white/5 border border-white/10 text-white rounded-2xl rounded-bl-md px-5 py-4 shadow-lg backdrop-blur-sm">
+                                    <div className="flex space-x-1">
+                                        <div className="w-2 h-2 bg-white/40 rounded-full animate-pulse"></div>
+                                        <div className="w-2 h-2 bg-white/40 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+                                        <div className="w-2 h-2 bg-white/40 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Fixed Input Bar at Bottom */}
+            <div className="absolute bottom-0 left-0 right-0 bg-black/40 backdrop-blur-sm border-t border-white/10 p-4">
+                <div className="flex items-center gap-3">
+                    <Button
+                        onClick={handleFileUpload}
+                        variant="ghost"
+                        size="sm"
+                        className="p-2 text-white/60 hover:text-white/80 hover:bg-white/5 rounded-lg transition-colors"
+                    >
+                        <Paperclip className="w-5 h-5" />
+                    </Button>
+
+                    <Input
+                        ref={inputRef}
+                        type="text"
+                        placeholder="Type your message..."
+                        value={input.message || ''}
+                        onChange={(e) => addMessageToPrompt(e.target.value, 'user')}
+                        onKeyDown={handleKeyDown}
+                        className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/40 focus:outline-none focus:border-orange-500/50 transition-colors"
+                    />
+
+                    <Button
+                        onClick={handleSendMessage}
+                        disabled={!input.message?.trim()}
+                        className="bg-orange-500/20 hover:bg-orange-500/30 disabled:bg-white/5 border border-orange-500/30 disabled:border-white/10 text-orange-400 disabled:text-white/30 p-3 rounded-xl transition-colors"
+                    >
+                        <Send className="w-5 h-5" />
+                    </Button>
+
+                    {/* Hidden File Input */}
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        multiple
+                        accept="*/*"
+                        className="hidden"
+                        onChange={handleFileSelect}
+                    />
+                </div>
             </div>
         </div>
     );

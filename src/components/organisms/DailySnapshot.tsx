@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { RotateCcw, MessageCircle } from 'lucide-react';
 import { Button } from '../atoms/Button';
+import { promptStore } from '@/stores/promptStore.ts';
 
 // Question pool for dynamic third question
 const QUESTION_POOL = [
@@ -36,6 +37,12 @@ const DailySnapshot: React.FC<DailySnapshotProps> = ({
   highlightText, 
   onOpenChat 
 }) => {
+  // Prompt store for avatar-driven conversations
+  const {
+    addAvatarMessage,
+    toggleConversationStarted,
+    isConversationStarted
+  } = promptStore();
   // State for dynamic question
   const [dynamicQuestion, setDynamicQuestion] = useState(QUESTION_POOL[0]);
 
@@ -59,13 +66,32 @@ const DailySnapshot: React.FC<DailySnapshotProps> = ({
     getRandomQuestion();
   };
 
-  // Handle open in chat click
+  // Avatar greeting templates for morning actions
+  const getAvatarGreeting = (question: string): string => {
+    const greetings = [
+      "Good morning! Let's set the tone for today. ",
+      "Hey, ready to start the day right? ",
+      "Let's plan your day together. "
+    ];
+
+    const randomGreeting = greetings[Math.floor(Math.random() * greetings.length)];
+    return randomGreeting + question;
+  };
+
+  // Handle open in chat click - Updated for avatar-driven conversations
   const handleOpenInChat = (question: string) => {
+    // Create avatar-initiated conversation with warm greeting + question
+    const avatarMessage = getAvatarGreeting(question);
+    addAvatarMessage(avatarMessage);
+
+    // Start conversation if not started
+    if (!isConversationStarted) {
+      toggleConversationStarted();
+    }
+
+    // Call custom handler if provided
     if (onOpenChat) {
       onOpenChat(question);
-    } else {
-      // TODO: Integrate with chat system
-      console.log(`Opening chat with question: ${question}`);
     }
   };
 

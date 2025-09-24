@@ -33,6 +33,7 @@ interface PromptState {
   toggleVoiceMessage: () => void;
   processTaskWithAI: (task: Task) => Promise<void>;
   addAIResponse: (response: string) => void;
+  addAvatarMessage: (message: string) => void;
   resetConversationState: () => void;
 }
 
@@ -237,6 +238,30 @@ Would you like me to help you think through any specific aspect of this task? I'
     const { addToHistory, toggleRespondingState } = promptStore.getState();
     addToHistory();
     toggleRespondingState();
+  },
+
+  addAvatarMessage: (message: string) => {
+    // Add avatar-initiated message directly to history (not input)
+    const avatarMessage = message?.trim();
+    if (!avatarMessage) {
+      console.warn("Attempted to add empty avatar message");
+      return;
+    }
+
+    set((state) => ({
+      history: [
+        ...state.history,
+        {
+          message: avatarMessage,
+          sender: "ai" as const,
+        },
+      ],
+      // Keep input empty for user response
+      input: {
+        message: "",
+        sender: "user",
+      },
+    }));
   },
 
   resetConversationState: () =>

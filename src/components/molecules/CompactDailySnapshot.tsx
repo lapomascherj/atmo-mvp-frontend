@@ -61,6 +61,7 @@ const CompactDailySnapshot: React.FC<CompactDailySnapshotProps> = ({
   // Prompt store for chat integration
   const {
     addMessageToPrompt,
+    addAvatarMessage,
     toggleConversationStarted,
     isConversationStarted
   } = promptStore();
@@ -130,7 +131,19 @@ const CompactDailySnapshot: React.FC<CompactDailySnapshotProps> = ({
     return starters[question] || "My thoughts on this: ";
   };
 
-  // Handle open in chat click
+  // Avatar greeting templates for morning actions
+  const getAvatarGreeting = (question: string): string => {
+    const greetings = [
+      "Good morning! Let's set the tone for today. ",
+      "Hey, ready to start the day right? ",
+      "Let's plan your day together. "
+    ];
+
+    const randomGreeting = greetings[Math.floor(Math.random() * greetings.length)];
+    return randomGreeting + question;
+  };
+
+  // Handle open in chat click - Updated for avatar-driven conversations
   const handleOpenInChat = (question: string, questionIndex?: number) => {
     // Record interaction
     recordQuestionInteraction(question, true);
@@ -140,9 +153,9 @@ const CompactDailySnapshot: React.FC<CompactDailySnapshotProps> = ({
       markQuestionAnswered(questionIndex);
     }
 
-    // Open chat with smart contextual answer starter
-    const smartStarter = getSmartAnswerStarter(question);
-    addMessageToPrompt(smartStarter);
+    // Create avatar-initiated conversation with warm greeting + question
+    const avatarMessage = getAvatarGreeting(question);
+    addAvatarMessage(avatarMessage);
 
     // Start conversation if not started
     if (!isConversationStarted) {

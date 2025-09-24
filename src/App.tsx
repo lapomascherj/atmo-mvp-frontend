@@ -13,7 +13,6 @@ import DailyRoad from "./pages/DailyRoad";
 import Profile from "./pages/Profile";
 import CalendarPage from "./pages/CalendarPage.tsx";
 import KnowledgeOrganiser from "./pages/KnowledgeOrganiser";
-import KnowledgeOrganiserSimple from "./pages/KnowledgeOrganiserSimple";
 import ProjectView from "./pages/ProjectView";
 import NewPage from "./pages/NewPage";
 

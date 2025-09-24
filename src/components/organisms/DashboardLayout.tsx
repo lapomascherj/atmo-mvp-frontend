@@ -164,15 +164,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ userName }) => {
                 }}
               >
                 <div className="w-full h-full overflow-hidden">
-                  <ErrorBoundary fallback={
-                    <div className="flex items-center justify-center h-full">
-                      <div className="text-center text-white/60">
-                        <p>Chat interface temporarily unavailable</p>
-                      </div>
-                    </div>
-                  }>
                     <CenterColumn maxWidthPercent={dividerPosition} />
-                  </ErrorBoundary>
                 </div>
               </div>
 

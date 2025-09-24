@@ -46,21 +46,24 @@ const InteractiveDivider: React.FC<InteractiveDividerProps> = ({
     }
   }, [disabled]);
 
-  // Handle mouse/touch move with enhanced viewport constraints
+  // Ultra-smooth pointer movement with professional-grade responsiveness
   const handlePointerMove = useCallback((e: PointerEvent) => {
     if (!isDragging || !containerRef.current || disabled) return;
 
     const rect = containerRef.current.getBoundingClientRect();
-    const newPosition = ((e.clientX - rect.left) / rect.width) * 100;
-    
-    // Enhanced clamping: respect minPosition/maxPosition AND ensure visibility
-    const safeMinPosition = Math.max(minPosition, 5); // 5% minimum from left edge
-    const safeMaxPosition = Math.min(maxPosition, 95); // 5% minimum from right edge
-    const clampedPosition = Math.max(safeMinPosition, Math.min(safeMaxPosition, newPosition));
-    
+    const rawPosition = ((e.clientX - rect.left) / rect.width) * 100;
+
+    // Dynamic bounds that adapt to content needs
+    const safeMinPosition = Math.max(minPosition, 20);
+    const safeMaxPosition = Math.min(maxPosition, 80);
+
+    // Apply bounds with smooth clamping
+    const clampedPosition = Math.max(safeMinPosition, Math.min(safeMaxPosition, rawPosition));
+
+    // Instant response for professional feel
     setPosition(clampedPosition);
     onPositionChange?.(clampedPosition);
-  }, [isDragging, minPosition, maxPosition, onPositionChange, disabled]);
+  }, [isDragging, minPosition, maxPosition, onPositionChange, disabled, position]);
 
   // Handle mouse/touch end
   const handlePointerUp = useCallback(() => {
@@ -149,19 +152,19 @@ const InteractiveDivider: React.FC<InteractiveDividerProps> = ({
         <div
           ref={dividerRef}
           className={cn(
-            'absolute top-0 bottom-0 left-1/2 -translate-x-1/2 transition-all duration-300 ease-out',
+            'absolute top-0 bottom-0 left-1/2 -translate-x-1/2 transition-all duration-200 ease-in-out',
             'bg-gradient-to-b from-transparent to-transparent',
-            // Thin line by default
-            'w-px via-white/10',
-            // Enhanced styling only when hovered or dragging
-            (isHovering || isDragging) && 'w-1 via-[#FF7000]/40 shadow-lg shadow-white/20',
+            // Responsive line thickness
+            'w-px via-white/15',
+            // Ultra-smooth interactive states
+            (isHovering || isDragging) && 'w-2 via-[#FF7000]/80 shadow-2xl shadow-[#FF7000]/50',
             disabled && 'opacity-50 cursor-not-allowed',
             className
           )}
           style={{
-            backgroundImage: isHovering || isDragging 
-              ? 'linear-gradient(to bottom, transparent, rgba(255, 112, 0, 0.4), transparent)'
-              : 'linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.1), transparent)'
+            backgroundImage: isHovering || isDragging
+              ? 'linear-gradient(to bottom, transparent, rgba(255, 112, 0, 0.7), transparent)'
+              : 'linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.15), transparent)'
           }}
           onPointerDown={handlePointerDown}
           onKeyDown={handleKeyDown}

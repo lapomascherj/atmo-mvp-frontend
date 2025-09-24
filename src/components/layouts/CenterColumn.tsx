@@ -219,6 +219,11 @@ What would you like to work on today?`;
             startListening();
         }
 
+        // Enable voice message mode to show avatar is listening
+        if (!isVoiceMessage) {
+            toggleVoiceMessage();
+        }
+
         // Ensure chat is open for voice-to-text
         if (!isConversationStarted) {
             toggleConversationStarted();
@@ -226,6 +231,8 @@ What would you like to work on today?`;
     };
 
     const handleStopVoiceMode = () => {
+        console.log('Stopping voice mode - current states:', { isListening, isVoiceMessage, voiceSource });
+
         // Stop listening and clear all voice-related state
         if (isListening) {
             stopListening();
@@ -244,7 +251,14 @@ What would you like to work on today?`;
         setVoiceSource(null);
         setIsTranscribing(false);
 
-        console.log('Voice mode stopped');
+        // Force interaction mode back to appropriate state
+        if (isConversationStarted) {
+            setInteractionMode('chat');
+        } else {
+            setInteractionMode('idle');
+        }
+
+        console.log('Voice mode stopped successfully');
     };
 
     const handleStartChat = () => {
@@ -292,12 +306,12 @@ What would you like to work on today?`;
     }));
 
     return (
-        <div className="h-full flex flex-col bg-black relative overflow-hidden w-full">
-            {/* Orange Sphere - Lowered position, voice-only interaction */}
-            <div className="flex-shrink-0 flex flex-col items-center pt-12 pb-6 relative z-10">
+        <div className="h-full flex flex-col bg-transparent relative overflow-hidden w-full">
+            {/* Orange Sphere - Aligned with right card */}
+            <div className="flex-shrink-0 flex flex-col items-center pt-44 pb-6 relative z-10">
                 <div className="relative transition-all duration-700 ease-out mb-4">
                     <SphereChat
-                        size={200}
+                        size={220}
                         onClick={handleSphereClick}
                         voiceSupported={isSupported}
                         isListening={isListening || isVoiceMessage}
@@ -311,28 +325,29 @@ What would you like to work on today?`;
                     <div className="absolute inset-0 -z-30 bg-gradient-to-r from-[#FF7000]/5 to-purple-500/5 rounded-full blur-[100px] scale-200 animate-pulse-soft"></div>
                 </div>
 
-                {/* Voice Control X Button */}
+                {/* Enhanced Voice Control X Button */}
                 {(isListening || isVoiceMessage) && (
                     <button
                         onClick={handleStopVoiceMode}
-                        className="w-8 h-8 rounded-full bg-black/80 border border-white/20 flex items-center justify-center text-white/60 hover:text-red-400 hover:border-red-400/40 transition-all duration-200"
+                        className="w-10 h-10 rounded-full bg-red-500/20 border-2 border-red-400/40 flex items-center justify-center text-red-400 hover:bg-red-500/30 hover:border-red-400/60 hover:text-red-300 hover:scale-105 transition-all duration-200 shadow-lg backdrop-blur-sm"
                         aria-label="Stop voice interaction"
                     >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
                         </svg>
                     </button>
                 )}
             </div>
 
             {/* Always-On Chat Interface - Width-Locked Panel */}
-            <div className="flex-1 transition-all duration-500 ease-in-out">
+            <div className="flex-1">
                 <FullHeightChat
                     messages={chatMessages}
                     currentMessage={input.message}
                     onMessageChange={addMessageToPrompt}
                     onSendMessage={handleSendMessage}
                     onMicClick={handleChatMicClick}
+                    onAttachClick={undefined}
                     isMicActive={voiceSource === 'chat' && isListening}
                     isMicSupported={isSupported}
                     isResponding={isResponding}

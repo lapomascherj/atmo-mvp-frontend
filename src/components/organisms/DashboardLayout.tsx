@@ -125,7 +125,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ userName }) => {
 
   return (
     <>
-      <div className="h-full bg-black relative overflow-hidden ml-[70px]">
+      <div className="h-full bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 relative overflow-hidden ml-[70px]">
         {/* Sophisticated Background Effects with Orange/Indigo Palette */}
         <div className="absolute inset-0 bg-[url('/bg-grid.svg')] bg-fixed opacity-[0.008] pointer-events-none"></div>
         
@@ -155,14 +155,12 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ userName }) => {
             <div className="h-full w-full flex relative">
               
               {/* Left Section - Avatar & Chat Area - Width Locked */}
-              <div 
-                className="h-full flex flex-col transition-all duration-300 ease-out overflow-hidden"
-                style={{ 
+              <div
+                className="h-full flex flex-col overflow-hidden"
+                style={{
                   width: `${dividerPosition}%`,
                   maxWidth: `${dividerPosition}%`,
-                  minWidth: '0',
-                  transform: `scale(${0.85 + (dividerPosition / 50) * 0.15})`,
-                  transformOrigin: 'center center'
+                  minWidth: '0'
                 }}
               >
                 <div className="w-full h-full overflow-hidden">
@@ -179,12 +177,10 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ userName }) => {
               </div>
 
               {/* Right Section - Daily Snapshot */}
-              <div 
-                className="h-full flex flex-col justify-center items-center transition-all duration-300 ease-out overflow-hidden"
-                style={{ 
-                  width: `${100 - dividerPosition}%`,
-                  transform: `scale(${0.85 + ((100 - dividerPosition) / 50) * 0.15})`,
-                  transformOrigin: 'center center'
+              <div
+                className="h-full flex flex-col justify-center items-center overflow-hidden"
+                style={{
+                  width: `${100 - dividerPosition}%`
                 }}
               >
                 <div className="w-full h-full flex flex-col items-center justify-center px-4">
@@ -201,11 +197,11 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ userName }) => {
                 </div>
               </div>
 
-              {/* Interactive Full-Height Divider - Enhanced Constraints */}
+              {/* Ultra-Responsive Interactive Divider */}
               <InteractiveDivider
                 initialPosition={50}
-                minPosition={30}
-                maxPosition={70}
+                minPosition={25}
+                maxPosition={75}
                 onPositionChange={setDividerPosition}
                 className="z-20"
                 showOnMobile={true}

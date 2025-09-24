@@ -1,7 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { Button } from '@/components/atoms/Button';
 import { Input } from '@/components/atoms/Input';
-import { Paperclip, Mic, MicOff, Send } from 'lucide-react';
+import { Paperclip, Send } from 'lucide-react';
 import { cn } from '@/utils/utils';
 
 interface ChatMessage {
@@ -17,6 +17,7 @@ interface FullHeightChatProps {
   onMessageChange: (message: string) => void;
   onSendMessage: () => void;
   onMicClick?: () => void;
+  onAttachClick?: () => void;
   isMicActive?: boolean;
   isMicSupported?: boolean;
   isResponding?: boolean;
@@ -31,6 +32,7 @@ const FullHeightChat: React.FC<FullHeightChatProps> = ({
   onMessageChange,
   onSendMessage,
   onMicClick,
+  onAttachClick,
   isMicActive = false,
   isMicSupported = true,
   isResponding = false,
@@ -40,6 +42,7 @@ const FullHeightChat: React.FC<FullHeightChatProps> = ({
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -56,17 +59,36 @@ const FullHeightChat: React.FC<FullHeightChatProps> = ({
   };
 
   const formatTime = (date: Date) => {
-    return date.toLocaleTimeString('en-US', { 
-      hour: '2-digit', 
+    return date.toLocaleTimeString('en-US', {
+      hour: '2-digit',
       minute: '2-digit',
-      hour12: false 
+      hour12: false
     });
   };
 
+  const handleFileUpload = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length > 0) {
+      // For now, just show the file names in chat
+      const fileNames = files.map(file => file.name).join(', ');
+      onMessageChange(`📎 Attached files: ${fileNames}`);
+      console.log('Files selected:', files);
+
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
   return (
-    <div className="h-full flex flex-col bg-black overflow-hidden">
-      {/* Messages Area - Properly Spaced, Scrollable */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 scrollbar-thin scrollbar-track-gray-900/20 scrollbar-thumb-gray-600/40">
+    <div className="h-full flex flex-col bg-transparent overflow-hidden">
+      {/* ATMO Messages Area */}
+      <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4 scrollbar-thin scrollbar-track-gray-900/20 scrollbar-thumb-gray-600/40 min-h-0">
         {showWelcome || messages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center text-white/40">
@@ -80,68 +102,96 @@ const FullHeightChat: React.FC<FullHeightChatProps> = ({
               <div
                 key={message.id || index}
                 className={cn(
-                  "flex w-full",
+                  "flex w-full gap-3",
                   message.sender === 'user' ? "justify-end" : "justify-start"
                 )}
               >
-                <div
-                  className={cn(
-                    "max-w-[80%] rounded-lg px-4 py-3 relative group font-mono text-sm leading-relaxed",
-                    message.sender === 'user'
-                      ? "bg-black border border-[#FF7000]/50 text-white"
-                      : "bg-gray-900/40 border border-gray-700/40 text-white"
-                  )}
-                >
-                  <p className="whitespace-pre-wrap break-words">
-                    {message.content}
-                  </p>
+                {/* ATMO AI Avatar */}
+                {message.sender === 'ai' && (
+                  <div className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0 mt-1">
+                    <div className="w-2 h-2 rounded-sm bg-orange-500" />
+                  </div>
+                )}
+
+                <div className="max-w-[70%] relative group">
+                  {/* ATMO Message Bubble */}
                   <div
                     className={cn(
-                      "text-xs mt-1 opacity-30 group-hover:opacity-60 transition-opacity font-sans",
-                      message.sender === 'user' ? "text-[#FF7000]/50" : "text-white/30"
+                      "px-4 py-3 text-sm leading-relaxed transition-all duration-200",
+                      message.sender === 'user'
+                        ? "bg-orange-500/10 border border-orange-500/20 text-white rounded-xl"
+                        : "bg-white/5 border border-white/10 text-white rounded-xl"
+                    )}
+                  >
+                    <p className="whitespace-pre-wrap break-words font-normal">
+                      {message.content}
+                    </p>
+                  </div>
+
+                  {/* ATMO Timestamp */}
+                  <div
+                    className={cn(
+                      "text-xs mt-1.5 opacity-30 group-hover:opacity-50 transition-opacity font-normal",
+                      message.sender === 'user' ? "text-right text-orange-400/60" : "text-left text-white/30"
                     )}
                   >
                     {formatTime(message.timestamp)}
                   </div>
                 </div>
+
+                {/* ATMO User Avatar */}
+                {message.sender === 'user' && (
+                  <div className="w-7 h-7 rounded-lg bg-orange-500/10 border border-orange-500/20 flex items-center justify-center flex-shrink-0 mt-1">
+                    <div className="w-2 h-2 rounded-sm bg-orange-500" />
+                  </div>
+                )}
               </div>
             ))}
-            
-            {/* AI Typing Indicator */}
+
+            {/* ATMO AI Typing Indicator */}
             {isResponding && (
-              <div className="flex justify-start">
-                <div className="max-w-[80%] rounded-lg px-4 py-3 bg-gray-900/40 border border-gray-700/40 text-white">
-                  <div className="flex items-center space-x-2">
-                    <div className="flex space-x-1">
-                      <div className="w-1.5 h-1.5 bg-[#FF7000] rounded-full animate-bounce"></div>
-                      <div className="w-1.5 h-1.5 bg-[#FF7000] rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                      <div className="w-1.5 h-1.5 bg-[#FF7000] rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+              <div className="flex w-full gap-3 justify-start">
+                {/* AI Avatar */}
+                <div className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0 mt-1">
+                  <div className="w-2 h-2 rounded-sm bg-orange-500 animate-pulse" />
+                </div>
+
+                <div className="max-w-[70%] relative">
+                  <div className="bg-white/5 border border-white/10 text-white rounded-xl px-4 py-3">
+                    <div className="flex items-center space-x-2">
+                      <div className="flex space-x-1">
+                        <div className="w-1.5 h-1.5 bg-orange-500 rounded-full animate-bounce"></div>
+                        <div className="w-1.5 h-1.5 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '0.15s' }}></div>
+                        <div className="w-1.5 h-1.5 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '0.3s' }}></div>
+                      </div>
+                      <span className="text-sm text-white/60 font-normal">thinking...</span>
                     </div>
-                    <span className="text-xs text-white/60 font-mono">thinking...</span>
                   </div>
                 </div>
               </div>
             )}
-            
+
             <div ref={messagesEndRef} />
           </>
         )}
       </div>
 
-      {/* Tech-Style Input Bar - Proportional Width */}
-      <div className="flex-shrink-0 bg-black px-4 py-4 border-t border-white/5">
+      {/* ATMO Input Bar */}
+      <div className="flex-shrink-0 bg-transparent px-5 py-4 border-t border-white/10">
         <div className="flex items-center space-x-3">
-          {/* Attachment Button */}
+          {/* ATMO Attachment Button */}
           <Button
             variant="ghost"
             size="icon"
-            className="text-white/40 hover:text-[#FF7000] hover:bg-[#FF7000]/10 transition-all duration-200 h-8 w-8"
+            onClick={handleFileUpload}
+            className="text-white/40 hover:text-orange-500 hover:bg-orange-500/10 transition-all duration-200 h-10 w-10 rounded-lg border border-white/10 hover:border-orange-500/20"
             disabled={disabled}
+            title="Attach Files"
           >
             <Paperclip className="w-4 h-4" />
           </Button>
 
-          {/* Tech Input Field - Full Width */}
+          {/* ATMO Input Field */}
           <div className="flex-1 relative">
             <Input
               ref={inputRef}
@@ -151,47 +201,38 @@ const FullHeightChat: React.FC<FullHeightChatProps> = ({
               placeholder={placeholder}
               disabled={disabled}
               className={cn(
-                "w-full h-10 bg-gray-900/60 border border-gray-700/60 rounded-xl px-4 py-2",
-                "text-white placeholder-white/40 font-mono text-sm",
-                "focus:border-[#FF7000]/80 focus:ring-1 focus:ring-[#FF7000]/30 focus:outline-none",
-                "hover:border-gray-600/80 transition-all duration-200",
-                "shadow-sm backdrop-blur-sm"
+                "w-full h-10 bg-white/5 border border-white/15 rounded-lg px-4 py-2",
+                "text-white placeholder-white/40 text-sm font-normal",
+                "focus:border-orange-500/40 focus:ring-1 focus:ring-orange-500/20 focus:outline-none",
+                "hover:border-white/25 transition-all duration-200"
               )}
             />
           </div>
 
-          {/* Microphone Button */}
-          {isMicSupported && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onMicClick}
-              disabled={disabled}
-              className={cn(
-                "transition-all duration-200 h-8 w-8",
-                isMicActive
-                  ? "text-[#FF7000] bg-[#FF7000]/20 hover:bg-[#FF7000]/30"
-                  : "text-white/40 hover:text-[#FF7000] hover:bg-[#FF7000]/10"
-              )}
-            >
-              {isMicActive ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-            </Button>
-          )}
-
-          {/* Send Button */}
+          {/* ATMO Send Button */}
           <Button
             onClick={onSendMessage}
             disabled={!currentMessage.trim() || disabled}
             size="icon"
             className={cn(
-              "bg-[#FF7000] hover:bg-[#FF7000]/90 text-white transition-all duration-200 h-8 w-8",
+              "bg-orange-500 hover:bg-orange-400 text-white transition-all duration-200 h-10 w-10 rounded-lg",
               "hover:scale-105 active:scale-95",
-              (!currentMessage.trim() || disabled) && "opacity-50 cursor-not-allowed hover:scale-100"
+              (!currentMessage.trim() || disabled) && "opacity-40 cursor-not-allowed hover:scale-100"
             )}
           >
             <Send className="w-4 h-4" />
           </Button>
         </div>
+
+        {/* Hidden File Input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept="*/*"
+          className="hidden"
+          onChange={handleFileSelect}
+        />
       </div>
     </div>
   );

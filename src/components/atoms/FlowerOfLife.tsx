@@ -20,7 +20,7 @@ const FlowerOfLife: React.FC<FlowerOfLifeProps> = ({
   const handleClick = () => {
     if (onClick) {
       setIsAnimating(true);
-      setTimeout(() => setIsAnimating(false), 1200); // 1.2 seconds animation
+      setTimeout(() => setIsAnimating(false), 2000); // 2 seconds animation
       onClick();
     }
   };
@@ -30,7 +30,7 @@ const FlowerOfLife: React.FC<FlowerOfLifeProps> = ({
       className={`cursor-pointer transition-all duration-300 hover:scale-110 ${className}`}
       onClick={handleClick}
       style={{
-        filter: isAnimating ? 'drop-shadow(0 0 20px rgba(255, 112, 0, 0.8))' : 'drop-shadow(0 0 8px rgba(255, 112, 0, 0.4))'
+        filter: isAnimating ? 'drop-shadow(0 0 20px rgba(218, 165, 32, 0.8))' : 'drop-shadow(0 0 10px rgba(184, 134, 11, 0.5))'
       }}
     >
       <svg
@@ -44,72 +44,75 @@ const FlowerOfLife: React.FC<FlowerOfLifeProps> = ({
         `}
         style={{
           animation: isAnimating
-            ? 'spinFast 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94)'
+            ? 'spinSlow 2s cubic-bezier(0.25, 0.46, 0.45, 0.94)'
             : hasNewContent
-            ? 'pulseOrange 2s ease-in-out infinite'
+            ? 'pulseGold 2s ease-in-out infinite'
             : 'none'
         }}
       >
         <defs>
-          <filter id="orangeGlow" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur stdDeviation={isAnimating ? "3" : "1.5"} result="coloredBlur"/>
+          <filter id="goldGlow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation={isAnimating ? "4" : "2"} result="coloredBlur"/>
+            <feColorMatrix type="matrix" values="1 0.84 0 0 0  1 0.84 0 0 0  0 0 0 0 0  0 0 0 1 0" result="goldBlur"/>
             <feMerge>
-              <feMergeNode in="coloredBlur"/>
+              <feMergeNode in="goldBlur"/>
               <feMergeNode in="SourceGraphic"/>
             </feMerge>
           </filter>
-          <radialGradient id="orangeRadial" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="rgba(255, 112, 0, 1)" />
-            <stop offset="70%" stopColor="rgba(255, 112, 0, 0.8)" />
-            <stop offset="100%" stopColor="rgba(255, 112, 0, 0.4)" />
+          <radialGradient id="goldRadial" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="rgba(218, 165, 32, 1)" />
+            <stop offset="50%" stopColor="rgba(184, 134, 11, 0.95)" />
+            <stop offset="80%" stopColor="rgba(160, 116, 10, 0.9)" />
+            <stop offset="100%" stopColor="rgba(139, 101, 8, 0.8)" />
           </radialGradient>
+          <linearGradient id="goldLinear" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="rgba(218, 165, 32, 1)" />
+            <stop offset="50%" stopColor="rgba(184, 134, 11, 0.98)" />
+            <stop offset="100%" stopColor="rgba(160, 116, 10, 0.95)" />
+          </linearGradient>
         </defs>
-        
-        {/* Outer boundary circles */}
-        <circle cx="100" cy="100" r="85" fill="none" stroke="url(#orangeRadial)" strokeWidth="1.2" filter="url(#orangeGlow)" />
-        <circle cx="100" cy="100" r="78" fill="none" stroke="rgba(255, 112, 0, 0.7)" strokeWidth="0.8" filter="url(#orangeGlow)" />
 
-        {/* Complete Flower of Life pattern - 19 circles total */}
+        {/* Complete Flower of Life pattern - High Definition Gold */}
         {/* Center circle */}
-        <circle cx="100" cy="100" r="22" fill="none" stroke="url(#orangeRadial)" strokeWidth="1" filter="url(#orangeGlow)" />
+        <circle cx="100" cy="100" r="22" fill="none" stroke="url(#goldRadial)" strokeWidth="1.5" filter="url(#goldGlow)" />
 
         {/* First ring - 6 circles around center */}
-        <circle cx="100" cy="78" r="22" fill="none" stroke="rgba(255, 112, 0, 0.95)" strokeWidth="1" filter="url(#orangeGlow)" />
-        <circle cx="119" cy="89" r="22" fill="none" stroke="rgba(255, 112, 0, 0.95)" strokeWidth="1" filter="url(#orangeGlow)" />
-        <circle cx="119" cy="111" r="22" fill="none" stroke="rgba(255, 112, 0, 0.95)" strokeWidth="1" filter="url(#orangeGlow)" />
-        <circle cx="100" cy="122" r="22" fill="none" stroke="rgba(255, 112, 0, 0.95)" strokeWidth="1" filter="url(#orangeGlow)" />
-        <circle cx="81" cy="111" r="22" fill="none" stroke="rgba(255, 112, 0, 0.95)" strokeWidth="1" filter="url(#orangeGlow)" />
-        <circle cx="81" cy="89" r="22" fill="none" stroke="rgba(255, 112, 0, 0.95)" strokeWidth="1" filter="url(#orangeGlow)" />
+        <circle cx="100" cy="78" r="22" fill="none" stroke="url(#goldLinear)" strokeWidth="1.4" filter="url(#goldGlow)" />
+        <circle cx="119" cy="89" r="22" fill="none" stroke="url(#goldLinear)" strokeWidth="1.4" filter="url(#goldGlow)" />
+        <circle cx="119" cy="111" r="22" fill="none" stroke="url(#goldLinear)" strokeWidth="1.4" filter="url(#goldGlow)" />
+        <circle cx="100" cy="122" r="22" fill="none" stroke="url(#goldLinear)" strokeWidth="1.4" filter="url(#goldGlow)" />
+        <circle cx="81" cy="111" r="22" fill="none" stroke="url(#goldLinear)" strokeWidth="1.4" filter="url(#goldGlow)" />
+        <circle cx="81" cy="89" r="22" fill="none" stroke="url(#goldLinear)" strokeWidth="1.4" filter="url(#goldGlow)" />
 
         {/* Second ring - 12 circles */}
-        <circle cx="100" cy="56" r="22" fill="none" stroke="rgba(255, 112, 0, 0.85)" strokeWidth="0.9" filter="url(#orangeGlow)" />
-        <circle cx="138" cy="78" r="22" fill="none" stroke="rgba(255, 112, 0, 0.85)" strokeWidth="0.9" filter="url(#orangeGlow)" />
-        <circle cx="138" cy="122" r="22" fill="none" stroke="rgba(255, 112, 0, 0.85)" strokeWidth="0.9" filter="url(#orangeGlow)" />
-        <circle cx="100" cy="144" r="22" fill="none" stroke="rgba(255, 112, 0, 0.85)" strokeWidth="0.9" filter="url(#orangeGlow)" />
-        <circle cx="62" cy="122" r="22" fill="none" stroke="rgba(255, 112, 0, 0.85)" strokeWidth="0.9" filter="url(#orangeGlow)" />
-        <circle cx="62" cy="78" r="22" fill="none" stroke="rgba(255, 112, 0, 0.85)" strokeWidth="0.9" filter="url(#orangeGlow)" />
+        <circle cx="100" cy="56" r="22" fill="none" stroke="rgba(184, 134, 11, 0.95)" strokeWidth="1.2" filter="url(#goldGlow)" />
+        <circle cx="138" cy="78" r="22" fill="none" stroke="rgba(184, 134, 11, 0.95)" strokeWidth="1.2" filter="url(#goldGlow)" />
+        <circle cx="138" cy="122" r="22" fill="none" stroke="rgba(184, 134, 11, 0.95)" strokeWidth="1.2" filter="url(#goldGlow)" />
+        <circle cx="100" cy="144" r="22" fill="none" stroke="rgba(184, 134, 11, 0.95)" strokeWidth="1.2" filter="url(#goldGlow)" />
+        <circle cx="62" cy="122" r="22" fill="none" stroke="rgba(184, 134, 11, 0.95)" strokeWidth="1.2" filter="url(#goldGlow)" />
+        <circle cx="62" cy="78" r="22" fill="none" stroke="rgba(184, 134, 11, 0.95)" strokeWidth="1.2" filter="url(#goldGlow)" />
 
         {/* Additional circles for complete pattern */}
-        <circle cx="119" cy="67" r="22" fill="none" stroke="rgba(255, 112, 0, 0.75)" strokeWidth="0.8" filter="url(#orangeGlow)" />
-        <circle cx="138" cy="100" r="22" fill="none" stroke="rgba(255, 112, 0, 0.75)" strokeWidth="0.8" filter="url(#orangeGlow)" />
-        <circle cx="119" cy="133" r="22" fill="none" stroke="rgba(255, 112, 0, 0.75)" strokeWidth="0.8" filter="url(#orangeGlow)" />
-        <circle cx="81" cy="133" r="22" fill="none" stroke="rgba(255, 112, 0, 0.75)" strokeWidth="0.8" filter="url(#orangeGlow)" />
-        <circle cx="62" cy="100" r="22" fill="none" stroke="rgba(255, 112, 0, 0.75)" strokeWidth="0.8" filter="url(#orangeGlow)" />
-        <circle cx="81" cy="67" r="22" fill="none" stroke="rgba(255, 112, 0, 0.75)" strokeWidth="0.8" filter="url(#orangeGlow)" />
+        <circle cx="119" cy="67" r="22" fill="none" stroke="rgba(160, 116, 10, 0.92)" strokeWidth="1.1" filter="url(#goldGlow)" />
+        <circle cx="138" cy="100" r="22" fill="none" stroke="rgba(160, 116, 10, 0.92)" strokeWidth="1.1" filter="url(#goldGlow)" />
+        <circle cx="119" cy="133" r="22" fill="none" stroke="rgba(160, 116, 10, 0.92)" strokeWidth="1.1" filter="url(#goldGlow)" />
+        <circle cx="81" cy="133" r="22" fill="none" stroke="rgba(160, 116, 10, 0.92)" strokeWidth="1.1" filter="url(#goldGlow)" />
+        <circle cx="62" cy="100" r="22" fill="none" stroke="rgba(160, 116, 10, 0.92)" strokeWidth="1.1" filter="url(#goldGlow)" />
+        <circle cx="81" cy="67" r="22" fill="none" stroke="rgba(160, 116, 10, 0.92)" strokeWidth="1.1" filter="url(#goldGlow)" />
       </svg>
 
       <style jsx>{`
-        @keyframes spinFast {
+        @keyframes spinSlow {
           0% { transform: rotate(0deg); }
-          100% { transform: rotate(720deg); }
+          100% { transform: rotate(360deg); }
         }
         
-        @keyframes pulseOrange {
+        @keyframes pulseGold {
           0%, 100% {
-            filter: drop-shadow(0 0 8px rgba(255, 112, 0, 0.4));
+            filter: drop-shadow(0 0 10px rgba(184, 134, 11, 0.5));
           }
           50% {
-            filter: drop-shadow(0 0 20px rgba(255, 112, 0, 0.9));
+            filter: drop-shadow(0 0 20px rgba(218, 165, 32, 0.8));
           }
         }
       `}</style>

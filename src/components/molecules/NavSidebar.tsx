@@ -1,6 +1,6 @@
 import React, {useState} from 'react';
 import {Link, useLocation} from 'react-router-dom';
-import {Brain, Calendar, ChevronLeft, ChevronRight, LayoutDashboard, LogOut, FileText} from 'lucide-react';
+import {Brain, Calendar, ChevronLeft, ChevronRight, LayoutDashboard, LogOut} from 'lucide-react';
 import {useAuth} from '@/hooks/useMockAuth';
 import {cn} from '@/utils/utils.ts';
 import {Avatar, AvatarFallback, AvatarImage} from '@/components/atoms/Avatar.tsx';

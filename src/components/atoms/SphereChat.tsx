@@ -23,6 +23,7 @@ const SphereChat: React.FC<SphereChatProps> = ({
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [isHovered, setIsHovered] = useState(false);
   const [clickRipples, setClickRipples] = useState<Array<{ id: number; x: number; y: number }>>([]);
+  const [isClicked, setIsClicked] = useState(false);
   const sphereRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -71,6 +72,9 @@ const SphereChat: React.FC<SphereChatProps> = ({
         setClickRipples(prev => prev.filter(ripple => ripple.id !== newRipple.id));
       }, 1000);
 
+      // Toggle active state for immediate visual feedback
+      setIsClicked(!isClicked);
+
       onClick();
     }
   };
@@ -79,15 +83,15 @@ const SphereChat: React.FC<SphereChatProps> = ({
   const getAnimationClass = () => {
     if (isListening) return 'animate-pulse-fast';
     if (isThinking) return 'animate-spin-slow';
-    if (isResponding) return 'animate-bounce-gentle';
+    if (isResponding) return 'animate-breathe';
     return 'animate-breathe';
   };
 
   const getGlowIntensity = () => {
-    if (isListening) return 0.9;
-    if (isThinking || isResponding) return 0.7;
-    if (isHovered) return 0.6;
-    return 0.4;
+    if (isListening) return 0.4;
+    if (isThinking || isResponding) return 0.3;
+    if (isHovered) return 0.25;
+    return 0.2;
   };
 
   return (
@@ -106,7 +110,7 @@ const SphereChat: React.FC<SphereChatProps> = ({
         style={{
           width: size + 80,
           height: size + 80,
-          background: `radial-gradient(circle, rgba(255, 112, 0, ${0.15 * getGlowIntensity()}) 0%, transparent 70%)`,
+          background: `radial-gradient(circle, rgba(204, 85, 0, ${0.1 * getGlowIntensity()}) 0%, transparent 70%)`,
           filter: `blur(${isListening ? '30px' : '20px'})`,
           transform: `translate(${mousePosition.x * 0.3}px, ${mousePosition.y * 0.3}px)`,
         }}
@@ -117,7 +121,7 @@ const SphereChat: React.FC<SphereChatProps> = ({
         style={{
           width: size + 40,
           height: size + 40,
-          background: `radial-gradient(circle, rgba(255, 140, 0, ${0.2 * getGlowIntensity()}) 0%, transparent 60%)`,
+          background: `radial-gradient(circle, rgba(221, 102, 0, ${0.15 * getGlowIntensity()}) 0%, transparent 60%)`,
           filter: `blur(${isListening ? '20px' : '15px'})`,
           transform: `translate(${mousePosition.x * 0.5}px, ${mousePosition.y * 0.5}px)`,
         }}
@@ -132,15 +136,15 @@ const SphereChat: React.FC<SphereChatProps> = ({
           width: size,
           height: size,
           background: isListening
-            ? 'linear-gradient(45deg, #FF7000, #FF8C00, #FF7000)'
-            : '#FF7000',
+            ? 'linear-gradient(45deg, #CC5500, #DD6600, #CC5500)'
+            : '#CC5500',
           boxShadow: `
-            0 0 ${isListening ? '80px' : '60px'} rgba(255, 112, 0, ${getGlowIntensity()}),
-            0 0 30px rgba(255, 112, 0, 0.4),
-            inset 0 0 20px rgba(255, 140, 0, 0.3)
+            0 0 ${isListening ? '50px' : '35px'} rgba(204, 85, 0, ${getGlowIntensity()}),
+            0 0 20px rgba(204, 85, 0, 0.2),
+            inset 0 0 15px rgba(221, 102, 0, 0.15)
           `,
           transform: `translate(${mousePosition.x}px, ${mousePosition.y}px) scale(${isHovered && onClick ? 1.05 : 1})`,
-          filter: isHovered && onClick ? 'brightness(1.15)' : 'brightness(1)',
+          filter: isHovered && onClick ? 'brightness(1.05)' : 'brightness(0.95)',
         }}
       >
         {/* Click ripple effects */}
@@ -169,7 +173,7 @@ const SphereChat: React.FC<SphereChatProps> = ({
         <div
           className="absolute inset-4 rounded-full opacity-30"
           style={{
-            background: 'radial-gradient(circle, rgba(255, 140, 0, 0.4) 0%, transparent 70%)',
+            background: 'radial-gradient(circle, rgba(221, 102, 0, 0.25) 0%, transparent 70%)',
             filter: 'blur(8px)',
           }}
         />
@@ -182,13 +186,55 @@ const SphereChat: React.FC<SphereChatProps> = ({
           style={{
             width: size + 20,
             height: size + 20,
-            borderColor: isListening ? 'rgba(239, 68, 68, 0.8)' : 'rgba(255, 140, 0, 0.8)',
+            borderColor: isListening ? 'rgba(239, 68, 68, 0.6)' : 'rgba(221, 102, 0, 0.6)',
             borderStyle: isListening ? 'solid' : 'dashed',
             animation: isListening ? 'pulse-ring 1.5s ease-in-out infinite' : 'pulse 2s ease-in-out infinite',
             transform: `translate(${mousePosition.x * 0.2}px, ${mousePosition.y * 0.2}px)`,
           }}
         />
       )}
+
+      {/* Orbiting dot when listening OR clicked */}
+      {(isListening || isClicked) && (
+        <div
+          className="absolute"
+          style={{
+            width: size + 20,
+            height: size + 20,
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+          }}
+        >
+          <div
+            className="absolute w-4 h-4 bg-orange-500 rounded-full animate-orbit-simple"
+            style={{
+              top: '-8px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              transformOrigin: `50% ${(size + 20) / 2 + 8}px`,
+              boxShadow: '0 0 16px rgba(249, 115, 22, 1)',
+              border: '1px solid rgba(255, 255, 255, 0.3)',
+            }}
+          />
+        </div>
+      )}
+
+      {/* Active text */}
+      {(isListening || isClicked) && (
+        <div
+          className="absolute text-orange-400 text-sm font-semibold"
+          style={{
+            top: size + 35,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            textShadow: '0 0 10px rgba(249, 115, 22, 0.8)',
+          }}
+        >
+          Listening
+        </div>
+      )}
+
 
       <style jsx>{`
         @keyframes breathe {
@@ -269,6 +315,19 @@ const SphereChat: React.FC<SphereChatProps> = ({
           50% {
             opacity: 0.4;
           }
+        }
+
+        @keyframes orbit-simple {
+          0% {
+            transform: translateX(-50%) rotate(0deg);
+          }
+          100% {
+            transform: translateX(-50%) rotate(360deg);
+          }
+        }
+
+        .animate-orbit-simple {
+          animation: orbit-simple 3s linear infinite;
         }
       `}</style>
     </div>

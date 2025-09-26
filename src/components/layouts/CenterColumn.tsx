@@ -20,9 +20,11 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
     const [interactionMode, setInteractionMode] = useState<'idle' | 'voice' | 'chat'>('idle');
     const [voiceSource, setVoiceSource] = useState<'sphere' | 'chat' | null>(null);
     const [isTranscribing, setIsTranscribing] = useState(false);
+    const [isAvatarInForeground, setIsAvatarInForeground] = useState(false);
     const transcriptTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const messagesEndRef = useRef<HTMLDivElement>(null);
     
     const {
         history,
@@ -47,7 +49,8 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
             
             if (voiceSource === 'sphere') {
                 // Voice-to-voice: Add to history and get AI response
-                addToHistory(cleanedTranscript, 'user');
+                addMessageToPrompt(cleanedTranscript, 'user');
+                addToHistory();
                 handleAIResponse(cleanedTranscript);
             } else {
                 // Voice-to-text: Add to input field
@@ -82,18 +85,23 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
     useEffect(() => {
         if (transcript && isListening) {
             setIsTranscribing(true);
-            
+
             // Clear existing timeout
             if (transcriptTimeoutRef.current) {
                 clearTimeout(transcriptTimeoutRef.current);
             }
-            
+
             // Set new timeout for when transcript stops updating
             transcriptTimeoutRef.current = setTimeout(() => {
                 setIsTranscribing(false);
             }, 1500);
         }
     }, [transcript, isListening]);
+
+    // Auto-scroll to bottom when new messages arrive (like WhatsApp)
+    useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [history]);
 
     const cleanTranscript = (text: string): string => {
         return text
@@ -105,11 +113,15 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
     };
 
     const handleSphereClick = () => {
+        // Toggle avatar foreground state
+        setIsAvatarInForeground(!isAvatarInForeground);
+
         if (isListening) {
             stopListening();
             setInteractionMode('idle');
             setVoiceSource(null);
-        } else if (isSupported) {
+        } else if (isSupported && !isResponding && !isTranscribing) {
+            // Prevent activation while AI is responding or transcribing
             setVoiceSource('sphere');
             setInteractionMode('voice');
             if (!isConversationStarted) {
@@ -128,31 +140,33 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
                 currentTask: currentTask || undefined,
                 userName: user?.nickname || 'User'
             });
-            
-            addToHistory(response.message, 'ai');
-            
+
+            // Add AI response to history using addAIResponse function
+            const { addAIResponse } = promptStore.getState();
+            addAIResponse(response.message);
+
             if (response.task) {
                 // Handle task context if needed
             }
-            
+
         } catch (error) {
             console.error('Error getting AI response:', error);
-            addToHistory("I'm having trouble processing your request right now. Please try again.", 'ai');
-        } finally {
-            toggleRespondingState();
+            const { addAIResponse } = promptStore.getState();
+            addAIResponse("I'm having trouble processing your request right now. Please try again.");
         }
     };
 
     const handleSendMessage = async () => {
         const messageText = input.message?.trim();
-        if (!messageText) return;
+        if (!messageText || isResponding) return; // Prevent sending while AI is responding
 
         if (!isConversationStarted) {
             toggleConversationStarted();
         }
 
-        addToHistory(messageText, 'user');
-        clearInput();
+        // Message is already in input from user typing, just add to history
+        addToHistory();
+        clearInput(); // Clear input immediately after adding to history
 
         await handleAIResponse(messageText);
     };
@@ -189,30 +203,38 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
     };
 
     return (
-        <div className="h-full relative bg-transparent overflow-hidden w-full">
-            {/* Fixed Orange Sphere - Always positioned at top - responsive */}
-            <div className="absolute top-32 md:top-44 left-1/2 transform -translate-x-1/2 z-30">
+        <div className="h-full relative bg-gradient-to-br from-slate-950/95 via-slate-900/90 to-slate-950/95 overflow-hidden w-full">
+
+            {/* Avatar - Centered initially, moves UP when conversation starts */}
+            <div className={`absolute left-1/2 transform -translate-x-1/2 transition-all duration-700 ease-out ${
+                isAvatarInForeground ? 'z-50' : 'z-30'
+            } ${
+                history.length > 0 ? 'top-16 md:top-20' : 'top-1/2 -translate-y-1/2'
+            }`}
+            style={{
+                filter: 'drop-shadow(0 0 20px rgba(204, 85, 0, 0.15))',
+            }}>
                 <div className="relative transition-all duration-700 ease-out">
                     <SphereChat
-                        size={220}
+                        size={history.length > 0 ? 160 : 220}
                         onClick={handleSphereClick}
                         voiceSupported={isSupported}
                         isListening={isListening || isVoiceMessage}
                         isThinking={isResponding}
                         isResponding={isConversationStarted && !isResponding && history.length > 0}
                     />
-                    
-                    {/* Enhanced glow effects with activity pulse */}
-                    <div className={`absolute inset-0 -z-10 bg-[#FF7000]/20 rounded-full blur-2xl transition-all duration-300 ${
+
+                    {/* Subtle glow effects with activity pulse */}
+                    <div className={`absolute inset-0 -z-10 bg-[#CC5500]/12 rounded-full blur-2xl transition-all duration-300 ${
                         isResponding ? 'animate-pulse scale-110' : 'animate-pulse-soft'
                     }`}></div>
-                    <div className={`absolute inset-0 -z-20 bg-[#FF7000]/10 rounded-full blur-3xl scale-150 transition-all duration-300 ${
+                    <div className={`absolute inset-0 -z-20 bg-[#CC5500]/6 rounded-full blur-3xl scale-150 transition-all duration-300 ${
                         isResponding ? 'animate-pulse scale-125' : 'animate-pulse-soft'
                     }`}></div>
-                    <div className="absolute inset-0 -z-30 bg-gradient-to-r from-[#FF7000]/5 to-purple-500/5 rounded-full blur-[100px] scale-200 animate-pulse-soft"></div>
+                    <div className="absolute inset-0 -z-30 bg-gradient-to-r from-[#CC5500]/3 to-indigo-500/2 rounded-full blur-[80px] scale-200 animate-pulse-soft"></div>
                 </div>
 
-                {/* Enhanced Voice Control X Button */}
+                {/* Voice Control X Button */}
                 {(isListening || isVoiceMessage) && (
                     <div className="absolute -bottom-16 left-1/2 transform -translate-x-1/2">
                         <Button
@@ -231,20 +253,48 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
                 )}
             </div>
 
-            {/* Gradient Fade Effect for Messages Area */}
-            <div className="absolute top-0 left-0 right-0 h-80 md:h-96 bg-gradient-to-b from-transparent via-transparent to-black/0 pointer-events-none z-20" 
-                 style={{
-                     background: 'linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 50%, rgba(0,0,0,0.2) 70%, rgba(0,0,0,0.6) 85%, rgba(0,0,0,0.9) 95%, rgba(0,0,0,1) 100%)'
-                 }}>
-            </div>
+            {/* Custom ATMO Scrollbar Styles */}
+            <style jsx>{`
+                .atmo-scrollbar {
+                    /* Firefox scrollbar styling */
+                    scrollbar-width: thin;
+                    scrollbar-color: rgba(51, 65, 85, 0.6) rgba(15, 23, 42, 0.1);
+                }
 
-            {/* Messages Area - Scrollable with padding for sphere */}
-            <div 
-                className="h-full overflow-y-auto pt-96 md:pt-[420px] pb-24"
+                .atmo-scrollbar::-webkit-scrollbar {
+                    width: 8px;
+                }
+
+                .atmo-scrollbar::-webkit-scrollbar-track {
+                    background: rgba(15, 23, 42, 0.1);
+                    border-radius: 4px;
+                }
+
+                .atmo-scrollbar::-webkit-scrollbar-thumb {
+                    background: rgba(51, 65, 85, 0.6);
+                    border-radius: 4px;
+                    transition: all 0.3s ease;
+                }
+
+                .atmo-scrollbar::-webkit-scrollbar-thumb:hover {
+                    background: rgba(249, 115, 22, 0.7);
+                    box-shadow: 0 0 8px rgba(249, 115, 22, 0.3);
+                }
+
+                .atmo-scrollbar::-webkit-scrollbar-corner {
+                    background: rgba(15, 23, 42, 0.1);
+                }
+            `}</style>
+
+            {/* Messages Area - Scrollable, positioned below avatar when active */}
+            <div
+                className={`atmo-scrollbar absolute left-0 right-0 bottom-0 overflow-y-auto transition-all duration-700 ${
+                    history.length > 0 ? 'top-[240px] md:top-[260px]' : 'top-3/4'
+                }`}
             >
-                <div className="px-6 space-y-4">
+                <div className="px-4 md:px-6 space-y-3 pb-24">
                     {history.length === 0 ? (
-                        <div className="text-center text-white/40 text-sm">
+                        <div className="text-center text-white/40 text-sm py-4">
                             Click the orange sphere to start a voice conversation
                         </div>
                     ) : (
@@ -256,32 +306,33 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
                                     message.sender === 'user' ? "justify-end" : "justify-start"
                                 )}
                             >
-                                <div className={cn("max-w-[85%] md:max-w-[75%]")}>
+                                <div className={cn("max-w-[90%] md:max-w-[80%]")}>
                                     <div
                                         className={cn(
-                                            "px-5 py-4 text-sm leading-relaxed transition-all duration-200 shadow-lg backdrop-blur-sm",
+                                            "px-4 py-3 text-sm leading-relaxed transition-all duration-200 backdrop-blur-sm",
                                             message.sender === 'user'
-                                                ? "bg-orange-500/10 border border-orange-500/20 text-white rounded-2xl rounded-br-md"
-                                                : "bg-white/5 border border-white/10 text-white rounded-2xl rounded-bl-md"
+                                                ? "bg-orange-500/15 border border-orange-500/30 text-white rounded-2xl rounded-br-md"
+                                                : "bg-slate-800/70 border border-slate-600/40 text-white/95 rounded-2xl rounded-bl-md"
                                         )}
                                         style={{
-                                            lineHeight: '1.7',
-                                            wordSpacing: '0.05em',
-                                            letterSpacing: '0.01em'
+                                            lineHeight: '1.6',
+                                            wordSpacing: '0.02em',
+                                            letterSpacing: '0.005em'
                                         }}
                                     >
                                         <div 
                                             className="whitespace-pre-wrap break-words font-normal"
                                             style={{
                                                 fontSize: '14px',
-                                                lineHeight: '1.7'
+                                                lineHeight: '1.6',
+                                                fontWeight: '400'
                                             }}
                                         >
                                             {message.message}
                                         </div>
                                     </div>
                                     <div className={cn(
-                                        "text-xs text-white/30 mt-1",
+                                        "text-xs text-white/30 mt-1.5",
                                         message.sender === 'user' ? "text-right" : "text-left"
                                     )}>
                                         {formatTime(new Date())}
@@ -294,8 +345,8 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
                     {/* Typing Indicator */}
                     {isResponding && (
                         <div className="flex justify-start">
-                            <div className="max-w-[85%] md:max-w-[75%]">
-                                <div className="bg-white/5 border border-white/10 text-white rounded-2xl rounded-bl-md px-5 py-4 shadow-lg backdrop-blur-sm">
+                            <div className="max-w-[90%] md:max-w-[80%]">
+                                <div className="bg-slate-800/70 border border-slate-600/40 text-white rounded-2xl rounded-bl-md px-4 py-3 backdrop-blur-sm">
                                     <div className="flex space-x-1">
                                         <div className="w-2 h-2 bg-white/40 rounded-full animate-pulse"></div>
                                         <div className="w-2 h-2 bg-white/40 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
@@ -305,17 +356,20 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
                             </div>
                         </div>
                     )}
+
+                    {/* Scroll target for auto-scroll */}
+                    <div ref={messagesEndRef} />
                 </div>
             </div>
 
             {/* Fixed Input Bar at Bottom */}
-            <div className="absolute bottom-0 left-0 right-0 bg-black/40 backdrop-blur-sm border-t border-white/10 p-4">
+            <div className="absolute bottom-0 left-0 right-0 bg-slate-900/85 backdrop-blur-md border-t border-slate-700/40 p-4 pl-20">
                 <div className="flex items-center gap-3">
                     <Button
                         onClick={handleFileUpload}
                         variant="ghost"
                         size="sm"
-                        className="p-2 text-white/60 hover:text-white/80 hover:bg-white/5 rounded-lg transition-colors"
+                        className="p-2 text-white/60 hover:text-white/85 hover:bg-slate-700/50 rounded-lg transition-all duration-300 border border-transparent hover:border-slate-600/30"
                     >
                         <Paperclip className="w-5 h-5" />
                     </Button>
@@ -327,13 +381,13 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
                         value={input.message || ''}
                         onChange={(e) => addMessageToPrompt(e.target.value, 'user')}
                         onKeyDown={handleKeyDown}
-                        className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/40 focus:outline-none focus:border-orange-500/50 transition-colors"
+                        className="flex-1 bg-slate-800/70 border border-slate-600/50 rounded-xl px-5 py-3 text-white/95 placeholder-white/45 focus:outline-none focus:border-orange-500/60 focus:bg-slate-800/85 transition-all duration-300 font-light"
                     />
 
                     <Button
                         onClick={handleSendMessage}
-                        disabled={!input.message?.trim()}
-                        className="bg-orange-500/20 hover:bg-orange-500/30 disabled:bg-white/5 border border-orange-500/30 disabled:border-white/10 text-orange-400 disabled:text-white/30 p-3 rounded-xl transition-colors"
+                        disabled={!input.message?.trim() || isResponding}
+                        className="bg-orange-500/25 hover:bg-orange-500/35 disabled:bg-slate-700/40 border border-orange-500/40 disabled:border-slate-600/30 text-orange-400 disabled:text-white/25 p-3 rounded-xl transition-all duration-300 hover:shadow-lg hover:scale-105 disabled:hover:scale-100"
                     >
                         <Send className="w-5 h-5" />
                     </Button>

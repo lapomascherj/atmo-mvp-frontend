@@ -57,7 +57,6 @@ const NavItem = ({icon, label, to, isActive, isCollapsed}: NavItemProps) => {
 
 const NavSidebar: React.FC = () => {
     const [isCollapsed, setIsCollapsed] = useState(true);
-    const [isHovering, setIsHovering] = useState(false);
     const location = useLocation();
     const {user, signOut} = useAuth();
 
@@ -76,38 +75,15 @@ const NavSidebar: React.FC = () => {
     const userName = user?.nickname || user?.email?.split('@')[0] || 'User';
     const avatarUrl = user?.avatar_url || null;
 
-    // Handle hover expansion with better logic
-    const handleMouseEnter = () => {
-        setIsHovering(true);
-        if (isCollapsed) {
-            setTimeout(() => {
-                if (isHovering) {
-                    setIsCollapsed(false);
-                }
-            }, 100);
-        }
-    };
-
-    const handleMouseLeave = () => {
-        setIsHovering(false);
-        setTimeout(() => {
-            if (!isHovering) {
-                setIsCollapsed(true);
-            }
-        }, 300);
-    };
-
     return (
         <aside
             className={cn(
-                'h-screen flex flex-col bg-gradient-to-b from-[#101040]/60 to-[#010024]/80 backdrop-blur-lg border-r border-white/5 transition-all duration-300 ease-in-out fixed left-0 top-0 z-40',
+                'h-screen flex flex-col bg-gradient-to-br from-slate-950/90 via-slate-900/85 to-slate-950/90 backdrop-blur-lg border-r border-white/5 transition-all duration-300 ease-in-out fixed left-0 top-0 z-40',
                 isCollapsed ? 'w-[70px]' : 'w-[220px]'
             )}
-            onMouseEnter={handleMouseEnter}
-            onMouseLeave={handleMouseLeave}
         >
             {/* Blur background effect */}
-            <div className="absolute inset-0 bg-blue-900/10 backdrop-blur-md -z-10"></div>
+            <div className="absolute inset-0 bg-slate-900/10 backdrop-blur-md -z-10"></div>
 
             {/* Collapse toggle button */}
             <button

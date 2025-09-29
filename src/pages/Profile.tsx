@@ -1,652 +1,413 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-    Award,
-    Calendar,
-    Check,
-    Cloud,
-    Edit,
-    FileText,
-    Github,
-    Loader2,
-    Lock,
-    LogOut,
-    Search,
-    Shield,
-    Bot
-} from 'lucide-react';
+import { Edit3, Check, X, LogOut, Camera, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useMockAuth';
-import { useIntegrationsStore } from '@/stores/useMockIntegrationsStore';
-import { Button } from '@/components/atoms/Button.tsx';
-import { Switch } from '@/components/atoms/Switch.tsx';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/atoms/Avatar.tsx';
-import { Progress } from '@/components/atoms/Progress.tsx';
-import { Input } from '@/components/atoms/Input.tsx';
-import { TextArea } from '@/components/atoms/TextArea.tsx';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/atoms/Select.tsx';
-import IntegrationCard from '@/components/molecules/IntegrationCard';
 import { useToast } from '@/hooks/useToast';
-import { usePocketBase } from '@/hooks/useMockPocketBase';
-import { useAuthStore } from '@/stores/useMockAuthStore';
-import { digitalBrainAPI } from '@/api/mockDigitalBrainApi';
-import { Persona } from '@/models/Persona';
+import { AtmoCard } from '@/components/molecules/AtmoCard';
+import { Button } from '@/components/atoms/Button';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/atoms/Avatar';
+import { Input } from '@/components/atoms/Input';
+import { TextArea } from '@/components/atoms/TextArea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/atoms/Select';
 import { JobTitle } from '@/models/JobTitle';
-import { IntegrationProvider } from '@/models/IntegrationProvider';
 import { Focus } from '@/models/Focus';
-import { AvatarStyle } from '@/models/AvatarStyle';
-import { CommunicationStyle } from '@/models/CommunicationStyle';
 
 const Profile: React.FC = () => {
-    const { user, updateUserProfile, getManagementUrl, token } = useAuth();
-    const pb = usePocketBase();
-    const { integrations, fetchIntegrations } = useIntegrationsStore();
-    const { toast } = useToast();
-    const navigate = useNavigate();
+  const { user, updateUserProfile, signOut } = useAuth();
+  const { toast } = useToast();
+  const navigate = useNavigate();
 
+  // State management
+  const [isEditing, setIsEditing] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
 
-    const [isSigningOut, setIsSigningOut] = useState(false);
-    const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
-    const [isDownloadingData, setIsDownloadingData] = useState(false);
-    const [downloadLink, setDownloadLink] = useState<string | null>(null);
-    const [isResettingPassword, setIsResettingPassword] = useState(false);
-    const [integrationsSearch, setIntegrationsSearch] = useState('');
-    const [editingField, setEditingField] = useState<'name' | null>(null);
-    const [profileForm, setProfileForm] = useState({
-        nickname: user?.nickname || '',
-        job_title: user?.job_title || JobTitle.Other,
-        focus: user?.focus || Focus.PersonalDevelopment,
-        biggest_challenge: user?.biggest_challenge || '',
-        avatar_style: user?.avatar_style || AvatarStyle.Balanced,
-        communication_style: user?.communication_style || CommunicationStyle.Detailed,
+  // Check if there are unsaved changes
+  const hasUnsavedChanges = isEditing && (
+    formData.nickname !== (user?.nickname || '') ||
+    formData.bio !== (user?.bio || '') ||
+    formData.job_title !== (user?.job_title || JobTitle.Other) ||
+    formData.focus !== (user?.focus || Focus.PersonalDevelopment) ||
+    formData.location !== (user?.location || '') ||
+    formData.website !== (user?.website || '') ||
+    avatarPreview !== null
+  );
+
+  // Form state
+  const [formData, setFormData] = useState({
+    nickname: user?.nickname || '',
+    bio: user?.bio || '',
+    job_title: user?.job_title || JobTitle.Other,
+    focus: user?.focus || Focus.PersonalDevelopment,
+    location: user?.location || '',
+    website: user?.website || '',
+  });
+
+  // Avatar handling
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Derived values
+  const displayName = isEditing ? formData.nickname : (user?.nickname || 'ATMO User');
+  const email = user?.email || 'demo@example.com';
+  const userInitial = displayName.charAt(0).toUpperCase();
+  const avatarUrl = avatarPreview || user?.avatar_url;
+
+  // Handle form changes
+  const handleInputChange = (field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  // Handle avatar upload
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setAvatarFile(file);
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setAvatarPreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Form validation
+  const validateForm = () => {
+    if (!formData.nickname.trim()) {
+      toast({
+        title: 'Validation Error',
+        description: 'Name is required.',
+        variant: 'destructive',
+      });
+      return false;
+    }
+    return true;
+  };
+
+  // Save changes
+  const handleSave = async () => {
+    if (!validateForm()) return;
+
+    setIsLoading(true);
+    try {
+      let avatar_url = user?.avatar_url;
+      if (avatarFile && avatarPreview) {
+        avatar_url = avatarPreview;
+      }
+
+      await updateUserProfile({
+        nickname: formData.nickname,
+        bio: formData.bio,
+        job_title: formData.job_title,
+        focus: formData.focus,
+        location: formData.location,
+        website: formData.website,
+        avatar_url,
+      });
+
+      setAvatarFile(null);
+      setAvatarPreview(null);
+      setIsEditing(false);
+
+      toast({
+        title: 'Profile Updated',
+        description: 'Your profile has been saved successfully.',
+      });
+    } catch (error) {
+      console.error('Failed to update profile:', error);
+      toast({
+        title: 'Update Failed',
+        description: 'Failed to save your profile. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Cancel editing
+  const handleCancel = () => {
+    setFormData({
+      nickname: user?.nickname || '',
+      bio: user?.bio || '',
+      job_title: user?.job_title || JobTitle.Other,
+      focus: user?.focus || Focus.PersonalDevelopment,
+      location: user?.location || '',
+      website: user?.website || '',
     });
-    const [avatarFile, setAvatarFile] = useState<File | null>(null);
-    const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
-    const fileInputRef = React.useRef<HTMLInputElement>(null);
+    setAvatarFile(null);
+    setAvatarPreview(null);
+    setIsEditing(false);
+  };
 
-    // Use user data from auth context
-    const fullName = user?.nickname || 'ATMO User';
-    const email = user?.email || 'user@example.com';
-    const userInitial = fullName.charAt(0).toUpperCase();
-    const avatarUrl = avatarPreview || user?.avatar_url || null;
+  // Sign out
+  const handleSignOut = async () => {
+    setIsSigningOut(true);
+    try {
+      await signOut();
+      navigate('/');
+    } catch (error) {
+      console.error('Sign out failed:', error);
+    } finally {
+      setIsSigningOut(false);
+    }
+  };
 
-    // Update when user data changes
-    useEffect(() => {
-        if (user) {
-            setProfileForm({
-                nickname: user.nickname || '',
-                job_title: user.job_title || JobTitle.Other,
-                focus: user.focus || Focus.PersonalDevelopment,
-                biggest_challenge: user.biggest_challenge || '',
-                avatar_style: user.avatar_style || AvatarStyle.Balanced,
-                communication_style: user.communication_style || CommunicationStyle.Detailed,
-            });
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 relative overflow-hidden">
+      {/* Background effects */}
+      <div className="absolute inset-0 bg-[url('/bg-grid.svg')] bg-fixed opacity-[0.01] pointer-events-none" />
+      <div className="fixed top-[20%] right-[25%] -z-10 w-72 h-72 bg-blue-500/5 rounded-full blur-[100px] animate-pulse-soft" />
+      <div className="fixed top-[60%] left-[15%] -z-10 w-96 h-96 bg-orange-500/3 rounded-full blur-[120px] animate-pulse-soft" />
 
-        }
-    }, [user]);
+      {/* Main content */}
+      <div className="container mx-auto px-6 py-16 max-w-2xl ml-[200px] lg:ml-[200px] xl:ml-auto 2xl:ml-auto">
 
-    // Handle inline name update
-    const handleUpdateField = async (field: 'name', value: string) => {
-        if (!user) return;
+        {/* Profile Hero */}
+        <div className="text-center mb-16">
+          <div className="relative inline-block mb-8">
+            {/* Avatar */}
+            <Avatar className="w-32 h-32 mx-auto border-4 border-white/10">
+              {avatarUrl ? (
+                <AvatarImage src={avatarUrl} alt={displayName} className="object-cover" />
+              ) : (
+                <AvatarFallback className="text-white text-4xl font-light bg-gradient-to-br from-orange-500/20 to-orange-600/20">
+                  {userInitial}
+                </AvatarFallback>
+              )}
+            </Avatar>
 
-        setEditingField(null);
+            {/* Avatar edit button */}
+            {isEditing && (
+              <Button
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+                className="absolute -bottom-2 -right-2 rounded-full h-10 w-10 p-0 bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/30"
+              >
+                <Camera className="w-4 h-4" />
+              </Button>
+            )}
 
-        try {
-            await updateUserProfile({
-                nickname: value,
-            });
-            toast({
-                title: 'Name Updated',
-                description: 'Your display name has been updated successfully.',
-            });
-        } catch (error) {
-            console.error('Failed to update name:', error);
-            toast({
-                title: 'Update Failed',
-                description: 'Failed to update display name. Please try again.',
-                variant: 'destructive',
-            });
-        }
-    };
-
-    // Inline editing component
-    const InlineTextEdit = ({ value, onSave, onCancel, placeholder = "", className = "" }: {
-        value: string;
-        onSave: (value: string) => void;
-        onCancel: () => void;
-        placeholder?: string;
-        className?: string;
-    }) => {
-        const [editValue, setEditValue] = useState(value);
-
-        const handleSave = () => {
-            onSave(editValue);
-        };
-
-        const handleKeyDown = (e: React.KeyboardEvent) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                handleSave();
-            } else if (e.key === 'Escape') {
-                onCancel();
-            }
-        };
-
-        const handleBlur = () => {
-            handleSave();
-        };
-
-        return (
             <input
-                value={editValue}
-                onChange={(e) => setEditValue(e.target.value)}
-                onKeyDown={handleKeyDown}
-                onBlur={handleBlur}
-                className={`bg-transparent border-none outline-none w-full ${className}`}
-                style={{
-                    background: 'transparent',
-                    border: 'none',
-                    outline: 'none',
-                    boxShadow: 'none',
-                    padding: 0,
-                    margin: 0,
-                    height: 'auto'
-                }}
-                placeholder={placeholder}
-                autoFocus
+              type="file"
+              ref={fileInputRef}
+              className="hidden"
+              accept="image/*"
+              onChange={handleAvatarChange}
             />
-        );
-    };
+          </div>
 
-    // Handle profile image selection
-    const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
+          {/* Name */}
+          <div className="mb-2">
+            {isEditing ? (
+              <Input
+                value={formData.nickname}
+                onChange={(e) => handleInputChange('nickname', e.target.value)}
+                className="text-center text-4xl font-light bg-transparent border-none text-white placeholder:text-white/40 focus:ring-orange-500/30 focus:border-orange-500/30 mb-2"
+                placeholder="Your name"
+              />
+            ) : (
+              <h1 className="text-4xl font-light text-white mb-2">{displayName}</h1>
+            )}
+          </div>
 
-        setAvatarFile(file);
-
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            setAvatarPreview(reader.result as string);
-        };
-        reader.readAsDataURL(file);
-    };
-
-    const handleAvatarClick = () => {
-        fileInputRef.current?.click();
-    };
-
-    const handleProfileUpdate = async () => {
-        setIsUpdatingProfile(true);
-        try {
-            let avatar_url = user?.avatar_url;
-
-            if (avatarFile) {
-                avatar_url = avatarPreview;
-            }
-
-            await updateUserProfile({
-                nickname: profileForm.nickname,
-                job_title: profileForm.job_title,
-                avatar_url,
-                focus: profileForm.focus,
-                biggest_challenge: profileForm.biggest_challenge,
-                avatar_style: profileForm.avatar_style,
-                communication_style: profileForm.communication_style,
-            });
-
-            setAvatarFile(null);
-            setAvatarPreview(null);
-            
-            toast({
-                title: 'Profile Updated',
-                description: 'Your profile has been updated successfully.',
-            });
-        } catch (error) {
-            console.error('Profile update failed:', error);
-            toast({
-                title: 'Update Failed',
-                description: 'Failed to update profile. Please try again.',
-                variant: 'destructive',
-            });
-        } finally {
-            setIsUpdatingProfile(false);
-        }
-    };
-
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const {name, value} = e.target;
-        setProfileForm(prev => ({
-            ...prev,
-            [name]: value
-        }));
-    };
-
-
-
-    const handleSignOut = async () => {
-        try {
-            setIsSigningOut(true);
-            await signOut();
-            navigate('/auth/login');
-        } catch (error) {
-            console.error('Error signing out:', error);
-            setIsSigningOut(false);
-        }
-    };
-
-    // Handle password reset through Casdoor API
-    const handlePasswordReset = async () => {
-        setIsResettingPassword(true);
-        try {
-            const { casdoorUser } = useAuthStore.getState();
-            if (!casdoorUser?.email) {
-                toast({
-                    title: 'Email Required',
-                    description: 'Email address is required for password reset.',
-                    variant: 'destructive',
-                });
-                return;
-            }
-
-            // Call Casdoor password reset API
-            const casdoorServerUrl = import.meta.env.VITE_CASDOOR_SERVER_URL || (() => {
-              console.error("❌ VITE_CASDOOR_SERVER_URL environment variable is required for password reset");
-              throw new Error("VITE_CASDOOR_SERVER_URL environment variable is required");
-            })();
-            const appName = import.meta.env.VITE_CASDOOR_APP_NAME || 'atmo';
-            const organizationName = import.meta.env.VITE_CASDOOR_ORGANIZATION_NAME || 'atmo';
-            
-            const response = await fetch(`${casdoorServerUrl}/api/send-reset-password-email`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('casdoor_token')}`,
-                },
-                body: JSON.stringify({
-                    organization: organizationName,
-                    application: appName,
-                    email: casdoorUser.email,
-                    type: 'reset_password',
-                }),
-            });
-
-            if (!response.ok) {
-                throw new Error(`Password reset request failed: ${response.status}`);
-            }
-
-            toast({
-                title: 'Password Reset Email Sent',
-                description: 'Please check your email for password reset instructions.',
-            });
-        } catch (error: any) {
-            console.error('Password reset error:', error);
-            toast({
-                title: 'Password Reset Failed',
-                description: error.message || 'Failed to send password reset email. Please try again.',
-                variant: 'destructive',
-            });
-        } finally {
-            setIsResettingPassword(false);
-        }
-    };
-
-
-
-    // Handle data download from DigitalBrain
-    const handleDataDownload = async () => {
-        setIsDownloadingData(true);
-        setDownloadLink(null);
-        
-        try {
-            const result = await digitalBrainAPI.exportUserData();
-            
-            if (result.success && result.data.downloadUrl) {
-                setDownloadLink(result.data.downloadUrl);
-                toast({
-                    title: 'Data Export Ready',
-                    description: 'Your data export has been generated successfully. Click the download link below.',
-                });
-            } else {
-                throw new Error(result.message || 'Failed to generate data export');
-            }
-        } catch (error: any) {
-            console.error('Failed to download data:', error);
-            toast({
-                title: 'Data Export Failed',
-                description: error.message || 'Failed to generate data export. Please try again.',
-                variant: 'destructive',
-            });
-        } finally {
-            setIsDownloadingData(false);
-        }
-    };
-
-    return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 relative">
-            {/* Simplified background effects */}
-            <div
-                className="absolute inset-0 bg-[url('/bg-grid.svg')] bg-fixed opacity-[0.01] pointer-events-none"></div>
-            <div
-                className="fixed top-[20%] right-[25%] -z-10 w-72 h-72 bg-blue-500/5 rounded-full blur-[100px] animate-pulse-soft"/>
-
-            <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-12 max-w-7xl">
-                {/* Center content for large screens */}
-                <div className="max-w-4xl mx-auto ml-[70px] lg:ml-[70px] xl:ml-auto 2xl:ml-auto">
-                {/* User Profile Header */}
-                <div className="mb-12 bg-slate-800/10 rounded-2xl border border-slate-700/20 p-6">
-                    <div className="flex items-center gap-6">
-                        <div className="relative">
-                            <Avatar className="w-20 h-20 rounded-2xl bg-slate-800/30 border border-slate-700/20">
-                                {avatarUrl ? (
-                                    <AvatarImage src={avatarUrl} alt={fullName} className="object-cover"/>
-                                ) : (
-                                    <AvatarFallback
-                                        className="text-white text-3xl font-medium">{userInitial}</AvatarFallback>
-                                )}
-                            </Avatar>
-                            <input
-                                type="file"
-                                ref={fileInputRef}
-                                className="hidden"
-                                accept="image/*"
-                                onChange={handleAvatarChange}
-                            />
-                            <Button
-                                size="sm"
-                                className="absolute bottom-0 right-0 rounded-full h-7 w-7 p-0 bg-[#FF7000]/20 hover:bg-[#FF7000]/30 border border-[#FF7000]/30"
-                                onClick={handleAvatarClick}
-                            >
-                                <Edit size={12}/>
-                            </Button>
-                        </div>
-
-                        <div className="flex-1">
-                            {/* Name and Sign Out Row */}
-                            <div className="flex items-center justify-between mb-2">
-                                <div className="group flex-1">
-                                    {editingField === 'name' ? (
-                                        <InlineTextEdit
-                                            value={fullName}
-                                            onSave={(value) => handleUpdateField('name', value)}
-                                            onCancel={() => setEditingField(null)}
-                                            placeholder="Enter your display name"
-                                            className="text-3xl font-light text-white"
-                                        />
-                                    ) : (
-                                        <h1 
-                                            className="text-3xl font-light text-white hover:text-[#FF7000] cursor-pointer transition-colors"
-                                            onClick={() => setEditingField('name')}
-                                            title="Click to edit display name"
-                                        >
-                                            {fullName}
-                                        </h1>
-                                    )}
-                                </div>
-                                
-                                {/* Sign Out Button */}
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="bg-slate-800/30 border-slate-700/30 text-white/70 hover:bg-slate-800/40 hover:border-red-500/30 hover:text-red-400 transition-colors"
-                                    onClick={handleSignOut}
-                                    disabled={isSigningOut}
-                                >
-                                    {isSigningOut ? (
-                                        <>
-                                            <Loader2 size={14} className="mr-1 animate-spin"/>
-                                            <span className="text-xs">Signing out...</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <LogOut size={14} className="mr-1"/>
-                                            <span className="text-xs">Sign Out</span>
-                                        </>
-                                    )}
-                                </Button>
-                            </div>
-                            
-                            {/* Email - Read Only */}
-                            <p className="text-slate-400 mb-4">{email}</p>
-                            
-                            {/* Improved Tier Section */}
-                            <div className="space-y-3">
-                                <div className="flex items-center gap-2">
-                                    <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                                    <span className="text-sm font-medium text-slate-300">Free Plan</span>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    <div className="flex items-center gap-2 flex-1">
-                                        <Progress value={30} className="flex-1 h-1.5 bg-slate-800/30"
-                                                  indicatorClassName="bg-[#FF7000]"/>
-                                        <span className="text-xs text-slate-400 whitespace-nowrap">30% used</span>
-                                    </div>
-                                    <Button size="sm"
-                                            className="bg-[#FF7000]/20 hover:bg-[#FF7000]/30 text-[#FF7000] border border-[#FF7000]/30 transition-all gap-1.5">
-                                        <Award size={14}/>
-                                        <span className="font-medium">Upgrade</span>
-                                    </Button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Main Content */}
-                <div className="space-y-8">
-                    {/* Account Settings and Security in Two Columns */}
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        {/* Account Settings */}
-                        <section className="bg-slate-800/10 rounded-2xl border border-slate-700/20 p-6 lg:col-span-2">
-                            <h2 className="text-2xl font-light text-white mb-6">Account Settings</h2>
-
-                            <div className="space-y-6">
-                                {/* Profile Information */}
-                                <div className="space-y-4">
-                                    {/* Job Title and Focus Area on Same Row */}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="text-white/80 text-sm block mb-2">Job Title</label>
-                                            <Select
-                                                name="job_title"
-                                                value={profileForm.job_title}
-                                                onValueChange={(value) => setProfileForm(prev => ({ ...prev, job_title: value as JobTitle }))}
-                                            >
-                                                <SelectTrigger className="bg-slate-800/30 border-slate-700/30 text-white focus:border-[#FF7000]/50 focus:ring-[#FF7000]/20">
-                                                    <SelectValue placeholder="Select Job Title" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {Object.values(JobTitle).map((title) => (
-                                                        <SelectItem key={title} value={title}>{title}</SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                        <div>
-                                            <label className="text-white/80 text-sm block mb-2">Focus Area</label>
-                                            <Select
-                                                name="focus"
-                                                value={profileForm.focus}
-                                                onValueChange={(value) => setProfileForm(prev => ({ ...prev, focus: value as Focus }))}
-                                            >
-                                                <SelectTrigger className="bg-slate-800/30 border-slate-700/30 text-white focus:border-[#FF7000]/50 focus:ring-[#FF7000]/20">
-                                                    <SelectValue placeholder="Select Focus Area" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {Object.values(Focus).map((focus) => (
-                                                        <SelectItem key={focus} value={focus}>{focus}</SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                    </div>
-                                    
-                                    {/* Biggest Challenge - Full Width */}
-                                    <div>
-                                        <label className="text-white/80 text-sm block mb-2">Biggest Challenge</label>
-                                        <TextArea
-                                            name="biggest_challenge"
-                                            value={profileForm.biggest_challenge}
-                                            onChange={(e) => setProfileForm(prev => ({ ...prev, biggest_challenge: e.target.value }))}
-                                            className="bg-slate-800/30 border-slate-700/30 text-white focus:border-[#FF7000]/50 focus:ring-[#FF7000]/20 min-h-[100px]"
-                                            placeholder="What's your biggest challenge right now? Describe it in detail..."
-                                            rows={4}
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Save Profile Button */}
-                                <div className="flex justify-end">
-                                    <Button 
-                                        onClick={handleProfileUpdate} 
-                                        disabled={isUpdatingProfile}
-                                        className="bg-[#FF7000]/20 hover:bg-[#FF7000]/30 text-[#FF7000] border border-[#FF7000]/30 transition-all"
-                                    >
-                                        {isUpdatingProfile ? (
-                                            <>
-                                                <Loader2 className="mr-2 h-4 w-4 animate-spin"/>
-                                                Updating...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Check size={16} className="mr-2"/>
-                                                Save Profile
-                                            </>
-                                        )}
-                                    </Button>
-                                </div>
-                            </div>
-                        </section>
-
-                        {/* Security & Privacy */}
-                        <section className="bg-slate-800/10 rounded-2xl border border-slate-700/20 p-6">
-                            <h2 className="text-2xl font-light text-white mb-6">Security & Privacy</h2>
-                            
-                            <div className="space-y-4">
-                                <Button
-                                    variant="outline"
-                                    onClick={handlePasswordReset}
-                                    disabled={isResettingPassword}
-                                    className="w-full justify-start gap-2 bg-slate-800/30 border-slate-700/30 text-white hover:bg-slate-800/40 hover:border-[#FF7000]/30 hover:text-[#FF7000]"
-                                >
-                                    {isResettingPassword ? (
-                                        <>
-                                            <Loader2 size={16} className="animate-spin"/>
-                                            Sending Reset Email...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Lock size={16}/>
-                                            Reset Password
-                                        </>
-                                    )}
-                                </Button>
-
-                                <Button
-                                    variant="outline"
-                                    onClick={handleDataDownload}
-                                    disabled={isDownloadingData}
-                                    className="w-full justify-start gap-2 bg-slate-800/30 border-slate-700/30 text-white hover:bg-slate-800/40 hover:border-[#FF7000]/30 hover:text-[#FF7000]"
-                                >
-                                    {isDownloadingData ? (
-                                        <>
-                                            <Loader2 size={16} className="animate-spin"/>
-                                            Preparing Download...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Cloud size={16}/>
-                                            Download My Data
-                                        </>
-                                    )}
-                                </Button>
-
-                                {downloadLink && (
-                                    <div className="p-3 rounded-xl bg-green-900/20 border border-green-500/30">
-                                        <p className="text-green-400 text-sm mb-2">Your data is ready for download:</p>
-                                        <a
-                                            href={downloadLink}
-                                            download
-                                            className="text-green-300 hover:text-green-200 underline text-sm"
-                                        >
-                                            Download Data Archive
-                                        </a>
-                                    </div>
-                                )}
-
-
-                            </div>
-                        </section>
-                    </div>
-
-                    {/* Integrations */}
-                    <section className="bg-slate-800/10 rounded-2xl border border-slate-700/20 p-6">
-                        <div className="flex items-center justify-between mb-6">
-                            <h2 className="text-2xl font-light text-white">Integrations</h2>
-                            
-                            {/* Search Bar */}
-                            <div className="relative w-64">
-                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
-                                <Input
-                                    placeholder="Search integrations..."
-                                    value={integrationsSearch}
-                                    onChange={(e) => setIntegrationsSearch(e.target.value)}
-                                    className="pl-10 bg-slate-800/30 border-slate-700/30 text-white placeholder:text-slate-400 focus:border-[#FF7000]/50 focus:ring-[#FF7000]/20"
-                                />
-                            </div>
-                        </div>
-
-                        {/* Integration Categories in Two Columns */}
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                            {/* Knowledge Base Integrations */}
-                            <div className="space-y-4">
-                                <div className="flex items-center gap-2 mb-4">
-                                    <Shield className="w-5 h-5 text-blue-400" />
-                                    <h3 className="text-lg font-medium text-white/90">Knowledge Base</h3>
-                                </div>
-                                <p className="text-sm text-slate-400 mb-6">
-                                    Connect to external knowledge sources and productivity tools.
-                                </p>
-                                <div className="grid grid-cols-2 gap-4">
-                                    {(['google', 'notion', 'github'] as const).filter(integration =>
-                                        integration.toLowerCase().includes(integrationsSearch.toLowerCase()) ||
-                                        integrationsSearch === ''
-                                    ).map((integrationType) => (
-                                        <IntegrationCard
-                                            key={integrationType}
-                                            integrationType={integrationType}
-                                        />
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* AI Enhancer Integrations */}
-                            <div className="space-y-4">
-                                <div className="flex items-center gap-2 mb-4">
-                                    <Bot className="w-5 h-5 text-orange-400" />
-                                    <h3 className="text-lg font-medium text-white/90">AI Enhancers</h3>
-                                </div>
-                                <p className="text-sm text-slate-400 mb-6">
-                                    Connect AI services for content generation and analysis.
-                                </p>
-                                <div className="grid grid-cols-2 gap-4">
-                                    {(['openai'] as const).filter(integration =>
-                                        integration.toLowerCase().includes(integrationsSearch.toLowerCase()) ||
-                                        integrationsSearch === ''
-                                    ).map((integrationType) => (
-                                        <IntegrationCard
-                                            key={integrationType}
-                                            integrationType={integrationType}
-                                        />
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-                    </section>
-                </div>
-                </div>
-            </div>
+          {/* Email */}
+          <p className="text-white/60 text-lg">{email}</p>
         </div>
-    );
+
+        {/* Main Profile Card */}
+        <AtmoCard variant="orange" className="p-8 mb-8">
+          <div className="space-y-8">
+
+            {/* Professional Info */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-white/80 text-sm font-medium mb-3">Job Title</label>
+                {isEditing ? (
+                  <Select
+                    value={formData.job_title}
+                    onValueChange={(value) => handleInputChange('job_title', value)}
+                  >
+                    <SelectTrigger className="bg-white/5 border-white/10 text-white focus:border-orange-500/50 focus:ring-orange-500/20">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.values(JobTitle).map((title) => (
+                        <SelectItem key={title} value={title}>{title}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <p className="text-white/90 py-3">{formData.job_title}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-white/80 text-sm font-medium mb-3">Focus Area</label>
+                {isEditing ? (
+                  <Select
+                    value={formData.focus}
+                    onValueChange={(value) => handleInputChange('focus', value)}
+                  >
+                    <SelectTrigger className="bg-white/5 border-white/10 text-white focus:border-orange-500/50 focus:ring-orange-500/20">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.values(Focus).map((focus) => (
+                        <SelectItem key={focus} value={focus}>{focus}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <p className="text-white/90 py-3">{formData.focus}</p>
+                )}
+              </div>
+            </div>
+
+            {/* Location and Website */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-white/80 text-sm font-medium mb-3">Location</label>
+                {isEditing ? (
+                  <Input
+                    value={formData.location}
+                    onChange={(e) => handleInputChange('location', e.target.value)}
+                    className="bg-white/5 border-white/10 text-white placeholder:text-white/40 focus:border-orange-500/50 focus:ring-orange-500/20"
+                    placeholder="City, Country"
+                  />
+                ) : (
+                  <p className="text-white/90 py-3">
+                    {formData.location || <span className="text-white/40">Not specified</span>}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-white/80 text-sm font-medium mb-3">Website</label>
+                {isEditing ? (
+                  <Input
+                    value={formData.website}
+                    onChange={(e) => handleInputChange('website', e.target.value)}
+                    className="bg-white/5 border-white/10 text-white placeholder:text-white/40 focus:border-orange-500/50 focus:ring-orange-500/20"
+                    placeholder="https://example.com"
+                  />
+                ) : (
+                  <p className="text-white/90 py-3">
+                    {formData.website ? (
+                      <a
+                        href={formData.website.startsWith('http') ? formData.website : `https://${formData.website}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-orange-400 hover:text-orange-300 transition-colors"
+                      >
+                        {formData.website}
+                      </a>
+                    ) : (
+                      <span className="text-white/40">Not specified</span>
+                    )}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Bio */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <label className="block text-white/80 text-sm font-medium">Bio</label>
+                {isEditing && (
+                  <span className="text-xs text-white/40">
+                    {formData.bio.length}/500
+                  </span>
+                )}
+              </div>
+              {isEditing ? (
+                <TextArea
+                  value={formData.bio}
+                  onChange={(e) => {
+                    if (e.target.value.length <= 500) {
+                      handleInputChange('bio', e.target.value);
+                    }
+                  }}
+                  className="bg-white/5 border-white/10 text-white placeholder:text-white/40 focus:border-orange-500/50 focus:ring-orange-500/20 resize-none"
+                  placeholder="Tell us about yourself..."
+                  rows={4}
+                />
+              ) : (
+                <p className="text-white/90 py-3 min-h-[80px] leading-relaxed">
+                  {formData.bio || <span className="text-white/40">No bio added yet</span>}
+                </p>
+              )}
+            </div>
+          </div>
+        </AtmoCard>
+
+        {/* Actions */}
+        <div className="flex items-center justify-between">
+          {/* Edit/Save Actions */}
+          <div className="flex items-center gap-3">
+            {isEditing ? (
+              <>
+                <Button
+                  onClick={handleSave}
+                  disabled={isLoading || !hasUnsavedChanges}
+                  className="bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 border border-orange-500/30 px-6 disabled:opacity-50"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4 mr-2" />
+                      Save Changes
+                    </>
+                  )}
+                </Button>
+                <Button
+                  onClick={handleCancel}
+                  variant="ghost"
+                  className="text-white/70 hover:text-white hover:bg-white/10"
+                >
+                  <X className="w-4 h-4 mr-2" />
+                  Cancel
+                </Button>
+              </>
+            ) : (
+              <Button
+                onClick={() => setIsEditing(true)}
+                className="bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 border border-orange-500/30 px-6"
+              >
+                <Edit3 className="w-4 h-4 mr-2" />
+                Edit Profile
+              </Button>
+            )}
+          </div>
+
+          {/* Sign Out */}
+          <Button
+            onClick={handleSignOut}
+            disabled={isSigningOut}
+            variant="ghost"
+            className="text-white/60 hover:text-red-400 hover:bg-red-500/10"
+          >
+            {isSigningOut ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Signing out...
+              </>
+            ) : (
+              <>
+                <LogOut className="w-4 h-4 mr-2" />
+                Sign Out
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default Profile;

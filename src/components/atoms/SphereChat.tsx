@@ -27,6 +27,7 @@ const SphereChat: React.FC<SphereChatProps> = ({
   const sphereRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
+
   // Mouse tracking for subtle movement effect
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -194,8 +195,8 @@ const SphereChat: React.FC<SphereChatProps> = ({
         />
       )}
 
-      {/* Orbiting dot when listening OR clicked */}
-      {(isListening || isClicked) && (
+      {/* Orbiting dot when listening */}
+      {isListening && (
         <div
           className="absolute"
           style={{
@@ -221,7 +222,7 @@ const SphereChat: React.FC<SphereChatProps> = ({
       )}
 
       {/* Active text */}
-      {(isListening || isClicked) && (
+      {isListening && (
         <div
           className="absolute text-orange-400 text-sm font-semibold"
           style={{

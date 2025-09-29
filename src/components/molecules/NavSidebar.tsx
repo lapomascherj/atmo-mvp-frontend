@@ -1,6 +1,6 @@
 import React, {useState} from 'react';
 import {Link, useLocation} from 'react-router-dom';
-import {Brain, Calendar, ChevronLeft, ChevronRight, LayoutDashboard, LogOut} from 'lucide-react';
+import {Brain, ChevronLeft, ChevronRight, LayoutDashboard, LogOut} from 'lucide-react';
 import {useAuth} from '@/hooks/useMockAuth';
 import {cn} from '@/utils/utils.ts';
 import {Avatar, AvatarFallback, AvatarImage} from '@/components/atoms/Avatar.tsx';
@@ -65,7 +65,6 @@ const NavSidebar: React.FC = () => {
     const navItems = [
         {icon: <LayoutDashboard size={20}/>, label: 'Dashboard', to: '/'},
         {icon: <Brain size={20}/>, label: 'Digital Brain', to: '/digital-brain'},
-        {icon: <Calendar size={20}/>, label: 'Calendar', to: '/calendar'},
     ];
 
     const userInitial = user?.nickname

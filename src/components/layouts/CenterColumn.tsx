@@ -17,10 +17,8 @@ interface CenterColumnProps {
 const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) => {
     const { user } = useAuth();
     const { toast } = useToast();
-    const [interactionMode, setInteractionMode] = useState<'idle' | 'voice' | 'chat'>('idle');
-    const [voiceSource, setVoiceSource] = useState<'sphere' | 'chat' | null>(null);
+    const [isCapturing, setIsCapturing] = useState(false);
     const [isTranscribing, setIsTranscribing] = useState(false);
-    const [isAvatarInForeground, setIsAvatarInForeground] = useState(false);
     const transcriptTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -46,24 +44,17 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
     const { startListening, stopListening, transcript, isListening, error: voiceError, isSupported } = useVoiceRecognition({
         onResult: (result) => {
             const cleanedTranscript = cleanTranscript(result);
-            
-            if (voiceSource === 'sphere') {
-                // Voice-to-voice: Add to history and get AI response
-                addMessageToPrompt(cleanedTranscript, 'user');
-                addToHistory();
-                handleAIResponse(cleanedTranscript);
-            } else {
-                // Voice-to-text: Add to input field
-                addMessageToPrompt(cleanedTranscript, 'user');
-            }
-            
+
+            // Always do voice-to-voice: Add to history and get AI response
+            addMessageToPrompt(cleanedTranscript, 'user');
+            addToHistory();
+            handleAIResponse(cleanedTranscript);
+
             setIsTranscribing(false);
-            setVoiceSource(null);
         },
         onError: (error) => {
             console.error('Voice recognition error:', error);
             setIsTranscribing(false);
-            setVoiceSource(null);
         }
     });
 
@@ -103,6 +94,19 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [history]);
 
+    // Connect voice recognition to isCapturing state
+    useEffect(() => {
+        if (isCapturing && isSupported && !isResponding && !isTranscribing) {
+            if (!isConversationStarted) {
+                toggleConversationStarted();
+            }
+            startListening();
+        } else if (!isCapturing) {
+            // Always stop when not capturing, regardless of other states
+            stopListening();
+        }
+    }, [isCapturing, isSupported, isResponding, isTranscribing, isConversationStarted, startListening, stopListening, toggleConversationStarted]);
+
     const cleanTranscript = (text: string): string => {
         return text
             .trim()
@@ -112,23 +116,8 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
             .trim();
     };
 
-    const handleSphereClick = () => {
-        // Toggle avatar foreground state
-        setIsAvatarInForeground(!isAvatarInForeground);
-
-        if (isListening) {
-            stopListening();
-            setInteractionMode('idle');
-            setVoiceSource(null);
-        } else if (isSupported && !isResponding && !isTranscribing) {
-            // Prevent activation while AI is responding or transcribing
-            setVoiceSource('sphere');
-            setInteractionMode('voice');
-            if (!isConversationStarted) {
-                toggleConversationStarted();
-            }
-            startListening();
-        }
+    const handleQuickCapture = () => {
+        setIsCapturing(!isCapturing);
     };
 
     const handleAIResponse = async (userMessage: string) => {
@@ -206,9 +195,7 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
         <div className="h-full relative bg-gradient-to-br from-slate-950/95 via-slate-900/90 to-slate-950/95 overflow-hidden w-full">
 
             {/* Avatar - Centered initially, moves UP when conversation starts */}
-            <div className={`absolute left-1/2 transform -translate-x-1/2 transition-all duration-700 ease-out ${
-                isAvatarInForeground ? 'z-50' : 'z-30'
-            } ${
+            <div className={`absolute left-1/2 transform -translate-x-1/2 transition-all duration-700 ease-out z-30 ${
                 history.length > 0 ? 'top-16 md:top-20' : 'top-1/2 -translate-y-1/2'
             }`}
             style={{
@@ -217,11 +204,10 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
                 <div className="relative transition-all duration-700 ease-out">
                     <SphereChat
                         size={history.length > 0 ? 160 : 220}
-                        onClick={handleSphereClick}
-                        voiceSupported={isSupported}
-                        isListening={isListening || isVoiceMessage}
-                        isThinking={isResponding}
-                        isResponding={isConversationStarted && !isResponding && history.length > 0}
+                        isActive={isCapturing}
+                        isListening={isCapturing}
+                        onClick={handleQuickCapture}
+                        voiceSupported={true}
                     />
 
                     {/* Subtle glow effects with activity pulse */}
@@ -235,14 +221,10 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
                 </div>
 
                 {/* Voice Control X Button */}
-                {(isListening || isVoiceMessage) && (
-                    <div className="absolute -bottom-16 left-1/2 transform -translate-x-1/2">
+                {isCapturing && (
+                    <div className="absolute -bottom-24 -left-6">
                         <Button
-                            onClick={() => {
-                                stopListening();
-                                setInteractionMode('idle');
-                                setVoiceSource(null);
-                            }}
+                            onClick={() => setIsCapturing(false)}
                             variant="ghost"
                             size="sm"
                             className="w-10 h-10 rounded-full bg-slate-800/60 hover:bg-slate-700/80 border border-slate-600/40 text-white/80 hover:text-white transition-all duration-200 backdrop-blur-sm shadow-lg"

@@ -11,7 +11,6 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import DailyRoad from "./pages/DailyRoad";
 import Profile from "./pages/Profile";
-import CalendarPage from "./pages/CalendarPage.tsx";
 import KnowledgeOrganiser from "./pages/KnowledgeOrganiser";
 import ProjectView from "./pages/ProjectView";
 import NewPage from "./pages/NewPage";
@@ -54,11 +53,6 @@ const AppContent: React.FC = () => {
                 </AppLayout>
             } />
             
-            <Route path="/calendar" element={
-                <AppLayout>
-                    <CalendarPage />
-                </AppLayout>
-            } />
             
             <Route path="/profile" element={
                 <AppLayout>

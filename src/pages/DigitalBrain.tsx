@@ -182,6 +182,18 @@ const DigitalBrain: React.FC = () => {
               onClick={handleQuickCapture}
               voiceSupported={true}
             />
+
+            {/* Voice Control X Button */}
+            {isCapturing && (
+              <div className="absolute -bottom-24 -left-6">
+                <button
+                  onClick={() => setIsCapturing(false)}
+                  className="w-10 h-10 rounded-full bg-slate-800/60 hover:bg-slate-700/80 border border-slate-600/40 text-white/80 hover:text-white transition-all duration-200 backdrop-blur-sm shadow-lg flex items-center justify-center"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

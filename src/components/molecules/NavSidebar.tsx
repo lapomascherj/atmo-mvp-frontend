@@ -24,7 +24,7 @@ const NavItem = ({icon, label, to, isActive, isCollapsed}: NavItemProps) => {
             to={to}
             onClick={handleClick}
             className={cn(
-                'flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-300 group relative cursor-pointer',
+                'flex items-center gap-2 px-2 py-2 rounded-lg transition-all duration-300 group relative cursor-pointer',
                 isCollapsed ? 'justify-center' : '',
                 isActive
                     ? 'bg-[#010024]/60 text-[#E3E3E3] shadow-inner shadow-white/5'
@@ -64,7 +64,7 @@ const NavSidebar: React.FC = () => {
 
     const navItems = [
         {icon: <LayoutDashboard size={20}/>, label: 'Dashboard', to: '/'},
-        {icon: <Brain size={20}/>, label: 'Digital Brain', to: '/knowledge-organiser'},
+        {icon: <Brain size={20}/>, label: 'Digital Brain', to: '/digital-brain'},
         {icon: <Calendar size={20}/>, label: 'Calendar', to: '/calendar'},
     ];
 
@@ -79,7 +79,7 @@ const NavSidebar: React.FC = () => {
         <aside
             className={cn(
                 'h-screen flex flex-col bg-gradient-to-br from-slate-950/90 via-slate-900/85 to-slate-950/90 backdrop-blur-lg border-r border-white/5 transition-all duration-300 ease-in-out fixed left-0 top-0 z-40',
-                isCollapsed ? 'w-[70px]' : 'w-[220px]'
+                isCollapsed ? 'w-[60px]' : 'w-[180px]'
             )}
         >
             {/* Blur background effect */}
@@ -96,22 +96,22 @@ const NavSidebar: React.FC = () => {
 
             {/* Logo */}
             <div className={cn(
-                'flex items-center px-4 h-16 border-b border-white/5',
+                'flex items-center px-3 h-14 border-b border-white/5',
                 isCollapsed ? 'justify-center' : 'justify-start'
             )}>
                 <div className="flex items-center">
                     <div
-                        className="w-9 h-9 bg-[#010024] border border-[#4169E1]/20 rounded-xl flex items-center justify-center shadow-[0_0_15px_rgba(65,105,225,0.3)]">
-                        <span className="text-[#4169E1] text-lg font-bold">A</span>
+                        className="w-8 h-8 bg-[#010024] border border-[#4169E1]/20 rounded-lg flex items-center justify-center shadow-[0_0_12px_rgba(65,105,225,0.3)]">
+                        <span className="text-[#4169E1] text-sm font-bold">A</span>
                     </div>
                     {!isCollapsed && (
-                        <span className="text-[#E3E3E3] text-lg ml-2 font-light">ATMO</span>
+                        <span className="text-[#E3E3E3] text-base ml-2 font-light">ATMO</span>
                     )}
                 </div>
             </div>
 
             {/* Navigation Items */}
-            <nav className="flex-1 overflow-y-auto px-3 py-6 flex flex-col gap-2 scrollbar-hide">
+            <nav className="flex-1 overflow-y-auto px-2 py-4 flex flex-col gap-1 scrollbar-hide">
                 {navItems.map((item) => (
                     <NavItem
                         key={item.to}
@@ -126,14 +126,14 @@ const NavSidebar: React.FC = () => {
 
             {/* Bottom section: Profile and Sign Out */}
             <div className={cn(
-                'px-3 py-4 border-t border-white/5 space-y-2',
+                'px-2 py-3 border-t border-white/5 space-y-1',
                 isCollapsed ? 'flex flex-col items-center' : ''
             )}>
                 {/* Profile Link */}
                 <Link
                     to="/profile"
                     className={cn(
-                        'flex items-center gap-2 px-2 py-2 rounded-xl hover:bg-[#010024]/40 transition-all group relative',
+                        'flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-[#010024]/40 transition-all group relative',
                         location.pathname === '/profile' ? 'bg-[#010024]/60 shadow-inner shadow-white/5' : '',
                         isCollapsed ? 'justify-center w-full' : ''
                     )}
@@ -168,7 +168,7 @@ const NavSidebar: React.FC = () => {
                 <button
                     onClick={signOut}
                     className={cn(
-                        'flex items-center gap-2 px-2 py-2 rounded-xl hover:bg-red-500/10 transition-all text-[#E3E3E3]/70 hover:text-red-400 group relative',
+                        'flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-red-500/10 transition-all text-[#E3E3E3]/70 hover:text-red-400 group relative',
                         isCollapsed ? 'justify-center w-full' : ''
                     )}
                 >

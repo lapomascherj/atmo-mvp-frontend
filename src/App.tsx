@@ -15,6 +15,7 @@ import CalendarPage from "./pages/CalendarPage.tsx";
 import KnowledgeOrganiser from "./pages/KnowledgeOrganiser";
 import ProjectView from "./pages/ProjectView";
 import NewPage from "./pages/NewPage";
+import DigitalBrain from "./pages/DigitalBrain";
 
 // Components
 import NavSidebar from "./components/molecules/NavSidebar.tsx";
@@ -80,6 +81,12 @@ const AppContent: React.FC = () => {
             <Route path="/knowledge-organiser/project/:id" element={
                 <AppLayout>
                     <ProjectView />
+                </AppLayout>
+            } />
+            
+            <Route path="/digital-brain" element={
+                <AppLayout>
+                    <DigitalBrain />
                 </AppLayout>
             } />
 

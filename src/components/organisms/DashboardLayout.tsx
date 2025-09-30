@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import CenterColumn from '../layouts/CenterColumn.tsx';
-import CompactDailySnapshot from '../molecules/CompactDailySnapshot.tsx';
+import DailySnapshot from '../organisms/DailySnapshot.tsx';
 import { AtmoCard } from '../molecules/AtmoCard.tsx';
 import { CardHeader, CardContent } from '../atoms/Card.tsx';
 import { Button } from '../atoms/Button.tsx';
@@ -185,7 +185,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ userName }) => {
                       </CardContent>
                     </AtmoCard>
                   }>
-                    <CompactDailySnapshot />
+                    <DailySnapshot />
                   </ErrorBoundary>
                 </div>
 

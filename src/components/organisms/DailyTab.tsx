@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import StatsSection from '../atoms/StatsSection.tsx';
 import MorningPodcast from '../molecules/MorningPodcast.tsx';
-import { useCalendarStore } from '@/stores/useCalendarStore.ts';
+// import { useCalendarStore } from '@/stores/useCalendarStore.ts'; // Temporarily disabled
 import { useTasksStore } from '@/stores/useTasksStore.ts';
 import { usePocketBase } from "@/hooks/useMockPocketBase";
 import { useAuth } from '@/hooks/useMockAuth';
@@ -12,7 +12,7 @@ interface DailyTabProps {
 }
 
 const DailyTab: React.FC<DailyTabProps> = ({ flippedCard, toggleCardFlip }) => {
-  const { events, fetchEvents } = useCalendarStore();
+  // const { events, fetchEvents } = useCalendarStore(); // Temporarily disabled
   const { tasks } = useTasksStore();
   const pb = usePocketBase();
   const { user } = useAuth();
@@ -21,9 +21,9 @@ const DailyTab: React.FC<DailyTabProps> = ({ flippedCard, toggleCardFlip }) => {
   useEffect(() => {
     if (pb && user) {
       console.log('🔄 DAILY TAB: Forcing fresh calendar data fetch for today');
-      fetchEvents(pb, true); // Force fresh fetch
+      // fetchEvents(pb, true); // Temporarily disabled - Force fresh fetch
     }
-  }, [pb, user, fetchEvents]);
+  }, [pb, user]); // Removed fetchEvents dependency
 
   // Calculate real stats from calendar and tasks
   const calculateDailyStats = () => {
@@ -32,6 +32,8 @@ const DailyTab: React.FC<DailyTabProps> = ({ flippedCard, toggleCardFlip }) => {
     const todayEnd = new Date(todayStart);
     todayEnd.setDate(todayEnd.getDate() + 1);
 
+    const events = []; // Temporarily empty - calendar store disabled
+    
     console.log('📊 DAILY TAB: Calculating stats for today:', {
       todayStart: todayStart.toISOString(),
       todayEnd: todayEnd.toISOString(),

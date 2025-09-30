@@ -1,40 +1,15 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { RotateCcw, MessageCircle } from 'lucide-react';
+import React from 'react';
+import { MessageCircle, Headphones, Play, Pause } from 'lucide-react';
 import { Button } from '../atoms/Button';
+import { AtmoCard } from '../molecules/AtmoCard';
 import { promptStore } from '@/stores/promptStore.ts';
-
-// Question pool for dynamic third question
-const QUESTION_POOL = [
-  "What do you want to focus on today?",
-  "What's one small win you'd like to achieve before the day ends?",
-  "What could create stress or tension for you today?",
-  "What's the hardest decision you expect to face today?",
-  "If someone could help you today, what would you ask them?",
-  "What's one thing you want to avoid getting distracted by?",
-  "What would make today feel like a success for you?",
-  "What's one step you can take today toward your long-term goals?",
-  "Who is one person you'd like to connect with or reach out to today?",
-  "What's one thing you can do today to recharge your energy?",
-  "What's the most important conversation you need to have today?",
-  "What's something you've been postponing that you could start today?",
-  "What's one thing you're grateful for this morning?",
-  "How do you want to show up for others today?",
-  "What's one way you could make today easier for yourself?",
-  "What's something exciting you're looking forward to today?",
-  "What's one challenge you want to approach differently today?",
-  "If today had a theme, what would you call it?",
-  "What's one thing you want to learn or discover today?",
-  "What would your 'best self' do first this morning?"
-];
 
 interface DailySnapshotProps {
   // Props for backend integration
-  highlightText?: string;
   onOpenChat?: (question: string) => void;
 }
 
 const DailySnapshot: React.FC<DailySnapshotProps> = ({ 
-  highlightText, 
   onOpenChat 
 }) => {
   // Prompt store for avatar-driven conversations
@@ -43,28 +18,9 @@ const DailySnapshot: React.FC<DailySnapshotProps> = ({
     toggleConversationStarted,
     isConversationStarted
   } = promptStore();
-  // State for dynamic question
-  const [dynamicQuestion, setDynamicQuestion] = useState(QUESTION_POOL[0]);
 
-  // Mock highlight text if not provided
-  const defaultHighlight = "Yesterday you drafted 2 new ideas. Let's make one real today.";
-  const displayHighlight = highlightText || defaultHighlight;
-
-  // Function to get random question from pool
-  const getRandomQuestion = useCallback(() => {
-    const randomIndex = Math.floor(Math.random() * QUESTION_POOL.length);
-    setDynamicQuestion(QUESTION_POOL[randomIndex]);
-  }, []);
-
-  // Initialize with random question on component mount
-  useEffect(() => {
-    getRandomQuestion();
-  }, [getRandomQuestion]);
-
-  // Handle switch question click
-  const handleSwitchQuestion = () => {
-    getRandomQuestion();
-  };
+  // Podcast state
+  const [isPlaying, setIsPlaying] = React.useState(false);
 
   // Avatar greeting templates for morning actions
   const getAvatarGreeting = (question: string): string => {
@@ -95,121 +51,144 @@ const DailySnapshot: React.FC<DailySnapshotProps> = ({
     }
   };
 
+  // Handle podcast play/pause
+  const handlePodcastToggle = () => {
+    setIsPlaying(!isPlaying);
+    // TODO: Implement actual podcast play/pause logic
+    console.log(isPlaying ? 'Pausing podcast' : 'Playing podcast');
+  };
+
   return (
     <div className="w-full space-y-4">
-      {/* 1️⃣ Morning Actions Card */}
-      <div className="rounded-xl p-4 bg-[#010000]/80 border border-white/5 hover:border-[#D04907]/20 transition-all duration-300 shadow-md hover:shadow-[0_4px_12px_rgba(208,73,7,0.15)] relative overflow-hidden">
-        {/* Background subtle glow */}
-        <div className="absolute -top-10 -right-10 w-32 h-32 rounded-full bg-[#D04907]/5 blur-xl opacity-70"></div>
-        
+      {/* Header Section */}
+      <div className="text-center mb-4">
+        <h1 className="text-2xl font-bold text-white mb-2">Daily Roadmap</h1>
+        <p className="text-white/70 text-sm">Small daily actions → big growth</p>
+      </div>
+
+      {/* 1️⃣ Today Inspo Card - Compact */}
+      <AtmoCard variant="orange" className="p-4" hover={true}>
         <div className="relative">
           {/* Card Title */}
-          <h3 className="text-lg font-semibold text-[#E3E3E3] mb-4">Morning Actions</h3>
+          <h3 className="text-lg font-semibold text-white mb-3">Today Inspo</h3>
           
-          {/* Questions List */}
-          <div className="space-y-4">
-            {/* Question 1 - Fixed */}
-            <div className="flex items-start justify-between gap-3">
-              <p className="text-sm text-[#E3E3E3]/90 flex-1">
-                What do you want to focus on today?
-              </p>
-              <Button
-                onClick={() => handleOpenInChat("What do you want to focus on today?")}
-                size="sm"
-                variant="ghost"
-                className="shrink-0 h-8 px-3 text-xs text-[#D04907] hover:text-[#E3E3E3] hover:bg-[#D04907]/10 border border-[#D04907]/20 hover:border-[#D04907]/40"
-              >
-                <MessageCircle size={12} className="mr-1" />
-                Open in chat
-              </Button>
-            </div>
-
-            {/* Question 2 - Fixed */}
-            <div className="flex items-start justify-between gap-3">
-              <p className="text-sm text-[#E3E3E3]/90 flex-1">
-                What could create stress or tension today?
-              </p>
-              <Button
-                onClick={() => handleOpenInChat("What could create stress or tension today?")}
-                size="sm"
-                variant="ghost"
-                className="shrink-0 h-8 px-3 text-xs text-[#D04907] hover:text-[#E3E3E3] hover:bg-[#D04907]/10 border border-[#D04907]/20 hover:border-[#D04907]/40"
-              >
-                <MessageCircle size={12} className="mr-1" />
-                Open in chat
-              </Button>
-            </div>
-
-            {/* Question 3 - Dynamic */}
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-start gap-2 flex-1">
-                <p className="text-sm text-[#E3E3E3]/90 flex-1">
-                  {dynamicQuestion}
-                </p>
-                <button
-                  onClick={handleSwitchQuestion}
-                  className="shrink-0 p-1 text-[#D04907] hover:text-[#E3E3E3] hover:bg-[#D04907]/10 rounded transition-colors"
-                  title="Switch question"
+          {/* User Routine Type */}
+          <div className="mb-4 pb-3 border-b border-white/10">
+            <p className="text-sm text-white/70 mb-1">Your routine</p>
+            <p className="text-sm font-medium text-[#FF5F1F]">Busy 9–5 worker</p>
+          </div>
+          
+          {/* Day Phases - Compact */}
+          <div className="space-y-2">
+            {/* Seed - Morning */}
+            <div className="bg-white/5 rounded-lg p-3 border border-white/10 hover:border-[#FF5F1F]/30 transition-colors">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-green-400"></div>
+                  <span className="text-sm font-medium text-white">Seed</span>
+                  <span className="text-xs text-white/60">morning</span>
+                </div>
+                <Button
+                  onClick={() => handleOpenInChat("Morning seed action")}
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2 text-xs text-[#FF5F1F] hover:text-white hover:bg-[#FF5F1F]/10"
                 >
-                  <RotateCcw size={14} />
-                </button>
+                  <MessageCircle size={10} className="mr-1" />
+                  Start
+                </Button>
+              </div>
+            </div>
+
+            {/* Grow - Afternoon */}
+            <div className="bg-white/5 rounded-lg p-3 border border-white/10 hover:border-[#FF5F1F]/30 transition-colors">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-yellow-400"></div>
+                  <span className="text-sm font-medium text-white">Grow</span>
+                  <span className="text-xs text-white/60">afternoon</span>
+                </div>
+                <Button
+                  onClick={() => handleOpenInChat("Afternoon grow action")}
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2 text-xs text-[#FF5F1F] hover:text-white hover:bg-[#FF5F1F]/10"
+                >
+                  <MessageCircle size={10} className="mr-1" />
+                  Start
+                </Button>
+              </div>
+            </div>
+
+            {/* Bloom - Evening */}
+            <div className="bg-white/5 rounded-lg p-3 border border-white/10 hover:border-[#FF5F1F]/30 transition-colors">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-purple-400"></div>
+                  <span className="text-sm font-medium text-white">Bloom</span>
+                  <span className="text-xs text-white/60">evening</span>
+                </div>
+                <Button
+                  onClick={() => handleOpenInChat("Evening bloom action")}
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2 text-xs text-[#FF5F1F] hover:text-white hover:bg-[#FF5F1F]/10"
+                >
+                  <MessageCircle size={10} className="mr-1" />
+                  Start
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </AtmoCard>
+
+      {/* 2️⃣ Morning AI Podcast Card - Simplified */}
+      <AtmoCard variant="orange" className="p-4" hover={true}>
+        <div className="relative">
+          {/* Card Title */}
+          <h3 className="text-lg font-semibold text-white mb-3">Morning AI Podcast</h3>
+          
+          {/* Podcast Focus */}
+          <p className="text-sm text-white/80 mb-4">Productivity Strategies for Busy 9-5 Workers</p>
+          
+          {/* Compact Audio Player */}
+          <div className="bg-[#FF5F1F]/10 rounded-lg p-3 border border-[#FF5F1F]/20">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-full bg-[#FF5F1F]/20 flex items-center justify-center">
+                  <Headphones size={12} className="text-[#FF5F1F]" />
+                </div>
+                <span className="text-sm text-white/70">8 min</span>
               </div>
               <Button
-                onClick={() => handleOpenInChat(dynamicQuestion)}
+                onClick={handlePodcastToggle}
                 size="sm"
                 variant="ghost"
-                className="shrink-0 h-8 px-3 text-xs text-[#D04907] hover:text-[#E3E3E3] hover:bg-[#D04907]/10 border border-[#D04907]/20 hover:border-[#D04907]/40"
+                className="h-7 px-2 text-xs text-[#FF5F1F] hover:text-white hover:bg-[#FF5F1F]/10 rounded-full"
               >
-                <MessageCircle size={12} className="mr-1" />
-                Open in chat
+                {isPlaying ? <Pause size={12} /> : <Play size={12} />}
               </Button>
             </div>
           </div>
         </div>
-      </div>
+      </AtmoCard>
 
-      {/* 2️⃣ Mood Check Card */}
-      <div className="rounded-xl p-4 bg-[#010000]/80 border border-white/5 hover:border-[#D04907]/20 transition-all duration-300 shadow-md hover:shadow-[0_4px_12px_rgba(208,73,7,0.15)] relative overflow-hidden">
-        {/* Background subtle glow */}
-        <div className="absolute -top-10 -right-10 w-32 h-32 rounded-full bg-[#D04907]/5 blur-xl opacity-70"></div>
-        
+      {/* 3️⃣ Second Card - Compact */}
+      <AtmoCard variant="orange" className="p-4" hover={true}>
         <div className="relative">
           {/* Card Title */}
-          <h3 className="text-lg font-semibold text-[#E3E3E3] mb-4">Mood Check</h3>
+          <h3 className="text-lg font-semibold text-white mb-3">Coming Soon</h3>
           
-          {/* Empty content area - placeholder for future mood interface */}
-          <div className="text-center py-8">
-            <p className="text-sm text-[#E3E3E3]/50">
-              Interactive mood interface coming soon
+          {/* Compact Placeholder Content */}
+          <div className="text-center py-4">
+            <p className="text-sm text-white/60">
+              Additional feature coming soon
             </p>
           </div>
         </div>
-      </div>
+      </AtmoCard>
 
-      {/* 3️⃣ Daily Highlight Card */}
-      <div className="rounded-xl p-4 bg-[#010000]/80 border border-white/5 hover:border-[#D04907]/20 transition-all duration-300 shadow-md hover:shadow-[0_4px_12px_rgba(208,73,7,0.15)] relative overflow-hidden">
-        {/* Background subtle glow */}
-        <div className="absolute -top-10 -right-10 w-32 h-32 rounded-full bg-[#D04907]/5 blur-xl opacity-70"></div>
-        
-        <div className="relative">
-          {/* Card Title */}
-          <h3 className="text-lg font-semibold text-[#E3E3E3] mb-4">Daily Highlight</h3>
-          
-          {/* Highlight Text */}
-          <div className="bg-[#D04907]/10 border border-[#D04907]/20 rounded-lg p-4">
-            <p className="text-sm text-[#E3E3E3]/90 leading-relaxed">
-              {displayHighlight}
-            </p>
-          </div>
-          
-          {/* TODO: Backend integration note */}
-          {!highlightText && (
-            <p className="text-xs text-[#E3E3E3]/40 mt-2">
-              {/* TODO: Connect to backend API for daily highlight */}
-            </p>
-          )}
-        </div>
-      </div>
     </div>
   );
 };

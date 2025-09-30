@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { MessageCircle, Sparkles } from 'lucide-react';
+import { MessageCircle } from 'lucide-react';
 import { Button } from '../atoms/Button';
 import { AtmoCard } from './AtmoCard';
 import { CardHeader, CardContent } from '../atoms/Card';
-import { useDailySnapshotStore, MOOD_OPTIONS } from '@/stores/dailySnapshotStore';
+import { useDailySnapshotStore } from '@/stores/dailySnapshotStore';
 import { promptStore } from '@/stores/promptStore';
 
 // Question pool for dynamic third question
@@ -50,11 +50,7 @@ const CompactDailySnapshot: React.FC<CompactDailySnapshotProps> = ({
   const {
     initializeToday,
     getQuestionsAnswered,
-    getCurrentMood,
-    getHighlight,
     markQuestionAnswered,
-    setMood,
-    generateSmartHighlight,
     recordQuestionInteraction
   } = useDailySnapshotStore();
 
@@ -68,7 +64,6 @@ const CompactDailySnapshot: React.FC<CompactDailySnapshotProps> = ({
 
   // Local state
   const [dynamicQuestion, setDynamicQuestion] = useState(QUESTION_POOL[0]);
-  const [showMoodPicker, setShowMoodPicker] = useState(false);
 
   // Initialize store on mount
   useEffect(() => {
@@ -77,8 +72,6 @@ const CompactDailySnapshot: React.FC<CompactDailySnapshotProps> = ({
 
   // Get current state
   const questionsAnswered = getQuestionsAnswered();
-  const { mood } = getCurrentMood();
-  const highlight = highlightText || getHighlight();
 
   // Function to get random question from pool
   const getRandomQuestion = useCallback(() => {
@@ -91,12 +84,6 @@ const CompactDailySnapshot: React.FC<CompactDailySnapshotProps> = ({
     getRandomQuestion();
   }, [getRandomQuestion]);
 
-  // Generate smart highlight if none exists
-  useEffect(() => {
-    if (!highlightText && !getHighlight()) {
-      generateSmartHighlight();
-    }
-  }, [highlightText, generateSmartHighlight, getHighlight]);
 
   // Handle switch question click
   const handleSwitchQuestion = () => {
@@ -167,14 +154,9 @@ const CompactDailySnapshot: React.FC<CompactDailySnapshotProps> = ({
       onOpenChat(question);
     }
 
-    console.log(`Opening chat for question: ${question} with starter: ${smartStarter}`);
+    console.log(`Opening chat for question: ${question}`);
   };
 
-  // Handle mood selection
-  const handleMoodSelect = (selectedMood: number) => {
-    setMood(selectedMood);
-    setShowMoodPicker(false);
-  };
 
   // Get all questions including dynamic one
   const allQuestions = [...FIXED_QUESTIONS, dynamicQuestion];
@@ -227,129 +209,6 @@ const CompactDailySnapshot: React.FC<CompactDailySnapshotProps> = ({
             </div>
           </div>
 
-          {/* 2️⃣ Mood Check Section */}
-          <div className="bg-black/30 rounded-lg p-4 border border-white/10">
-            <h3 className="text-sm font-semibold text-[#FF5F1F] mb-3 text-center">Mood Check</h3>
-
-            {mood && !showMoodPicker ? (
-              // Mood selected - Professional display
-              <div className="text-center py-3">
-                <div className="bg-white/5 border border-white/10 rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="text-left flex-1">
-                      <p className="text-sm text-white font-medium">
-                        {MOOD_OPTIONS.find(m => m.value === mood)?.label}
-                      </p>
-                      <p className="text-xs text-white/60">Current mood level</p>
-                    </div>
-                    <button
-                      onClick={() => setShowMoodPicker(true)}
-                      className="text-xs text-[#FF5F1F] hover:text-white transition-colors px-2 py-1 rounded border border-[#FF5F1F]/30 hover:border-[#FF5F1F]/50"
-                    >
-                      Change
-                    </button>
-                  </div>
-
-                  {/* Professional mood scale indicator */}
-                  <div className="flex items-center gap-1">
-                    {MOOD_OPTIONS.map((option, index) => (
-                      <div
-                        key={option.value}
-                        className={`h-2 flex-1 rounded-full transition-all duration-300 ${
-                          option.value <= mood
-                            ? `bg-gradient-to-r ${option.color} shadow-sm`
-                            : 'bg-white/10'
-                        }`}
-                      />
-                    ))}
-                  </div>
-                  <div className="flex justify-between mt-2">
-                    <span className="text-xs text-white/40">Low</span>
-                    <span className="text-xs text-white/40">High</span>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              // No mood selected - Professional scale picker
-              <div className="text-center py-2">
-                {showMoodPicker ? (
-                  <div className="space-y-4">
-                    <p className="text-xs text-white/70 mb-3">How are you feeling today?</p>
-
-                    {/* Professional mood scale selector */}
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-1">
-                        {MOOD_OPTIONS.map((option, index) => (
-                          <button
-                            key={option.value}
-                            onClick={() => handleMoodSelect(option.value)}
-                            className={`h-8 flex-1 rounded transition-all duration-200 hover:scale-105 ${
-                              `bg-gradient-to-r ${option.color} hover:shadow-lg`
-                            }`}
-                            title={option.label}
-                          />
-                        ))}
-                      </div>
-
-                      {/* Scale labels */}
-                      <div className="flex justify-between px-1">
-                        {MOOD_OPTIONS.map((option) => (
-                          <span key={option.value} className={`text-xs ${option.textColor} font-medium`}>
-                            {option.label}
-                          </span>
-                        ))}
-                      </div>
-
-                      <div className="flex justify-between">
-                        <span className="text-xs text-white/40">1</span>
-                        <span className="text-xs text-white/40">2</span>
-                        <span className="text-xs text-white/40">3</span>
-                        <span className="text-xs text-white/40">4</span>
-                        <span className="text-xs text-white/40">5</span>
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={() => setShowMoodPicker(false)}
-                      className="text-xs text-white/40 hover:text-white/60 transition-colors mt-3"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setShowMoodPicker(true)}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 hover:bg-white/10 hover:border-[#FF5F1F]/30 transition-all duration-200 group"
-                  >
-                    <div className="text-center">
-                      <p className="text-sm text-white/90 group-hover:text-white">Check your mood</p>
-                      <p className="text-xs text-white/60">Rate how you're feeling today</p>
-                    </div>
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* 3️⃣ Daily Highlight Section */}
-          <div className="bg-black/30 rounded-lg p-4 border border-white/10">
-            <div className="flex items-center justify-center gap-2 mb-3">
-              <h3 className="text-sm font-semibold text-[#FF5F1F] text-center">Daily Highlight</h3>
-              <button
-                onClick={generateSmartHighlight}
-                className="p-1 text-[#FF5F1F]/60 hover:text-[#FF5F1F] transition-colors"
-                title="Generate new highlight"
-              >
-                <Sparkles size={12} />
-              </button>
-            </div>
-            <div className="bg-[#FF5F1F]/10 border border-[#FF5F1F]/30 rounded-lg p-3 relative overflow-hidden">
-              <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-[#FF5F1F]/50 to-transparent" />
-              <p className="text-xs text-white/90 leading-relaxed relative z-10">
-                {highlight}
-              </p>
-            </div>
-          </div>
         </div>
       </CardContent>
     </AtmoCard>

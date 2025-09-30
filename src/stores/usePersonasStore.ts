@@ -1412,79 +1412,80 @@ export const usePersonasStore = create<PersonasStoreState>((set, get) => ({
         useIntegrationsStore.setState({ integrations, loading: false });
       });
 
-      import("./useCalendarStore").then(({ useCalendarStore }) => {
-        // Calendar events come from knowledge items with source="calendar"
-        const knowledgeItems = get().getKnowledgeItems();
-        const calendarEvents = knowledgeItems
-          .filter((item) => item.source === "calendar")
-          .map((item) => {
-            // Extract proper dates from content object
-            let startDate = new Date();
-            let endDate = new Date();
-            let description = "";
+      // TODO: Calendar store integration - temporarily disabled
+      // import("./useCalendarStore").then(({ useCalendarStore }) => {
+      //   // Calendar events come from knowledge items with source="calendar"
+      //   const knowledgeItems = get().getKnowledgeItems();
+      //   const calendarEvents = knowledgeItems
+      //     .filter((item) => item.source === "calendar")
+      //     .map((item) => {
+      //       // Extract proper dates from content object
+      //       let startDate = new Date();
+      //       let endDate = new Date();
+      //       let description = "";
 
-            if (item.content) {
-              if (typeof item.content === "object") {
-                const contentObj = item.content as any;
-                if (contentObj.start_date)
-                  startDate = new Date(contentObj.start_date);
-                if (contentObj.end_date)
-                  endDate = new Date(contentObj.end_date);
-                if (contentObj.description)
-                  description = contentObj.description;
-              } else if (typeof item.content === "string") {
-                try {
-                  const contentObj = JSON.parse(item.content);
-                  if (contentObj.start_date)
-                    startDate = new Date(contentObj.start_date);
-                  if (contentObj.end_date)
-                    endDate = new Date(contentObj.end_date);
-                  if (contentObj.description)
-                    description = contentObj.description;
-                } catch {
-                  // Use fallback dates
-                }
-              }
-            }
+      //       if (item.content) {
+      //         if (typeof item.content === "object") {
+      //           const contentObj = item.content as any;
+      //           if (contentObj.start_date)
+      //             startDate = new Date(contentObj.start_date);
+      //           if (contentObj.end_date)
+      //             endDate = new Date(contentObj.end_date);
+      //           if (contentObj.description)
+      //             description = contentObj.description;
+      //         } else if (typeof item.content === "string") {
+      //           try {
+      //             const contentObj = JSON.parse(item.content);
+      //             if (contentObj.start_date)
+      //               startDate = new Date(contentObj.start_date);
+      //             if (contentObj.end_date)
+      //               endDate = new Date(contentObj.end_date);
+      //             if (contentObj.description)
+      //               description = contentObj.description;
+      //           } catch {
+      //             // Use fallback dates
+      //           }
+      //         }
+      //       }
 
-            return {
-              id: item.id,
-              title: item.title || item.name || "Untitled Event", // Handle both title and name
-              start_date: startDate,
-              end_date: endDate,
-              start_time: startDate,
-              end_time: endDate,
-              all_day: false,
-              description:
-                description ||
-                (typeof item.content === "string" ? item.content : ""),
-              location: "",
-              attendees: [],
-              synced: false, // These are local events, not synced from external calendar
-            };
-          });
+      //       return {
+      //         id: item.id,
+      //         title: item.title || item.name || "Untitled Event", // Handle both title and name
+      //         start_date: startDate,
+      //         end_date: endDate,
+      //         start_time: startDate,
+      //         end_time: endDate,
+      //         all_day: false,
+      //         description:
+      //           description ||
+      //           (typeof item.content === "string" ? item.content : ""),
+      //         location: "",
+      //         attendees: [],
+      //         synced: false, // These are local events, not synced from external calendar
+      //       };
+      //     });
 
-        console.debug(
-          `🔄 PERSONA STORE: Setting ${calendarEvents.length} calendar events in CalendarStore`
-        );
+      //   console.debug(
+      //     `🔄 PERSONA STORE: Setting ${calendarEvents.length} calendar events in CalendarStore`
+      //   );
 
-        // Get current events from CalendarStore to preserve any that aren't from knowledge items
-        const currentCalendarStore = useCalendarStore.getState();
-        const currentEvents = currentCalendarStore.events || [];
+      //   // Get current events from CalendarStore to preserve any that aren't from knowledge items
+      //   const currentCalendarStore = useCalendarStore.getState();
+      //   const currentEvents = currentCalendarStore.events || [];
 
-        // Filter out old knowledge-item-based events and merge with new ones
-        const nonKnowledgeItemEvents = currentEvents.filter(
-          (event) => !knowledgeItems.some((item) => item.id === event.id)
-        );
+      //   // Filter out old knowledge-item-based events and merge with new ones
+      //   const nonKnowledgeItemEvents = currentEvents.filter(
+      //     (event) => !knowledgeItems.some((item) => item.id === event.id)
+      //   );
 
-        const mergedEvents = [...nonKnowledgeItemEvents, ...calendarEvents];
+      //   const mergedEvents = [...nonKnowledgeItemEvents, ...calendarEvents];
 
-        console.debug(
-          `🔄 PERSONA STORE: Merging ${nonKnowledgeItemEvents.length} existing events with ${calendarEvents.length} knowledge item events`
-        );
+      //   console.debug(
+      //     `🔄 PERSONA STORE: Merging ${nonKnowledgeItemEvents.length} existing events with ${calendarEvents.length} knowledge item events`
+      //   );
 
-        useCalendarStore.setState({ events: mergedEvents, loading: false });
-      });
+      //   useCalendarStore.setState({ events: mergedEvents, loading: false });
+      // });
 
       console.debug("✅ PERSONA STORE: Dependent stores refreshed");
     } catch (error) {

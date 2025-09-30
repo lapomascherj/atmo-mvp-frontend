@@ -9,6 +9,7 @@ import { cn } from '@/utils/utils';
 import { promptStore } from "@/stores/promptStore.ts";
 import { useToast } from '@/hooks/useToast.ts';
 import { digitalBrainAPI } from '@/api/mockDigitalBrainApi';
+import { useSidebar } from '@/context/SidebarContext';
 
 interface CenterColumnProps {
     maxWidthPercent?: number;
@@ -17,6 +18,7 @@ interface CenterColumnProps {
 const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) => {
     const { user } = useAuth();
     const { toast } = useToast();
+    const { sidebarWidth } = useSidebar();
     const [isCapturing, setIsCapturing] = useState(false);
     const [isTranscribing, setIsTranscribing] = useState(false);
     const transcriptTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -50,10 +52,6 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
             addToHistory();
             handleAIResponse(cleanedTranscript);
 
-            setIsTranscribing(false);
-        },
-        onError: (error) => {
-            console.error('Voice recognition error:', error);
             setIsTranscribing(false);
         }
     });
@@ -124,7 +122,8 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
         try {
             toggleRespondingState();
             
-            const response = await digitalBrainAPI.sendMessage(userMessage, {
+            const response = await digitalBrainAPI.ask({
+                message: userMessage,
                 conversationHistory: history,
                 currentTask: currentTask || undefined,
                 userName: user?.nickname || 'User'
@@ -132,16 +131,14 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
 
             // Add AI response to history using addAIResponse function
             const { addAIResponse } = promptStore.getState();
-            addAIResponse(response.message);
-
-            if (response.task) {
-                // Handle task context if needed
-            }
+            addAIResponse(response.data.response);
 
         } catch (error) {
             console.error('Error getting AI response:', error);
             const { addAIResponse } = promptStore.getState();
             addAIResponse("I'm having trouble processing your request right now. Please try again.");
+        } finally {
+            toggleRespondingState();
         }
     };
 
@@ -192,51 +189,55 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
     };
 
     return (
-        <div className="h-full relative bg-gradient-to-br from-slate-950/90 via-slate-900/85 to-slate-950/90 overflow-hidden w-full">
+        <div className="h-full flex flex-col overflow-hidden w-full">
 
             {/* Avatar - Centered initially, moves UP when conversation starts */}
-            <div className={`absolute left-1/2 transform -translate-x-1/2 transition-all duration-700 ease-out z-30 ${
-                history.length > 0 ? 'top-16 md:top-20' : 'top-1/2 -translate-y-1/2'
-            }`}
-            style={{
-                filter: 'drop-shadow(0 0 20px rgba(204, 85, 0, 0.15))',
-            }}>
-                <div className="relative transition-all duration-700 ease-out">
-                    <SphereChat
-                        size={history.length > 0 ? 160 : 220}
-                        isActive={isCapturing}
-                        isListening={isCapturing}
-                        onClick={handleQuickCapture}
-                        voiceSupported={true}
-                    />
+            <div className={`relative w-full transition-all duration-700 ease-out z-30 flex-shrink-0 ${
+                history.length > 0 ? 'h-[240px] md:h-[260px]' : 'h-[50vh]'
+            }`}>
+                <div className={`absolute left-1/2 transform -translate-x-1/2 transition-all duration-700 ease-out ${
+                    history.length > 0 ? 'top-16 md:top-20' : 'top-1/2 -translate-y-1/2'
+                }`}
+                style={{
+                    filter: 'drop-shadow(0 0 20px rgba(204, 85, 0, 0.15))',
+                }}>
+                    <div className="relative transition-all duration-700 ease-out">
+                        <SphereChat
+                            size={history.length > 0 ? 160 : 220}
+                            isActive={isCapturing}
+                            isListening={isCapturing}
+                            onClick={handleQuickCapture}
+                            voiceSupported={true}
+                        />
 
-                    {/* Subtle glow effects with activity pulse */}
-                    <div className={`absolute inset-0 -z-10 bg-[#CC5500]/12 rounded-full blur-2xl transition-all duration-300 ${
-                        isResponding ? 'animate-pulse scale-110' : 'animate-pulse-soft'
-                    }`}></div>
-                    <div className={`absolute inset-0 -z-20 bg-[#CC5500]/6 rounded-full blur-3xl scale-150 transition-all duration-300 ${
-                        isResponding ? 'animate-pulse scale-125' : 'animate-pulse-soft'
-                    }`}></div>
-                    <div className="absolute inset-0 -z-30 bg-gradient-to-r from-[#CC5500]/3 to-indigo-500/2 rounded-full blur-[80px] scale-200 animate-pulse-soft"></div>
-                </div>
-
-                {/* Voice Control X Button */}
-                {isCapturing && (
-                    <div className="absolute -bottom-24 -left-6">
-                        <Button
-                            onClick={() => setIsCapturing(false)}
-                            variant="ghost"
-                            size="sm"
-                            className="w-10 h-10 rounded-full bg-slate-800/60 hover:bg-slate-700/80 border border-slate-600/40 text-white/80 hover:text-white transition-all duration-200 backdrop-blur-sm shadow-lg"
-                        >
-                            ✕
-                        </Button>
+                        {/* Subtle glow effects with activity pulse */}
+                        <div className={`absolute inset-0 -z-10 bg-[#CC5500]/12 rounded-full blur-2xl transition-all duration-300 ${
+                            isResponding ? 'animate-pulse scale-110' : 'animate-pulse-soft'
+                        }`}></div>
+                        <div className={`absolute inset-0 -z-20 bg-[#CC5500]/6 rounded-full blur-3xl scale-150 transition-all duration-300 ${
+                            isResponding ? 'animate-pulse scale-125' : 'animate-pulse-soft'
+                        }`}></div>
+                        <div className="absolute inset-0 -z-30 bg-gradient-to-r from-[#CC5500]/3 to-indigo-500/2 rounded-full blur-[80px] scale-200 animate-pulse-soft"></div>
                     </div>
-                )}
+
+                    {/* Voice Control X Button */}
+                    {isCapturing && (
+                        <div className="absolute -bottom-24 -left-6">
+                            <Button
+                                onClick={() => setIsCapturing(false)}
+                                variant="ghost"
+                                size="sm"
+                                className="w-10 h-10 rounded-full bg-slate-800/60 hover:bg-slate-700/80 border border-slate-600/40 text-white/80 hover:text-white transition-all duration-200 backdrop-blur-sm shadow-lg"
+                            >
+                                ✕
+                            </Button>
+                        </div>
+                    )}
+                </div>
             </div>
 
             {/* Custom ATMO Scrollbar Styles */}
-            <style jsx>{`
+            <style>{`
                 .atmo-scrollbar {
                     /* Firefox scrollbar styling */
                     scrollbar-width: thin;
@@ -268,13 +269,9 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
                 }
             `}</style>
 
-            {/* Messages Area - Scrollable, positioned below avatar when active */}
-            <div
-                className={`atmo-scrollbar absolute left-0 right-0 bottom-0 overflow-y-auto transition-all duration-700 ${
-                    history.length > 0 ? 'top-[240px] md:top-[260px]' : 'top-3/4'
-                }`}
-            >
-                <div className="px-4 md:px-6 space-y-3 pb-24">
+            {/* Messages Area - FLEX GROW Container - CANNOT overflow */}
+            <div className="flex-1 overflow-y-auto atmo-scrollbar min-h-0">
+                <div className="px-4 md:px-6 space-y-3 py-4">
                     {history.length === 0 ? (
                         <div className="text-center text-white/40 text-sm py-4">
                             Click the orange sphere to start a voice conversation
@@ -344,9 +341,9 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
                 </div>
             </div>
 
-            {/* Fixed Input Bar at Bottom */}
-            <div className="absolute bottom-0 left-0 right-0 border-t border-slate-700/40 pt-4 px-4">
-                <div className="flex items-center gap-3">
+            {/* Input Bar at Bottom - FLEX SHRINK 0 - PHYSICAL BOUNDARY */}
+            <div className="flex-shrink-0 border-t border-slate-700/40 pt-3 pb-3 px-4 bg-gradient-to-t from-slate-950/95 via-slate-950/90 to-transparent">
+                <div className="flex items-center gap-3 mx-2">
                     <Button
                         onClick={handleFileUpload}
                         variant="ghost"

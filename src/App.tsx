@@ -15,16 +15,18 @@ import DigitalBrain from "./pages/DigitalBrain";
 // Components
 import NavSidebar from "./components/molecules/NavSidebar.tsx";
 import {DailyMapCtxProvider} from "@/context/DailyMapCtx.tsx";
-import {SidebarProvider} from "@/context/SidebarContext.tsx";
+import {SidebarProvider, useSidebar} from "@/context/SidebarContext.tsx";
 
 const queryClient = new QueryClient();
 
 // Simple layout component without authentication
 const AppLayout: React.FC<{children: React.ReactNode}> = ({children}) => {
+    const { sidebarWidth } = useSidebar();
+
     return (
         <div className="flex h-screen overflow-hidden">
             <NavSidebar/>
-            <main className="flex-1 overflow-y-auto">
+            <main className="flex-1 h-full overflow-hidden" style={{ marginLeft: sidebarWidth }}>
                 {children}
             </main>
             <Toaster/>

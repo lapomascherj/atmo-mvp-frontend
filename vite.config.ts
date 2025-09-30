@@ -55,7 +55,6 @@ export default defineConfig(({ mode }) => ({
           ],
           'three-vendor': ['three', '@react-three/drei'],
           'chart-vendor': ['recharts'],
-          'auth-vendor': ['casdoor-js-sdk'],
           // Application chunks
           'stores': [
             './src/stores/useMockAuthStore',

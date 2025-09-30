@@ -30,7 +30,7 @@ export const AtmoCard = React.forwardRef<
         variant === 'orange' && 'glass-card-orange',
         variant === 'purple' && 'glass-card-purple',
         variant === 'gold' && 'glass-card-gold',
-        glow && variant === 'orange' && 'animate-orange-glow',
+        glow && variant === 'orange' && 'steady-orange-glow',
         glow && variant === 'purple' && 'animate-purple-glow',
         glow && variant === 'gold' && 'animate-gold-glow',
         className

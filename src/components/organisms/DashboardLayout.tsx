@@ -138,9 +138,9 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ userName }) => {
         <div className="fixed top-[80%] left-[60%] -z-10 w-[300px] h-[300px] bg-gradient-to-r from-orange-300/4 via-indigo-400/3 to-orange-200/2 rounded-full blur-[80px] animate-pulse-soft" />
         <div className="fixed top-[30%] left-[80%] -z-10 w-[250px] h-[250px] bg-gradient-to-r from-indigo-300/3 via-orange-300/2 to-white/2 rounded-full blur-[70px] animate-pulse-soft" />
 
-        <div className="h-screen flex flex-col p-4 md:p-8 relative overflow-hidden">
+        <div className="h-full flex flex-col p-0 relative overflow-hidden">
           {/* Flower of Life Button - Top Right */}
-          <div className="absolute top-6 right-6 z-20">
+          <div className="absolute top-4 right-4 z-20">
             <FlowerOfLife 
               size={64} 
               isActive={isFlowerActive} 
@@ -170,24 +170,32 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ userName }) => {
 
               {/* Right Section - Perfect Mosaic Layout with Minimum Width Protection */}
               <div
-                className="h-full flex items-center justify-center gap-4 overflow-hidden px-4 py-3"
+                className="h-full flex flex-col items-center justify-center overflow-hidden p-4"
                 style={{
                   width: `${100 - dividerPosition}%`,
                   minWidth: '600px' // Ensure cards don't collapse
                 }}
               >
-                {/* Daily Snapshot - Full Height */}
-                <div className="h-full flex items-center justify-center">
-                  <ErrorBoundary fallback={
-                    <AtmoCard className="w-full h-full">
-                      <CardContent className="h-full flex items-center justify-center p-4 text-center text-white/60">
-                        <p>Daily snapshot temporarily unavailable</p>
-                      </CardContent>
-                    </AtmoCard>
-                  }>
-                    <DailySnapshot />
-                  </ErrorBoundary>
+                {/* Title - Centered in RIGHT section */}
+                <div className="w-full text-center mb-12 mt-16 flex-shrink-0">
+                  <h1 className="text-2xl font-bold text-white mb-2">Daily Roadmap</h1>
+                  <p className="text-white/70 text-sm">Small daily actions → big growth</p>
                 </div>
+
+                {/* Cards Row */}
+                <div className="flex items-center justify-center gap-4 flex-1">
+                  {/* Daily Snapshot - Full Height */}
+                  <div className="h-full flex items-center justify-center">
+                    <ErrorBoundary fallback={
+                      <AtmoCard className="w-full h-full">
+                        <CardContent className="h-full flex items-center justify-center p-4 text-center text-white/60">
+                          <p>Daily snapshot temporarily unavailable</p>
+                        </CardContent>
+                      </AtmoCard>
+                    }>
+                      <DailySnapshot />
+                    </ErrorBoundary>
+                  </div>
 
                 {/* Cards Column - Centered vertically */}
                 <div className="h-full flex flex-col justify-center gap-1">
@@ -223,6 +231,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ userName }) => {
                     </CardContent>
                   </AtmoCard>
                 </div>
+              </div>
               </div>
 
               {/* Ultra-Responsive Interactive Divider */}

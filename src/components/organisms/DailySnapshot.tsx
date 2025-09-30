@@ -59,15 +59,9 @@ const DailySnapshot: React.FC<DailySnapshotProps> = ({
   };
 
   return (
-    <div className="w-full space-y-4">
-      {/* Header Section */}
-      <div className="text-center mb-4">
-        <h1 className="text-2xl font-bold text-white mb-2">Daily Roadmap</h1>
-        <p className="text-white/70 text-sm">Small daily actions → big growth</p>
-      </div>
-
+    <div className="w-full space-y-3">
       {/* 1️⃣ Today Inspo Card - Compact */}
-      <AtmoCard variant="orange" className="p-4" hover={true}>
+      <AtmoCard variant="orange" className="p-3" hover={true} glow={true}>
         <div className="relative">
           {/* Card Title */}
           <h3 className="text-lg font-semibold text-white mb-3">Today Inspo</h3>
@@ -144,7 +138,7 @@ const DailySnapshot: React.FC<DailySnapshotProps> = ({
       </AtmoCard>
 
       {/* 2️⃣ Morning AI Podcast Card - Simplified */}
-      <AtmoCard variant="orange" className="p-4" hover={true}>
+      <AtmoCard variant="orange" className="p-3" hover={true} glow={true}>
         <div className="relative">
           {/* Card Title */}
           <h3 className="text-lg font-semibold text-white mb-3">Morning AI Podcast</h3>
@@ -175,7 +169,7 @@ const DailySnapshot: React.FC<DailySnapshotProps> = ({
       </AtmoCard>
 
       {/* 3️⃣ Second Card - Compact */}
-      <AtmoCard variant="orange" className="p-4" hover={true}>
+      <AtmoCard variant="orange" className="p-3" hover={true} glow={true}>
         <div className="relative">
           {/* Card Title */}
           <h3 className="text-lg font-semibold text-white mb-3">Coming Soon</h3>

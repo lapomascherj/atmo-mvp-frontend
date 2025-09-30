@@ -1,7 +1,8 @@
-import React, {useState} from 'react';
+import React from 'react';
 import {Link, useLocation} from 'react-router-dom';
 import {Brain, ChevronLeft, ChevronRight, LayoutDashboard, LogOut} from 'lucide-react';
 import {useAuth} from '@/hooks/useMockAuth';
+import {useSidebar} from '@/context/SidebarContext';
 import {cn} from '@/utils/utils.ts';
 import {Avatar, AvatarFallback, AvatarImage} from '@/components/atoms/Avatar.tsx';
 
@@ -56,11 +57,9 @@ const NavItem = ({icon, label, to, isActive, isCollapsed}: NavItemProps) => {
 };
 
 const NavSidebar: React.FC = () => {
-    const [isCollapsed, setIsCollapsed] = useState(true);
+    const {isCollapsed, toggleCollapse} = useSidebar();
     const location = useLocation();
     const {user, signOut} = useAuth();
-
-    const toggleCollapse = () => setIsCollapsed(!isCollapsed);
 
     const navItems = [
         {icon: <LayoutDashboard size={20}/>, label: 'Dashboard', to: '/'},

@@ -192,7 +192,7 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
     };
 
     return (
-        <div className="h-full relative bg-gradient-to-br from-slate-950/95 via-slate-900/90 to-slate-950/95 overflow-hidden w-full">
+        <div className="h-full relative bg-gradient-to-br from-slate-950/90 via-slate-900/85 to-slate-950/90 overflow-hidden w-full">
 
             {/* Avatar - Centered initially, moves UP when conversation starts */}
             <div className={`absolute left-1/2 transform -translate-x-1/2 transition-all duration-700 ease-out z-30 ${
@@ -345,13 +345,13 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
             </div>
 
             {/* Fixed Input Bar at Bottom */}
-            <div className="absolute bottom-0 left-0 right-0 bg-slate-900/85 backdrop-blur-md border-t border-slate-700/40 p-4 pl-20">
+            <div className="absolute bottom-0 left-0 right-0 border-t border-slate-700/40 pt-4 px-4">
                 <div className="flex items-center gap-3">
                     <Button
                         onClick={handleFileUpload}
                         variant="ghost"
                         size="sm"
-                        className="p-2 text-white/60 hover:text-white/85 hover:bg-slate-700/50 rounded-lg transition-all duration-300 border border-transparent hover:border-slate-600/30"
+                        className="flex-shrink-0 p-3 text-white/60 hover:text-white/85 hover:bg-slate-700/50 rounded-xl transition-all duration-300 border border-transparent hover:border-slate-600/30"
                     >
                         <Paperclip className="w-5 h-5" />
                     </Button>

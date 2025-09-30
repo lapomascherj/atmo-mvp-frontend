@@ -9,16 +9,13 @@ import ErrorBoundary from "@/components/atoms/ErrorBoundary.tsx";
 // Pages
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
-import DailyRoad from "./pages/DailyRoad";
 import Profile from "./pages/Profile";
-import KnowledgeOrganiser from "./pages/KnowledgeOrganiser";
-import ProjectView from "./pages/ProjectView";
-import NewPage from "./pages/NewPage";
 import DigitalBrain from "./pages/DigitalBrain";
 
 // Components
 import NavSidebar from "./components/molecules/NavSidebar.tsx";
 import {DailyMapCtxProvider} from "@/context/DailyMapCtx.tsx";
+import {SidebarProvider} from "@/context/SidebarContext.tsx";
 
 const queryClient = new QueryClient();
 
@@ -40,44 +37,19 @@ const AppLayout: React.FC<{children: React.ReactNode}> = ({children}) => {
 const AppContent: React.FC = () => {
     return (
         <Routes>
-            {/* Main App Routes - All accessible without authentication */}
+            {/* Main App Routes - Essential pages only */}
             <Route path="/" element={
                 <AppLayout>
                     <Index />
                 </AppLayout>
             } />
-            
-            <Route path="/daily-road" element={
-                <AppLayout>
-                    <DailyRoad />
-                </AppLayout>
-            } />
-            
-            
+
             <Route path="/profile" element={
                 <AppLayout>
                     <Profile />
                 </AppLayout>
             } />
-            
-            <Route path="/knowledge-organiser" element={
-                <AppLayout>
-                    <KnowledgeOrganiser />
-                </AppLayout>
-            } />
-            
-            <Route path="/new-page" element={
-                <AppLayout>
-                    <NewPage />
-                </AppLayout>
-            } />
-            
-            <Route path="/knowledge-organiser/project/:id" element={
-                <AppLayout>
-                    <ProjectView />
-                </AppLayout>
-            } />
-            
+
             <Route path="/digital-brain" element={
                 <AppLayout>
                     <DigitalBrain />
@@ -96,9 +68,11 @@ function App() {
             <QueryClientProvider client={queryClient}>
                 <TooltipProvider>
                     <BrowserRouter>
-                        <DailyMapCtxProvider>
-                            <AppContent />
-                        </DailyMapCtxProvider>
+                        <SidebarProvider>
+                            <DailyMapCtxProvider>
+                                <AppContent />
+                            </DailyMapCtxProvider>
+                        </SidebarProvider>
                     </BrowserRouter>
                 </TooltipProvider>
             </QueryClientProvider>

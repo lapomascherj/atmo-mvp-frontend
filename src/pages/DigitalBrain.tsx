@@ -26,19 +26,19 @@ const DigitalBrain: React.FC = () => {
           <p className="text-white/60">Your personal knowledge ecosystem</p>
         </div>
 
-        {/* Main Layout - 4 Cards Around Center Sphere */}
-        <div className="relative h-[calc(100vh-200px)] flex items-center justify-center">
-          
-          {/* Card 1 - Top Left (User Profile) */}
-          <div className="absolute top-0 left-0 w-[45%] h-[45%]">
-            <AtmoCard variant="purple" className="w-full h-full" hover={true}>
+        {/* Main Layout - 2x2 Grid with Center Sphere */}
+        <div className="h-[calc(100vh-200px)] flex items-center justify-center p-8">
+          <div className="max-w-6xl w-full grid grid-cols-2 gap-6 relative">
+
+            {/* Card 1 - Top Left (User Profile) */}
+            <AtmoCard variant="purple" className="h-80" hover={true}>
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center">
                     <User size={20} className="text-purple-400" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-semibold text-white">Card 1 - User Profile</h3>
+                    <h3 className="text-sm font-semibold text-white">User Profile</h3>
                     <p className="text-xs text-white/60">Data & Growth</p>
                   </div>
                 </div>
@@ -66,43 +66,27 @@ const DigitalBrain: React.FC = () => {
                 </div>
               </CardContent>
             </AtmoCard>
-          </div>
 
-          {/* Card 3 - Top Right (AI Insights Feed) */}
-          <div className="absolute top-0 right-0 w-[45%] h-[45%]">
-            <AtmoCard variant="orange" className="w-full h-full" hover={true}>
+            {/* Card 2 - Top Right (AI Insights Feed) */}
+            <AtmoCard variant="orange" className="h-80" hover={true}>
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-orange-500/20 flex items-center justify-center">
                     <Lightbulb size={20} className="text-orange-400" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-semibold text-white">Card 3 - AI Insights</h3>
+                    <h3 className="text-sm font-semibold text-white">AI Insights</h3>
                     <p className="text-xs text-white/60">Feed</p>
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="pt-0 overflow-y-auto">
                 <div className="space-y-3">
-                  {/* Favourites Section */}
                   <div>
-                    <h4 className="text-xs font-medium text-orange-400 mb-2">Favourites</h4>
+                    <h4 className="text-xs font-medium text-orange-400 mb-2">Recent</h4>
                     <div className="space-y-2">
                       <div className="p-2 bg-black/20 rounded-lg border border-orange-500/20">
-                        <p className="text-xs text-white/80">Insight placeholder</p>
-                        <div className="flex gap-1 mt-1">
-                          <span className="px-1 py-0.5 bg-orange-500/20 text-orange-400 text-xs rounded">Tag</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* New Section */}
-                  <div>
-                    <h4 className="text-xs font-medium text-orange-400 mb-2">New</h4>
-                    <div className="space-y-2">
-                      <div className="p-2 bg-black/20 rounded-lg border border-orange-500/20">
-                        <p className="text-xs text-white/80">Latest insight</p>
+                        <p className="text-xs text-white/80">Latest insight generated</p>
                         <div className="flex gap-1 mt-1">
                           <span className="px-1 py-0.5 bg-orange-500/20 text-orange-400 text-xs rounded">Fresh</span>
                         </div>
@@ -112,18 +96,16 @@ const DigitalBrain: React.FC = () => {
                 </div>
               </CardContent>
             </AtmoCard>
-          </div>
 
-          {/* Card 2 - Bottom Left (Knowledge Graph) */}
-          <div className="absolute bottom-0 left-0 w-[45%] h-[45%]">
-            <AtmoCard variant="blue" className="w-full h-full" hover={true}>
+            {/* Card 3 - Bottom Left (Knowledge Graph) */}
+            <AtmoCard variant="blue" className="h-80" hover={true}>
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center">
                     <Brain size={20} className="text-blue-400" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-semibold text-white">Card 2 - Knowledge Graph</h3>
+                    <h3 className="text-sm font-semibold text-white">Knowledge Graph</h3>
                     <p className="text-xs text-white/60">Interactive nodes</p>
                   </div>
                 </div>
@@ -138,18 +120,16 @@ const DigitalBrain: React.FC = () => {
                 </div>
               </CardContent>
             </AtmoCard>
-          </div>
 
-          {/* Card 4 - Bottom Right (Analytics) */}
-          <div className="absolute bottom-0 right-0 w-[45%] h-[45%]">
-            <AtmoCard variant="gold" className="w-full h-full" hover={true}>
+            {/* Card 4 - Bottom Right (Analytics) */}
+            <AtmoCard variant="gold" className="h-80" hover={true}>
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-yellow-500/20 flex items-center justify-center">
                     <BarChart3 size={20} className="text-yellow-400" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-semibold text-white">Card 4 - Analytics</h3>
+                    <h3 className="text-sm font-semibold text-white">Analytics</h3>
                     <p className="text-xs text-white/60">Usage insights</p>
                   </div>
                 </div>
@@ -171,29 +151,29 @@ const DigitalBrain: React.FC = () => {
                 </div>
               </CardContent>
             </AtmoCard>
-          </div>
 
-          {/* Orange Sphere - Exactly in the Center */}
-          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50">
-            <SphereChat
-              size={80}
-              isActive={isCapturing}
-              isListening={isCapturing}
-              onClick={handleQuickCapture}
-              voiceSupported={true}
-            />
+            {/* Avatar Sphere - Positioned in top-right with proper padding */}
+            <div className="absolute top-8 right-8 z-50">
+              <SphereChat
+                size={100}
+                isActive={isCapturing}
+                isListening={isCapturing}
+                onClick={handleQuickCapture}
+                voiceSupported={true}
+              />
 
-            {/* Voice Control X Button */}
-            {isCapturing && (
-              <div className="absolute -bottom-24 -left-6">
-                <button
-                  onClick={() => setIsCapturing(false)}
-                  className="w-10 h-10 rounded-full bg-slate-800/60 hover:bg-slate-700/80 border border-slate-600/40 text-white/80 hover:text-white transition-all duration-200 backdrop-blur-sm shadow-lg flex items-center justify-center"
-                >
-                  ✕
-                </button>
-              </div>
-            )}
+              {/* Voice Control X Button */}
+              {isCapturing && (
+                <div className="absolute -bottom-24 -left-6">
+                  <button
+                    onClick={() => setIsCapturing(false)}
+                    className="w-10 h-10 rounded-full bg-slate-800/60 hover:bg-slate-700/80 border border-slate-600/40 text-white/80 hover:text-white transition-all duration-200 backdrop-blur-sm shadow-lg flex items-center justify-center"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

@@ -2,13 +2,19 @@ import React, { useState } from 'react';
 import { AtmoCard } from '@/components/molecules/AtmoCard';
 import { CardContent, CardHeader } from '@/components/atoms/Card';
 import SphereChat from '@/components/atoms/SphereChat';
-import { User, BarChart3, Brain, Lightbulb, ChevronUp, TrendingUp, Target, Zap, Star } from 'lucide-react';
+import { User, BarChart3, Brain, Lightbulb, ChevronUp, TrendingUp, Target, Zap, Star, Radar, Settings, Filter, BookOpen, Plus, Circle, X, Edit3 } from 'lucide-react';
 import { SchedulerView } from '@/components/scheduler/SchedulerView';
 import { type SchedulerEvent } from '@/types/scheduler';
 
 const DigitalBrain: React.FC = () => {
   const [isCapturing, setIsCapturing] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
+  
+  // AI Insights state
+  const [insightMode, setInsightMode] = useState<'personal' | 'projects'>('personal');
+  const [selectedTag, setSelectedTag] = useState<string>('all');
+  const [selectedProject, setSelectedProject] = useState<string>('all');
+  const [showJournal, setShowJournal] = useState(false);
   const [events, setEvents] = useState<SchedulerEvent[]>([
     {
       id: 'event-1',
@@ -54,8 +60,368 @@ const DigitalBrain: React.FC = () => {
     },
   ]);
 
+  // Mock data for AI Insights
+  const personalTags = [
+    { id: 'all', name: 'All' },
+    { id: 'partnership', name: 'Partnership' },
+    { id: 'learning', name: 'Learning' },
+    { id: 'opportunity', name: 'Opportunity' },
+    { id: 'trend', name: 'Trend' },
+    { id: 'skill', name: 'Skill' },
+    { id: 'network', name: 'Network' },
+    { id: 'task', name: 'Task' },
+  ];
+
+  const projectTags = [
+    { id: 'all', name: 'All' },
+    { id: 'partnership', name: 'Partnership' },
+    { id: 'funding', name: 'Funding' },
+    { id: 'talent', name: 'Talent' },
+    { id: 'market', name: 'Market' },
+    { id: 'tool', name: 'Tool' },
+    { id: 'customer', name: 'Customer' },
+    { id: 'task', name: 'Task' },
+  ];
+
+  const personalInsights = [
+    {
+      id: '1',
+      type: 'Task',
+      title: 'Write LinkedIn thought piece on AI trends',
+      metadata: 'Impact: High • 1h ago',
+      action: 'Add to Today',
+      relevance: 94
+    },
+    {
+      id: '2',
+      type: 'Learning',
+      title: 'Leadership in 2024: Remote Team Management',
+      metadata: '15min read • 4h ago',
+      action: 'Read',
+      relevance: 89
+    },
+    {
+      id: '3',
+      type: 'Partnership',
+      title: 'Y Combinator seeks AI startups',
+      metadata: 'Match: 89% • 2h ago',
+      action: 'Connect',
+      relevance: 89
+    },
+    {
+      id: '4',
+      type: 'Opportunity',
+      title: 'TechCrunch Disrupt 2024 Speaker Applications',
+      metadata: 'Networking: High • 6h ago',
+      action: 'Register',
+      relevance: 85
+    },
+    {
+      id: '5',
+      type: 'Trend',
+      title: 'No-code movement growing +47%',
+      metadata: 'Growth: High • 1d ago',
+      action: 'Explore',
+      relevance: 82
+    },
+    {
+      id: '6',
+      type: 'Network',
+      title: 'Connect with Sarah Chen, VP at Notion',
+      metadata: 'Mutual connections: 3 • 3h ago',
+      action: 'Connect',
+      relevance: 88
+    }
+  ];
+
+  const projectInsights = [
+    {
+      id: '1',
+      type: 'Partnership',
+      title: 'Notion API partnership program',
+      metadata: 'Fit: 94% • 3h ago',
+      action: 'Apply',
+      project: 'GrowIn',
+      relevance: 94
+    },
+    {
+      id: '2',
+      type: 'Task',
+      title: 'Update GrowIn landing page copy',
+      metadata: 'Priority: High • 2h ago',
+      action: 'Add to Sprint',
+      project: 'GrowIn',
+      relevance: 92
+    },
+    {
+      id: '3',
+      type: 'Funding',
+      title: 'Seed funding for AI productivity tools',
+      metadata: 'Stage: Perfect • 5h ago',
+      action: 'Learn More',
+      project: 'ATMO',
+      relevance: 90
+    },
+    {
+      id: '4',
+      type: 'Task',
+      title: 'Research ATMO user personas',
+      metadata: 'Deadline: Tomorrow • 4h ago',
+      action: 'Schedule',
+      project: 'ATMO',
+      relevance: 88
+    },
+    {
+      id: '5',
+      type: 'Talent',
+      title: 'Senior React developer available',
+      metadata: 'Skills: 96% match • 8h ago',
+      action: 'Contact',
+      project: 'Both Projects',
+      relevance: 86
+    },
+    {
+      id: '6',
+      type: 'Market',
+      title: 'Productivity software market analysis',
+      metadata: 'Growth: +23% • 1d ago',
+      action: 'Analyze',
+      project: 'All',
+      relevance: 84
+    },
+    {
+      id: '7',
+      type: 'Tool',
+      title: 'New React performance monitoring tool',
+      metadata: 'Relevance: High • 6h ago',
+      action: 'Evaluate',
+      project: 'GrowIn',
+      relevance: 81
+    },
+    {
+      id: '8',
+      type: 'Customer',
+      title: 'Busy professionals segment analysis',
+      metadata: 'Target match: 89% • 12h ago',
+      action: 'Research',
+      project: 'ATMO',
+      relevance: 87
+    }
+  ];
+
+  const getCurrentInsights = () => {
+    const insights = insightMode === 'personal' ? personalInsights : projectInsights;
+    if (selectedTag === 'all') return insights;
+    return insights.filter(insight => insight.type.toLowerCase() === selectedTag);
+  };
+
+  const getCurrentTags = () => {
+    return insightMode === 'personal' ? personalTags : projectTags;
+  };
+
+  // Journal albums and items (Apple Photos style)
+  const journalAlbums = [
+    {
+      id: 'recent',
+      name: 'Recent',
+      count: 8,
+      items: [
+        {
+          id: '1',
+          type: 'Article',
+          title: 'The Future of AI in Productivity Tools',
+          source: 'Harvard Business Review',
+          savedDate: '2 days ago',
+          readTime: '8 min read',
+          thumbnail: 'AI'
+        },
+        {
+          id: '2',
+          type: 'Opportunity',
+          title: 'Y Combinator Application',
+          source: 'YC Website',
+          savedDate: '1 week ago',
+          deadline: 'Dec 15',
+          thumbnail: 'YC'
+        },
+        {
+          id: '3',
+          type: 'Advice',
+          title: 'Building MVP: Core Features',
+          source: 'Paul Graham',
+          savedDate: '3 days ago',
+          readTime: '12 min',
+          thumbnail: 'MVP'
+        },
+        {
+          id: '4',
+          type: 'Article',
+          title: 'Remote Team Leadership',
+          source: 'First Round',
+          savedDate: '1 week ago',
+          readTime: '15 min',
+          thumbnail: 'LEAD'
+        }
+      ]
+    },
+    {
+      id: 'opportunities',
+      name: 'Opportunities',
+      count: 5,
+      items: [
+        {
+          id: '5',
+          type: 'Funding',
+          title: 'Seed Funding Programs',
+          source: 'AngelList',
+          savedDate: '4 days ago',
+          thumbnail: 'FUND'
+        },
+        {
+          id: '6',
+          type: 'Partnership',
+          title: 'Tech Partnership Program',
+          source: 'Microsoft',
+          savedDate: '6 days ago',
+          thumbnail: 'PART'
+        }
+      ]
+    },
+    {
+      id: 'learning',
+      name: 'Learning',
+      count: 12,
+      items: [
+        {
+          id: '7',
+          type: 'Course',
+          title: 'Advanced React Patterns',
+          source: 'Kent C. Dodds',
+          savedDate: '2 weeks ago',
+          thumbnail: 'REACT'
+        },
+        {
+          id: '8',
+          type: 'Book',
+          title: 'The Lean Startup',
+          source: 'Eric Ries',
+          savedDate: '1 month ago',
+          thumbnail: 'LEAN'
+        }
+      ]
+    }
+  ];
+
+  const [selectedAlbum, setSelectedAlbum] = useState('recent');
+  const [albums, setAlbums] = useState(journalAlbums);
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [opportunityToSave, setOpportunityToSave] = useState(null);
+  const [showCreateAlbum, setShowCreateAlbum] = useState(false);
+  const [newAlbumName, setNewAlbumName] = useState('');
+
+  // Opportunity Radar data - 3 opportunities
+  const opportunityRadarData = {
+    personal: [
+      {
+        id: '1',
+        title: 'AI Strategy Workshop',
+        subtitle: 'Dec 15 - Online',
+        match: '95%',
+        growth: '+12%'
+      },
+      {
+        id: '2',
+        title: 'Tech Leadership Summit',
+        subtitle: 'Jan 20 - San Francisco',
+        match: '88%',
+        growth: '+8%'
+      },
+      {
+        id: '3',
+        title: 'Startup Accelerator',
+        subtitle: 'Feb 1 - Applications Open',
+        match: '92%',
+        growth: '+15%'
+      }
+    ],
+    projects: [
+      {
+        id: '1',
+        title: 'Notion API Partnership',
+        subtitle: 'Integration Program',
+        relevance: '89%',
+        urgency: 'High'
+      },
+      {
+        id: '2',
+        title: 'Microsoft for Startups',
+        subtitle: 'Azure Credits Program',
+        relevance: '85%',
+        urgency: 'Medium'
+      },
+      {
+        id: '3',
+        title: 'Y Combinator Demo Day',
+        subtitle: 'Investor Network',
+        relevance: '93%',
+        urgency: 'High'
+      }
+    ]
+  };
+
   const handleQuickCapture = () => {
     setIsCapturing(!isCapturing);
+  };
+
+  // Album management functions
+  const handleCreateAlbum = () => {
+    if (newAlbumName.trim()) {
+      const newAlbum = {
+        id: newAlbumName.toLowerCase().replace(/\s+/g, '-'),
+        name: newAlbumName.trim(),
+        count: 0,
+        items: []
+      };
+      setAlbums([...albums, newAlbum]);
+      setNewAlbumName('');
+      setShowCreateAlbum(false);
+    }
+  };
+
+  const handleDeleteAlbum = (albumId) => {
+    if (albumId === 'recent') return; // Don't allow deleting Recent album
+    setAlbums(albums.filter(album => album.id !== albumId));
+    if (selectedAlbum === albumId) {
+      setSelectedAlbum('recent');
+    }
+  };
+
+  // Opportunity saving functions
+  const handleSaveOpportunity = (opportunity) => {
+    setOpportunityToSave(opportunity);
+    setShowSaveModal(true);
+  };
+
+  const handleSaveToAlbum = (albumId) => {
+    if (opportunityToSave) {
+      const newItem = {
+        id: `opp-${Date.now()}`,
+        type: 'Opportunity',
+        title: opportunityToSave.title,
+        source: 'ATMO Radar',
+        savedDate: 'Just now',
+        thumbnail: opportunityToSave.title.substring(0, 3).toUpperCase()
+      };
+
+      setAlbums(albums.map(album => 
+        album.id === albumId 
+          ? { ...album, items: [...album.items, newItem], count: album.count + 1 }
+          : album
+      ));
+
+      setShowSaveModal(false);
+      setOpportunityToSave(null);
+    }
   };
 
   return (
@@ -188,17 +554,326 @@ const DigitalBrain: React.FC = () => {
             </div>
           </AtmoCard>
 
-          {/* Card 2 - AI Insights */}
-          <AtmoCard variant="orange" className="w-full h-full" hover={true}>
-            <CardHeader className="px-6 py-4">
-              <h3 className="text-lg font-semibold text-white text-center">AI Insights</h3>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="text-center text-white/60">
-                <Lightbulb size={32} className="mx-auto mb-2 text-orange-400" />
-                <p className="text-sm">Coming soon</p>
+          {/* Card 2 - AI Insights / Journal */}
+          <AtmoCard variant="orange" className="w-full h-full p-4" hover={true}>
+            <div className="h-full flex flex-col">
+              
+              {/* Header with ATMO Insights/Journal, centered toggle, and Journal icon */}
+              <div className="flex items-center mb-4">
+                <div className="flex-1">
+                  <h3 className="text-sm font-semibold text-white">
+                    {showJournal ? 'Journal' : 'ATMO Insights'}
+                  </h3>
+                </div>
+                
+                {/* Perfectly centered mode toggle - only show when not in journal mode */}
+                {!showJournal && (
+                  <div className="flex bg-white/5 rounded-lg p-1">
+                    <button 
+                      onClick={() => setInsightMode('personal')}
+                      className={`px-3 py-1 rounded-md text-xs transition-all ${
+                        insightMode === 'personal' 
+                          ? 'bg-[#89AC76]/20 text-[#89AC76] border border-[#89AC76]/30' 
+                          : 'text-white/60 hover:text-white/80'
+                      }`}
+                    >
+                      Personal
+                    </button>
+                    <button 
+                      onClick={() => setInsightMode('projects')}
+                      className={`px-3 py-1 rounded-md text-xs transition-all ${
+                        insightMode === 'projects' 
+                          ? 'bg-[#89AC76]/20 text-[#89AC76] border border-[#89AC76]/30' 
+                          : 'text-white/60 hover:text-white/80'
+                      }`}
+                    >
+                      Projects
+                    </button>
+                  </div>
+                )}
+                
+                {/* Journal icon */}
+                <div className="flex-1 flex justify-end">
+                  <button 
+                    onClick={() => setShowJournal(!showJournal)}
+                    className={`w-6 h-6 rounded-md flex items-center justify-center transition-colors ${
+                      showJournal 
+                        ? 'bg-[#89AC76]/20 text-[#89AC76] border border-[#89AC76]/30' 
+                        : 'bg-white/5 hover:bg-white/10 text-white/60'
+                    }`}
+                  >
+                    <BookOpen size={12} />
+                  </button>
+                </div>
               </div>
-            </CardContent>
+
+              {showJournal ? (
+                /* Journal View - Apple Photos Style */
+                <div className="flex-1 overflow-hidden">
+                  <div className="mb-3">
+                    <h4 className="text-sm font-medium text-white mb-2">Digital Wardrobe</h4>
+                    <p className="text-xs text-white/60">Your curated collection organized in albums</p>
+                  </div>
+                  
+                  {/* Album Tabs with Create Button */}
+                  <div className="flex gap-1 mb-4 overflow-x-auto scrollbar-hide">
+                    {albums.map(album => (
+                      <div key={album.id} className="relative group">
+                        <button
+                          onClick={() => setSelectedAlbum(album.id)}
+                          className={`px-3 py-1 rounded-full text-xs whitespace-nowrap transition-colors ${
+                            selectedAlbum === album.id
+                              ? 'bg-[#89AC76]/20 text-[#89AC76] border border-[#89AC76]/30'
+                              : 'bg-white/5 text-white/60 border border-white/10 hover:bg-white/10'
+                          }`}
+                        >
+                          {album.name} ({album.count})
+                        </button>
+                        {album.id !== 'recent' && (
+                          <button
+                            onClick={() => handleDeleteAlbum(album.id)}
+                            className="absolute -top-1 -right-1 w-5 h-5 bg-white/10 hover:bg-white/20 text-white/60 hover:text-white/80 rounded-full opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center border border-white/20"
+                            title="Delete Album"
+                          >
+                            <X size={10} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    
+                    {/* Create New Album Button */}
+                    <button 
+                      onClick={() => setShowCreateAlbum(true)}
+                      className="w-8 h-8 rounded-full bg-white/5 border border-white/10 hover:border-[#89AC76]/30 hover:bg-[#89AC76]/10 transition-colors flex items-center justify-center shrink-0"
+                      title="Create New Album"
+                    >
+                      <Plus size={12} className="text-white/60 hover:text-[#89AC76]" />
+                    </button>
+                  </div>
+                  
+                  {/* Items Grid - Apple Photos Style with Enhanced Scrolling */}
+                  <div className="flex-1 overflow-y-auto min-h-0" style={{ maxHeight: 'calc(100% - 120px)' }}>
+                    <div className="grid grid-cols-2 gap-2 pb-4">
+                      {albums
+                        .find(album => album.id === selectedAlbum)
+                        ?.items.map(item => (
+                          <div key={item.id} className="group cursor-pointer">
+                            <div className="bg-white/5 rounded-lg border border-white/10 hover:border-[#89AC76]/30 transition-all overflow-hidden">
+                              {/* Thumbnail */}
+                              <div className="h-16 bg-gradient-to-br from-[#89AC76]/20 to-[#89AC76]/10 flex items-center justify-center">
+                                <span className="text-xs font-bold text-[#89AC76]">
+                                  {item.thumbnail}
+                                </span>
+                              </div>
+                              
+                              {/* Content */}
+                              <div className="p-2">
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-xs text-[#89AC76] font-medium">{item.type}</span>
+                                  <span className="text-xs text-white/50">{item.savedDate}</span>
+                                </div>
+                                <h5 className="text-xs font-medium text-white mb-1 line-clamp-2 leading-tight">
+                                  {item.title}
+                                </h5>
+                                <p className="text-xs text-white/60 truncate">{item.source}</p>
+                                
+                                {/* Metadata */}
+                                <div className="mt-1">
+                                  <span className="text-xs text-white/50">
+                                    {'readTime' in item ? item.readTime : 'deadline' in item ? `Due: ${item.deadline}` : ''}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      
+                      {/* Add New Item Button */}
+                      <div className="col-span-2 mt-2">
+                        <button className="w-full h-12 border-2 border-dashed border-white/20 rounded-lg text-white/40 hover:border-[#89AC76]/30 hover:text-[#89AC76]/60 transition-colors flex items-center justify-center">
+                          <Plus size={14} className="mr-2" />
+                          <span className="text-xs">Add to Journal</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* AI Insights View */
+                <>
+                  {/* Opportunity Radar Section - 3 Small Cards */}
+                  <div className="mb-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Radar size={12} className="text-[#89AC76]" />
+                      <span className="text-xs font-medium text-[#89AC76]">Opportunity Radar</span>
+                    </div>
+                    
+                    {/* 3 Opportunity Cards */}
+                    <div className="flex gap-2">
+                      {opportunityRadarData[insightMode].map(opportunity => (
+                        <div key={opportunity.id} className="flex-1 p-2 bg-gradient-to-r from-[#89AC76]/15 to-[#89AC76]/10 rounded-lg border border-[#89AC76]/25">
+                          <div className="mb-2">
+                            <h4 className="text-xs font-semibold text-white mb-1 line-clamp-1">
+                              {opportunity.title}
+                            </h4>
+                            <p className="text-xs text-white/70 line-clamp-1">
+                              {opportunity.subtitle}
+                            </p>
+                            <p className="text-xs text-[#89AC76] mt-1">
+                              {insightMode === 'personal' 
+                                ? `Match: ${opportunity.match} | Growth: ${opportunity.growth}`
+                                : `Relevance: ${opportunity.relevance} | ${opportunity.urgency}`
+                              }
+                            </p>
+                          </div>
+                          <div className="flex gap-1 justify-center">
+                            <button 
+                              onClick={() => handleSaveOpportunity(opportunity)}
+                              className="w-6 h-6 bg-[#89AC76]/20 text-[#89AC76] rounded border border-[#89AC76]/30 hover:bg-[#89AC76]/30 transition-colors flex items-center justify-center"
+                              title="Save to Journal"
+                            >
+                              <Plus size={10} />
+                            </button>
+                            <button 
+                              className="w-6 h-6 bg-[#89AC76]/20 text-[#89AC76] rounded border border-[#89AC76]/30 hover:bg-[#89AC76]/30 transition-colors flex items-center justify-center"
+                              title="Bring to Chat"
+                            >
+                              <Circle size={8} className="fill-current" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Growth Insights Feed */}
+                  <div className="flex-1 overflow-hidden">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="text-sm font-medium text-white">
+                        {insightMode === 'personal' ? "Today's Growth Discoveries" : "Growth Opportunities"}
+                      </h4>
+                      {insightMode === 'projects' && (
+                        <select 
+                          value={selectedProject}
+                          onChange={(e) => setSelectedProject(e.target.value)}
+                          className="bg-white/5 border border-white/10 rounded text-xs text-white/80 px-2 py-1"
+                        >
+                          <option value="all">All Projects</option>
+                          <option value="growin">GrowIn</option>
+                          <option value="atmo">ATMO</option>
+                        </select>
+                      )}
+                    </div>
+                    
+                    {/* Tag filters without emojis */}
+                    <div className="flex gap-1 mb-3 overflow-x-auto scrollbar-hide">
+                      {getCurrentTags().map(tag => (
+                        <button 
+                          key={tag.id} 
+                          onClick={() => setSelectedTag(tag.id)}
+                          className={`px-2 py-1 rounded-full text-xs whitespace-nowrap transition-colors ${
+                            selectedTag === tag.id 
+                              ? 'bg-[#89AC76]/20 text-[#89AC76] border border-[#89AC76]/30'
+                              : 'bg-white/5 text-white/60 border border-white/10 hover:bg-white/10'
+                          }`}
+                        >
+                          {tag.name}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Horizontal scrolling insights without emojis */}
+                    <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-2 h-36">
+                      {getCurrentInsights().map(insight => (
+                        <div key={insight.id} className="flex-shrink-0 w-48 p-3 bg-white/5 rounded-lg border border-white/10 hover:border-[#89AC76]/30 transition-all">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-xs text-[#89AC76] font-medium">{insight.type}</span>
+                            {insightMode === 'projects' && 'project' in insight && (
+                              <span className="text-xs text-white/50">• {insight.project}</span>
+                            )}
+                          </div>
+                          <h5 className="text-xs font-medium text-white mb-1 line-clamp-2">
+                            {insight.title}
+                          </h5>
+                          <p className="text-xs text-white/60 mb-2">
+                            {insight.metadata}
+                          </p>
+                          <div className="flex gap-1 justify-center">
+                            <button className="w-6 h-6 bg-[#89AC76]/20 text-[#89AC76] rounded border border-[#89AC76]/30 hover:bg-[#89AC76]/30 transition-colors flex items-center justify-center">
+                              <Plus size={10} />
+                            </button>
+                            <button className="w-6 h-6 bg-[#89AC76]/20 text-[#89AC76] rounded border border-[#89AC76]/30 hover:bg-[#89AC76]/30 transition-colors flex items-center justify-center">
+                              <Circle size={8} className="fill-current" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Save Opportunity Modal */}
+            {showSaveModal && (
+              <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-50">
+                <div className="bg-slate-800 rounded-lg p-4 w-64 border border-white/10">
+                  <h4 className="text-sm font-semibold text-white mb-3">Save to Album</h4>
+                  <p className="text-xs text-white/70 mb-3">Choose an album for: {opportunityToSave?.title}</p>
+                  <div className="space-y-2 max-h-32 overflow-y-auto">
+                    {albums.map(album => (
+                      <button
+                        key={album.id}
+                        onClick={() => handleSaveToAlbum(album.id)}
+                        className="w-full text-left px-3 py-2 bg-white/5 hover:bg-[#89AC76]/10 rounded border border-white/10 hover:border-[#89AC76]/30 transition-colors"
+                      >
+                        <span className="text-xs text-white">{album.name} ({album.count})</span>
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => setShowSaveModal(false)}
+                    className="w-full mt-3 px-3 py-2 bg-white/5 text-white/70 text-xs rounded border border-white/10 hover:bg-white/10 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Create Album Modal */}
+            {showCreateAlbum && (
+              <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-50">
+                <div className="bg-slate-800 rounded-lg p-4 w-64 border border-white/10">
+                  <h4 className="text-sm font-semibold text-white mb-3">Create New Album</h4>
+                  <input
+                    type="text"
+                    value={newAlbumName}
+                    onChange={(e) => setNewAlbumName(e.target.value)}
+                    placeholder="Album name"
+                    className="w-full px-3 py-2 bg-white/5 text-white text-xs rounded border border-white/10 focus:border-[#89AC76]/30 focus:outline-none mb-3"
+                    onKeyDown={(e) => e.key === 'Enter' && handleCreateAlbum()}
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleCreateAlbum}
+                      className="flex-1 px-3 py-2 bg-[#89AC76]/20 text-[#89AC76] text-xs rounded border border-[#89AC76]/30 hover:bg-[#89AC76]/30 transition-colors"
+                    >
+                      Create
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowCreateAlbum(false);
+                        setNewAlbumName('');
+                      }}
+                      className="flex-1 px-3 py-2 bg-white/5 text-white/70 text-xs rounded border border-white/10 hover:bg-white/10 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </AtmoCard>
 
           {/* Card 3 - Knowledge Graph */}

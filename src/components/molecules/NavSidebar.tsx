@@ -76,17 +76,18 @@ const NavSidebar: React.FC = () => {
     return (
         <aside
             className={cn(
-                'h-screen flex flex-col bg-gradient-to-br from-slate-950/90 via-slate-900/85 to-slate-950/90 backdrop-blur-lg border-r border-white/5 transition-all duration-300 ease-in-out fixed left-0 top-0 z-40',
+                'h-screen flex flex-col bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border-r border-white/5 fixed left-0 top-0 z-40',
                 isCollapsed ? 'w-[60px]' : 'w-[180px]'
             )}
+            style={{
+                transition: 'width 300ms ease-in-out',
+                willChange: 'width',
+            }}
         >
-            {/* Blur background effect */}
-            <div className="absolute inset-0 bg-slate-900/10 backdrop-blur-md -z-10"></div>
-
-            {/* Collapse toggle button */}
+            {/* Collapse toggle button - Outside sidebar */}
             <button
                 onClick={toggleCollapse}
-                className="absolute -right-3 top-20 bg-[#010024]/50 border border-white/10 rounded-full p-1 text-[#E3E3E3]/50 hover:text-[#E3E3E3] transition-colors z-10 h-6 w-6 flex items-center justify-center shadow-md"
+                className="absolute -right-3 top-20 bg-slate-900 border border-white/10 rounded-full p-1 text-white/50 hover:text-white transition-colors z-50 h-6 w-6 flex items-center justify-center shadow-lg"
                 aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             >
                 {isCollapsed ? <ChevronRight size={14}/> : <ChevronLeft size={14}/>}
@@ -98,9 +99,8 @@ const NavSidebar: React.FC = () => {
                 isCollapsed ? 'justify-center' : 'justify-start'
             )}>
                 <div className="flex items-center">
-                    <div
-                        className="w-8 h-8 bg-[#010024] border border-[#4169E1]/20 rounded-lg flex items-center justify-center shadow-[0_0_12px_rgba(65,105,225,0.3)]">
-                        <span className="text-[#4169E1] text-sm font-bold">A</span>
+                    <div className="w-8 h-8 flex items-center justify-center">
+                        <img src="/AtmoPNG.png" alt="Atmo" className="w-full h-full object-contain" />
                     </div>
                     {!isCollapsed && (
                         <span className="text-[#E3E3E3] text-base ml-2 font-light">ATMO</span>

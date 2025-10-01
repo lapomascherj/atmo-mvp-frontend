@@ -3,9 +3,56 @@ import { AtmoCard } from '@/components/molecules/AtmoCard';
 import { CardContent, CardHeader } from '@/components/atoms/Card';
 import SphereChat from '@/components/atoms/SphereChat';
 import { User, BarChart3, Brain, Lightbulb, ChevronUp, TrendingUp, Target, Zap, Star } from 'lucide-react';
+import { SchedulerView } from '@/components/scheduler/SchedulerView';
+import { type SchedulerEvent } from '@/types/scheduler';
 
 const DigitalBrain: React.FC = () => {
   const [isCapturing, setIsCapturing] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [events, setEvents] = useState<SchedulerEvent[]>([
+    {
+      id: 'event-1',
+      title: 'Morning Meeting',
+      startTime: '08:00',
+      duration: 30,
+    },
+    {
+      id: 'event-2',
+      title: 'Project Planning',
+      startTime: '09:00',
+      duration: 60,
+    },
+    {
+      id: 'event-3',
+      title: 'Team Sync',
+      startTime: '10:00',
+      duration: 45,
+    },
+    {
+      id: 'event-4',
+      title: 'Lunch Break',
+      startTime: '12:00',
+      duration: 60,
+    },
+    {
+      id: 'event-5',
+      title: 'Design Review',
+      startTime: '14:00',
+      duration: 90,
+    },
+    {
+      id: 'event-6',
+      title: 'Client Call',
+      startTime: '16:00',
+      duration: 45,
+    },
+    {
+      id: 'event-7',
+      title: 'Wrap Up',
+      startTime: '17:00',
+      duration: 30,
+    },
+  ]);
 
   const handleQuickCapture = () => {
     setIsCapturing(!isCapturing);
@@ -19,15 +66,15 @@ const DigitalBrain: React.FC = () => {
       <div className="fixed top-[60%] left-[15%] -z-10 w-96 h-96 bg-orange-500/3 rounded-full blur-[120px] animate-pulse-soft" />
 
       {/* Left Section - Cards Grid */}
-      <div className="flex-1 h-full flex flex-col p-8 pl-8 pr-4">
+      <div className="flex-1 h-full flex flex-col p-6 pl-8 pr-4">
         {/* Page Title - Top Left */}
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-white mb-2">Digital Brain</h1>
-          <p className="text-white/60 text-sm">Your personal knowledge ecosystem</p>
+        <div className="mb-4">
+          <h1 className="text-2xl font-bold text-white mb-1">Digital Brain</h1>
+          <p className="text-white/60 text-xs">Your personal knowledge ecosystem</p>
         </div>
 
-        {/* 2x2 Grid of Cards - Wider */}
-        <div className="flex-1 grid grid-cols-2 grid-rows-2 gap-6 w-full">
+        {/* 2x2 Grid of Cards - Smaller */}
+        <div className="grid grid-cols-2 grid-rows-2 gap-4 max-h-[calc(100vh-140px)]">
 
           {/* Card 1 - User Profile (Lapo's Design) */}
           <AtmoCard variant="purple" className="w-full h-full p-4" hover={true}>
@@ -167,17 +214,14 @@ const DigitalBrain: React.FC = () => {
             </CardContent>
           </AtmoCard>
 
-          {/* Card 4 - Analytics */}
-          <AtmoCard variant="gold" className="w-full h-full" hover={true}>
-            <CardHeader className="px-6 py-4">
-              <h3 className="text-lg font-semibold text-white text-center">Analytics</h3>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="text-center">
-                <p className="text-2xl font-bold text-yellow-400 mb-2">2.5h</p>
-                <p className="text-xs text-white/60">Today's usage</p>
-              </div>
-            </CardContent>
+          {/* Card 4 - Analytics with Scheduler */}
+          <AtmoCard variant="gold" className="w-full h-full overflow-hidden" hover={true}>
+            <SchedulerView
+              events={events}
+              onEventsChange={setEvents}
+              selectedDate={selectedDate}
+              onDateChange={setSelectedDate}
+            />
           </AtmoCard>
 
         </div>

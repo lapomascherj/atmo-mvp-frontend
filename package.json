@@ -8,7 +8,16 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "pb:serve": "cd pocketbase && ./pocketbase serve",
+    "pb:serve:prod": "cd pocketbase && ./pocketbase serve --http=0.0.0.0:8090",
+    "pb:admin": "open http://127.0.0.1:8090/_/",
+    "pb:migrate": "cd pocketbase && ./pocketbase migrate",
+    "pb:backup": "cd pocketbase && ./pocketbase export",
+    "pb:import": "cd pocketbase && ./pocketbase import",
+    "dev:full": "concurrently \"npm run pb:serve\" \"npm run dev\"",
+    "start": "serve -s dist -l $PORT",
+    "heroku-postbuild": "npm run build"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.1.1",
@@ -61,6 +70,7 @@
     "react-router-dom": "^6.26.2",
     "react-speech-recognition": "^4.0.1",
     "recharts": "^2.12.7",
+    "serve": "^14.2.5",
     "sonner": "^1.5.0",
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",

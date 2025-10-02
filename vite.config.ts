@@ -62,7 +62,6 @@ export default defineConfig(({ mode }) => ({
             './src/stores/useProjectsStore',
             './src/stores/useTasksStore',
             './src/stores/useGoalsStore',
-            './src/stores/useCalendarStore',
             './src/stores/useMockIntegrationsStore',
             './src/stores/useKnowledgeItemsStore'
           ]

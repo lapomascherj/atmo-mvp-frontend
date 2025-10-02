@@ -5,7 +5,7 @@ import SphereChat from '@/components/atoms/SphereChat';
 import { User, BarChart3, Brain, Lightbulb, ChevronUp, TrendingUp, Target, Zap, Star, Radar, Settings, Filter, BookOpen, Plus, Circle, X, Edit3 } from 'lucide-react';
 import { SchedulerView } from '@/components/scheduler/SchedulerView';
 import { type SchedulerEvent } from '@/types/scheduler';
-import { KnowledgeCraftCard, type GraphNode, type GraphLink } from '@/components/knowledge/KnowledgeCraftCard';
+import { ObsidianKnowledgeGraph } from '@/components/knowledge/ObsidianKnowledgeGraph';
 
 const STORAGE_KEY = 'atmo_roadmap_tasks';
 
@@ -96,58 +96,7 @@ const DigitalBrain: React.FC = () => {
     }
   }, [events]);
 
-  // Knowledge Graph data
-  const knowledgeNodes: GraphNode[] = [
-    { id: '1', label: 'ATMO Platform', type: 'idea' },
-    { id: '2', label: 'AI Integration', type: 'task' },
-    { id: '3', label: 'User Research', type: 'note' },
-    { id: '4', label: 'GrowIn Project', type: 'idea' },
-    { id: '5', label: 'Digital Branding', type: 'note' },
-    { id: '6', label: 'React Performance', type: 'task' },
-    { id: '7', label: 'Force-Directed Layout', type: 'note' },
-    { id: '8', label: 'Productivity Tools', type: 'idea' },
-    { id: '9', label: 'Market Analysis', type: 'task' },
-    { id: '10', label: 'User Personas', type: 'note' },
-    { id: '11', label: 'Tech Stack', type: 'idea' },
-    { id: '12', label: 'Component Library', type: 'task' },
-    { id: '13', label: 'Growth Hacking', type: 'note' },
-    { id: '14', label: 'Seed Funding', type: 'idea' },
-    { id: '15', label: 'MVP Features', type: 'task' },
-    { id: '16', label: 'Design System', type: 'note' },
-    { id: '17', label: 'API Architecture', type: 'idea' },
-    { id: '18', label: 'Testing Strategy', type: 'task' },
-    { id: '19', label: 'Deployment Pipeline', type: 'note' },
-    { id: '20', label: 'Customer Feedback', type: 'idea' },
-  ];
-
-  const knowledgeLinks: GraphLink[] = [
-    { source: '1', target: '2', weight: 2 },
-    { source: '1', target: '3', weight: 1 },
-    { source: '1', target: '8', weight: 1.5 },
-    { source: '2', target: '6', weight: 1 },
-    { source: '2', target: '11', weight: 1.5 },
-    { source: '3', target: '10', weight: 2 },
-    { source: '4', target: '5', weight: 2 },
-    { source: '4', target: '13', weight: 1 },
-    { source: '4', target: '15', weight: 1.5 },
-    { source: '5', target: '16', weight: 1 },
-    { source: '6', target: '7', weight: 2 },
-    { source: '6', target: '12', weight: 1 },
-    { source: '8', target: '9', weight: 1 },
-    { source: '8', target: '14', weight: 1 },
-    { source: '9', target: '20', weight: 1.5 },
-    { source: '10', target: '20', weight: 1 },
-    { source: '11', target: '12', weight: 2 },
-    { source: '11', target: '17', weight: 1.5 },
-    { source: '12', target: '16', weight: 1 },
-    { source: '15', target: '18', weight: 1 },
-    { source: '17', target: '19', weight: 1 },
-    { source: '18', target: '19', weight: 1.5 },
-    { source: '1', target: '15', weight: 1 },
-    { source: '4', target: '1', weight: 0.5 },
-    { source: '14', target: '1', weight: 1 },
-    { source: '13', target: '8', weight: 0.5 },
-  ];
+  // Knowledge Graph is now data-driven from Zustand stores
 
   // Mock data for AI Insights
   const personalTags = [
@@ -1090,10 +1039,8 @@ const DigitalBrain: React.FC = () => {
             )}
           </AtmoCard>
 
-          {/* Card 3 - Knowledge Craft */}
-          <AtmoCard variant="blue" className="w-full h-full overflow-hidden" hover={true}>
-            <KnowledgeCraftCard nodes={knowledgeNodes} links={knowledgeLinks} />
-          </AtmoCard>
+          {/* Card 3 - Obsidian Knowledge Graph */}
+          <ObsidianKnowledgeGraph className="w-full h-full overflow-hidden" />
 
           {/* Card 4 - Analytics with Scheduler */}
           <AtmoCard variant="gold" className="w-full h-full overflow-hidden" hover={true}>

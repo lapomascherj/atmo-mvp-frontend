@@ -2,6 +2,167 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Knowledge Graph Animations */
+.animate-pulse-soft {
+  animation: pulse-soft 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse-soft {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+.graph-node {
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.graph-node:hover {
+  filter: brightness(1.2);
+  transform: scale(1.1);
+}
+
+.graph-connection {
+  transition: all 0.3s ease;
+}
+
+.graph-connection.animated {
+  animation: connection-pulse 2s ease-in-out infinite;
+}
+
+@keyframes connection-pulse {
+  0%, 100% {
+    opacity: 0.6;
+    stroke-width: 1;
+  }
+  50% {
+    opacity: 1;
+    stroke-width: 2;
+  }
+}
+
+/* Obsidian-style Cosmic Knowledge Graph */
+.knowledge-graph-cosmic {
+  background: radial-gradient(ellipse at center, #0f1419 0%, #000000 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.knowledge-graph-cosmic::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    radial-gradient(2px 2px at 20px 30px, rgba(255,255,255,0.1), transparent),
+    radial-gradient(2px 2px at 40px 70px, rgba(255,255,255,0.05), transparent),
+    radial-gradient(1px 1px at 90px 40px, rgba(255,255,255,0.08), transparent),
+    radial-gradient(1px 1px at 130px 80px, rgba(59,130,246,0.1), transparent),
+    radial-gradient(2px 2px at 160px 30px, rgba(139,92,246,0.08), transparent);
+  background-repeat: repeat;
+  background-size: 200px 160px;
+  animation: stars-twinkle 20s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes stars-twinkle {
+  0%, 100% { opacity: 0.3; }
+  25% { opacity: 0.8; }
+  50% { opacity: 0.5; }
+  75% { opacity: 0.9; }
+}
+
+.main-node {
+  filter: drop-shadow(0 0 20px rgba(59, 130, 246, 0.5));
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: grab;
+}
+
+.main-node:active {
+  cursor: grabbing;
+}
+
+.main-node:hover {
+  filter: drop-shadow(0 0 30px rgba(59, 130, 246, 0.8));
+  transform: scale(1.1);
+}
+
+.sub-node {
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.2));
+  transition: all 0.2s ease;
+  cursor: grab;
+}
+
+.sub-node:active {
+  cursor: grabbing;
+}
+
+.sub-node:hover {
+  filter: drop-shadow(0 0 15px rgba(255, 255, 255, 0.4));
+  transform: scale(1.05);
+}
+
+.connection-line {
+  stroke: rgba(59, 130, 246, 0.3);
+  stroke-width: 1;
+  transition: all 0.3s ease;
+}
+
+.connection-line.active {
+  stroke: rgba(59, 130, 246, 0.8);
+  stroke-width: 2;
+  animation: pulse-connection 2s ease-in-out infinite;
+}
+
+/* Cosmic glow effects */
+.cosmic-glow-blue {
+  filter: drop-shadow(0 0 20px rgba(59, 130, 246, 0.6));
+}
+
+.cosmic-glow-green {
+  filter: drop-shadow(0 0 20px rgba(16, 185, 129, 0.6));
+}
+
+.cosmic-glow-orange {
+  filter: drop-shadow(0 0 20px rgba(245, 158, 11, 0.6));
+}
+
+.cosmic-glow-purple {
+  filter: drop-shadow(0 0 20px rgba(139, 92, 246, 0.6));
+}
+
+/* Floating animation for nodes */
+@keyframes float-gentle {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-3px); }
+}
+
+.floating-node {
+  animation: float-gentle 4s ease-in-out infinite;
+}
+
+/* Pulsing effect for selected nodes */
+@keyframes cosmic-pulse {
+  0%, 100% { 
+    filter: drop-shadow(0 0 20px rgba(59, 130, 246, 0.5));
+    transform: scale(1);
+  }
+  50% { 
+    filter: drop-shadow(0 0 40px rgba(59, 130, 246, 1));
+    transform: scale(1.05);
+  }
+}
+
+.selected-node {
+  animation: cosmic-pulse 2s ease-in-out infinite;
+}
+
 /* Custom utilities for AI Insights card */
 .scrollbar-hide {
   -ms-overflow-style: none;
@@ -19,6 +180,16 @@
 }
 
 @layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: 'Work Sans', sans-serif;
+  }
+
   :root {
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;

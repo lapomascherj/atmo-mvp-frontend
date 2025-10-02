@@ -38,8 +38,8 @@ export const EditEventModal: React.FC<EditEventModalProps> = ({
 
   const handleSave = () => {
     const newEvent: SchedulerEvent = {
-      id: event?.id || `event-${Date.now()}`,
-      title: title || 'Untitled Event',
+      id: event?.id || `task-${Date.now()}`,
+      title: title || 'Untitled Task',
       startTime,
       duration: parseInt(duration, 10),
       description: event?.description,
@@ -80,7 +80,7 @@ export const EditEventModal: React.FC<EditEventModalProps> = ({
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-700/40">
             <h2 className="text-sm font-semibold text-white">
-              {event ? 'Edit Event' : 'Add New Event'}
+              {event ? 'Edit Task' : 'Add New Task'}
             </h2>
             <button
               onClick={onClose}
@@ -93,16 +93,16 @@ export const EditEventModal: React.FC<EditEventModalProps> = ({
 
           {/* Content */}
           <div className="px-4 py-3 space-y-3">
-            {/* Event Title */}
+            {/* Task Title */}
             <div>
               <label className="block text-[10px] font-medium text-white/70 mb-1">
-                Event Title
+                Task Title
               </label>
               <input
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="Enter event title"
+                placeholder="Enter task title"
                 className="w-full px-2.5 py-1.5 bg-slate-800/60 border border-slate-700/60 rounded-md text-xs text-white placeholder:text-white/40 focus:outline-none focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/30 transition-colors"
                 autoFocus
               />
@@ -166,7 +166,7 @@ export const EditEventModal: React.FC<EditEventModalProps> = ({
                 onClick={handleSave}
                 className="px-2.5 py-1.5 text-[11px] font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-md transition-colors shadow-lg shadow-orange-500/20"
               >
-                {event ? 'Save' : 'Add Event'}
+                {event ? 'Save' : 'Add Task'}
               </button>
             </div>
           </div>

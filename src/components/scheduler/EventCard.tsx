@@ -35,7 +35,7 @@ export const EventCard: React.FC<EventCardProps> = ({
       onClick={onClick}
       role="button"
       tabIndex={0}
-      aria-label={`Event: ${event.title} at ${event.startTime}, duration ${formatDuration(event.duration)}`}
+      aria-label={`Task: ${event.title} at ${event.startTime}, duration ${formatDuration(event.duration)}`}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
@@ -49,12 +49,12 @@ export const EventCard: React.FC<EventCardProps> = ({
         onMouseDown={onDragStart}
         onMouseUp={onDragEnd}
         role="button"
-        aria-label="Drag to reschedule"
+        aria-label="Drag to reschedule task"
       >
         <GripVertical size={14} className="text-white/40 hover:text-orange-400 transition-colors" />
       </div>
 
-      {/* Event Content */}
+      {/* Task Content */}
       <div className="ml-4 flex items-center justify-between">
         <div className="flex-1 min-w-0">
           <h4 className="text-sm font-medium text-white truncate">

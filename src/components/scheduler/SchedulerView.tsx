@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Plus, Calendar } from 'lucide-react';
+import { Plus, Calendar, RefreshCw } from 'lucide-react';
 import { TimeRuler } from './TimeRuler';
 import { EventCard } from './EventCard';
 import { EditEventModal } from './EditEventModal';
@@ -27,6 +27,7 @@ export const SchedulerView: React.FC<SchedulerViewProps> = ({
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
   const [dragState, setDragState] = useState<{
     isDragging: boolean;
     eventId: string | null;
@@ -215,16 +216,25 @@ export const SchedulerView: React.FC<SchedulerViewProps> = ({
     <div
       className="h-full flex flex-col bg-gradient-to-br from-slate-950/40 via-slate-900/40 to-slate-950/40"
       role="application"
-      aria-label="Event scheduler"
+      aria-label="Task scheduler"
     >
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 flex-shrink-0">
         <div>
-          <h2 className="text-lg font-semibold text-white">Your Schedule</h2>
+          <h2 className="text-lg font-semibold text-white">Your Roadmap</h2>
           <p className="text-xs text-white/60 mt-0.5">{formatDate(selectedDate)}</p>
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Sync button */}
+          <button
+            onClick={() => setIsSyncModalOpen(true)}
+            className="w-9 h-9 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center transition-colors"
+            aria-label="Sync calendar"
+          >
+            <RefreshCw size={16} className="text-white/70" />
+          </button>
+
           {/* Calendar button */}
           <button
             onClick={() => setIsCalendarOpen(true)}
@@ -234,11 +244,11 @@ export const SchedulerView: React.FC<SchedulerViewProps> = ({
             <Calendar size={16} className="text-white/70" />
           </button>
 
-          {/* Add event button */}
+          {/* Add task button */}
           <button
             onClick={handleAddEvent}
             className="w-9 h-9 rounded-lg bg-orange-500 hover:bg-orange-600 flex items-center justify-center transition-colors shadow-lg shadow-orange-500/20"
-            aria-label="Add event"
+            aria-label="Add task"
           >
             <Plus size={16} className="text-white" />
           </button>
@@ -270,14 +280,14 @@ export const SchedulerView: React.FC<SchedulerViewProps> = ({
               />
             ))}
 
-            {/* "No events" message */}
+            {/* "No tasks" message */}
             {events.length === 0 && (
               <div className="absolute inset-0 flex items-center justify-center">
-                <p className="text-sm text-white/40">No events scheduled</p>
+                <p className="text-sm text-white/40">No tasks scheduled</p>
               </div>
             )}
 
-            {/* Event Cards */}
+            {/* Task Cards */}
             {events.map((event) => (
               <div
                 key={event.id}
@@ -318,6 +328,60 @@ export const SchedulerView: React.FC<SchedulerViewProps> = ({
         isOpen={isCalendarOpen}
         onClose={() => setIsCalendarOpen(false)}
       />
+
+      {/* Sync Modal */}
+      {isSyncModalOpen && (
+        <div
+          className="absolute inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center rounded-lg"
+          onClick={() => setIsSyncModalOpen(false)}
+        >
+          <div
+            className="relative w-[90%] max-w-[320px] bg-gradient-to-br from-slate-900/98 to-slate-800/98 rounded-lg border border-slate-700/60 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-700/40">
+              <h2 className="text-sm font-semibold text-white">Sync Calendar</h2>
+              <button
+                onClick={() => setIsSyncModalOpen(false)}
+                className="w-5 h-5 rounded-md bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors"
+                aria-label="Close modal"
+              >
+                <Plus size={12} className="text-white/60 rotate-45" />
+              </button>
+            </div>
+
+            <div className="px-4 py-4 space-y-3">
+              <p className="text-xs text-white/70 mb-4">
+                Connect your calendar to keep your tasks synchronized across devices.
+              </p>
+
+              <button
+                onClick={() => {
+                  // Handle Apple Calendar sync
+                  alert('Apple Calendar sync coming soon!');
+                  setIsSyncModalOpen(false);
+                }}
+                className="w-full px-4 py-3 bg-slate-800/60 hover:bg-slate-800/80 border border-slate-700/60 rounded-lg text-sm text-white transition-colors flex items-center justify-between"
+              >
+                <span>Apple Calendar</span>
+                <RefreshCw size={16} className="text-white/60" />
+              </button>
+
+              <button
+                onClick={() => {
+                  // Handle Google Calendar sync
+                  alert('Google Calendar sync coming soon!');
+                  setIsSyncModalOpen(false);
+                }}
+                className="w-full px-4 py-3 bg-slate-800/60 hover:bg-slate-800/80 border border-slate-700/60 rounded-lg text-sm text-white transition-colors flex items-center justify-between"
+              >
+                <span>Google Calendar</span>
+                <RefreshCw size={16} className="text-white/60" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,64 +1,153 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AtmoCard } from '@/components/molecules/AtmoCard';
 import { CardContent, CardHeader } from '@/components/atoms/Card';
 import SphereChat from '@/components/atoms/SphereChat';
 import { User, BarChart3, Brain, Lightbulb, ChevronUp, TrendingUp, Target, Zap, Star, Radar, Settings, Filter, BookOpen, Plus, Circle, X, Edit3 } from 'lucide-react';
 import { SchedulerView } from '@/components/scheduler/SchedulerView';
 import { type SchedulerEvent } from '@/types/scheduler';
+import { KnowledgeCraftCard, type GraphNode, type GraphLink } from '@/components/knowledge/KnowledgeCraftCard';
+
+const STORAGE_KEY = 'atmo_roadmap_tasks';
 
 const DigitalBrain: React.FC = () => {
   const [isCapturing, setIsCapturing] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
-  
+
   // AI Insights state
   const [insightMode, setInsightMode] = useState<'personal' | 'projects'>('personal');
   const [selectedTag, setSelectedTag] = useState<string>('all');
   const [selectedProject, setSelectedProject] = useState<string>('all');
   const [showJournal, setShowJournal] = useState(false);
-  const [events, setEvents] = useState<SchedulerEvent[]>([
-    {
-      id: 'event-1',
-      title: 'Morning Meeting',
-      startTime: '08:00',
-      duration: 30,
-    },
-    {
-      id: 'event-2',
-      title: 'Project Planning',
-      startTime: '09:00',
-      duration: 60,
-    },
-    {
-      id: 'event-3',
-      title: 'Team Sync',
-      startTime: '10:00',
-      duration: 45,
-    },
-    {
-      id: 'event-4',
-      title: 'Lunch Break',
-      startTime: '12:00',
-      duration: 60,
-    },
-    {
-      id: 'event-5',
-      title: 'Design Review',
-      startTime: '14:00',
-      duration: 90,
-    },
-    {
-      id: 'event-6',
-      title: 'Client Call',
-      startTime: '16:00',
-      duration: 45,
-    },
-    {
-      id: 'event-7',
-      title: 'Wrap Up',
-      startTime: '17:00',
-      duration: 30,
-    },
-  ]);
+
+  // Chat state
+  const [chatMessages, setChatMessages] = useState<Array<{id: string, text: string, sender: 'user' | 'ai', timestamp: Date}>>([]);
+  const [chatInput, setChatInput] = useState('');
+  const chatContainerRef = React.useRef<HTMLDivElement>(null);
+  const chatInputRef = React.useRef<HTMLTextAreaElement>(null);
+  const [sendingOpportunityIds, setSendingOpportunityIds] = useState<Set<string>>(new Set());
+
+  // Load tasks from localStorage on mount
+  const loadTasksFromStorage = (): SchedulerEvent[] => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        return JSON.parse(stored);
+      }
+    } catch (error) {
+      console.error('Failed to load tasks from localStorage:', error);
+    }
+    // Default tasks if nothing in storage
+    return [
+      {
+        id: 'task-1',
+        title: 'Morning Meeting',
+        startTime: '08:00',
+        duration: 30,
+      },
+      {
+        id: 'task-2',
+        title: 'Project Planning',
+        startTime: '09:00',
+        duration: 60,
+      },
+      {
+        id: 'task-3',
+        title: 'Team Sync',
+        startTime: '10:00',
+        duration: 45,
+      },
+      {
+        id: 'task-4',
+        title: 'Lunch Break',
+        startTime: '12:00',
+        duration: 60,
+      },
+      {
+        id: 'task-5',
+        title: 'Design Review',
+        startTime: '14:00',
+        duration: 90,
+      },
+      {
+        id: 'task-6',
+        title: 'Client Call',
+        startTime: '16:00',
+        duration: 45,
+      },
+      {
+        id: 'task-7',
+        title: 'Wrap Up',
+        startTime: '17:00',
+        duration: 30,
+      },
+    ];
+  };
+
+  const [events, setEvents] = useState<SchedulerEvent[]>(loadTasksFromStorage());
+
+  // Save tasks to localStorage whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(events));
+      // TODO: Add API call here for cross-device sync
+      // await syncTasksToBackend(events);
+    } catch (error) {
+      console.error('Failed to save tasks to localStorage:', error);
+    }
+  }, [events]);
+
+  // Knowledge Graph data
+  const knowledgeNodes: GraphNode[] = [
+    { id: '1', label: 'ATMO Platform', type: 'idea' },
+    { id: '2', label: 'AI Integration', type: 'task' },
+    { id: '3', label: 'User Research', type: 'note' },
+    { id: '4', label: 'GrowIn Project', type: 'idea' },
+    { id: '5', label: 'Digital Branding', type: 'note' },
+    { id: '6', label: 'React Performance', type: 'task' },
+    { id: '7', label: 'Force-Directed Layout', type: 'note' },
+    { id: '8', label: 'Productivity Tools', type: 'idea' },
+    { id: '9', label: 'Market Analysis', type: 'task' },
+    { id: '10', label: 'User Personas', type: 'note' },
+    { id: '11', label: 'Tech Stack', type: 'idea' },
+    { id: '12', label: 'Component Library', type: 'task' },
+    { id: '13', label: 'Growth Hacking', type: 'note' },
+    { id: '14', label: 'Seed Funding', type: 'idea' },
+    { id: '15', label: 'MVP Features', type: 'task' },
+    { id: '16', label: 'Design System', type: 'note' },
+    { id: '17', label: 'API Architecture', type: 'idea' },
+    { id: '18', label: 'Testing Strategy', type: 'task' },
+    { id: '19', label: 'Deployment Pipeline', type: 'note' },
+    { id: '20', label: 'Customer Feedback', type: 'idea' },
+  ];
+
+  const knowledgeLinks: GraphLink[] = [
+    { source: '1', target: '2', weight: 2 },
+    { source: '1', target: '3', weight: 1 },
+    { source: '1', target: '8', weight: 1.5 },
+    { source: '2', target: '6', weight: 1 },
+    { source: '2', target: '11', weight: 1.5 },
+    { source: '3', target: '10', weight: 2 },
+    { source: '4', target: '5', weight: 2 },
+    { source: '4', target: '13', weight: 1 },
+    { source: '4', target: '15', weight: 1.5 },
+    { source: '5', target: '16', weight: 1 },
+    { source: '6', target: '7', weight: 2 },
+    { source: '6', target: '12', weight: 1 },
+    { source: '8', target: '9', weight: 1 },
+    { source: '8', target: '14', weight: 1 },
+    { source: '9', target: '20', weight: 1.5 },
+    { source: '10', target: '20', weight: 1 },
+    { source: '11', target: '12', weight: 2 },
+    { source: '11', target: '17', weight: 1.5 },
+    { source: '12', target: '16', weight: 1 },
+    { source: '15', target: '18', weight: 1 },
+    { source: '17', target: '19', weight: 1 },
+    { source: '18', target: '19', weight: 1.5 },
+    { source: '1', target: '15', weight: 1 },
+    { source: '4', target: '1', weight: 0.5 },
+    { source: '14', target: '1', weight: 1 },
+    { source: '13', target: '8', weight: 0.5 },
+  ];
 
   // Mock data for AI Insights
   const personalTags = [
@@ -373,6 +462,120 @@ const DigitalBrain: React.FC = () => {
     setIsCapturing(!isCapturing);
   };
 
+  // Chat functions
+  const scrollToBottom = () => {
+    if (chatContainerRef.current) {
+      // Force instant scroll to bottom without animation for perfect snapping
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  };
+
+  const focusChatInput = () => {
+    if (chatInputRef.current) {
+      chatInputRef.current.focus();
+    }
+  };
+
+  React.useEffect(() => {
+    // Scroll to bottom whenever messages change
+    scrollToBottom();
+  }, [chatMessages]);
+
+  // Send opportunity to chat
+  const sendOpportunityToChat = (opportunity: any, type: 'radar' | 'insight') => {
+    const opportunityId = `${type}-${opportunity.id}`;
+
+    // Debounce - prevent duplicate sends
+    if (sendingOpportunityIds.has(opportunityId)) {
+      return;
+    }
+
+    // Mark as sending
+    setSendingOpportunityIds(prev => new Set(prev).add(opportunityId));
+
+    // Create message with title, summary, and deep link
+    let messageText = `📊 **${opportunity.title}**\n\n`;
+
+    if (type === 'radar') {
+      messageText += `${opportunity.subtitle}\n\n`;
+      if (insightMode === 'personal') {
+        messageText += `Match: ${opportunity.match} | Growth: ${opportunity.growth}`;
+      } else {
+        messageText += `Relevance: ${opportunity.relevance} | Priority: ${opportunity.urgency}`;
+      }
+    } else {
+      messageText += `${opportunity.metadata}\n\n`;
+      messageText += `Type: ${opportunity.type}`;
+      if (opportunity.project) {
+        messageText += ` | Project: ${opportunity.project}`;
+      }
+    }
+
+    messageText += `\n\n🔗 ID: ${opportunityId}`;
+
+    const newMessage = {
+      id: Date.now().toString(),
+      text: messageText,
+      sender: 'user' as const,
+      timestamp: new Date()
+    };
+
+    setChatMessages(prev => [...prev, newMessage]);
+
+    // Focus chat input after short delay
+    setTimeout(() => {
+      focusChatInput();
+      // Remove from sending set after debounce period
+      setSendingOpportunityIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(opportunityId);
+        return newSet;
+      });
+    }, 500);
+
+    // AI mock response
+    setTimeout(() => {
+      const aiResponse = {
+        id: (Date.now() + 1).toString(),
+        text: `I've analyzed this ${type === 'radar' ? 'opportunity' : 'insight'}. ${opportunity.title} looks promising! Would you like me to help you create an action plan, save it to your journal, or schedule time to work on it?`,
+        sender: 'ai' as const,
+        timestamp: new Date()
+      };
+      setChatMessages(prev => [...prev, aiResponse]);
+    }, 1500);
+  };
+
+  const handleSendMessage = () => {
+    if (chatInput.trim()) {
+      const newMessage = {
+        id: Date.now().toString(),
+        text: chatInput,
+        sender: 'user' as const,
+        timestamp: new Date()
+      };
+      setChatMessages(prev => [...prev, newMessage]);
+      setChatInput('');
+
+      // Simulate AI response
+      setTimeout(() => {
+        const aiMessage = {
+          id: (Date.now() + 1).toString(),
+          text: "I'm processing your request. This is a demo response!",
+          sender: 'ai' as const,
+          timestamp: new Date()
+        };
+        setChatMessages(prev => [...prev, aiMessage]);
+      }, 1000);
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
+
   // Album management functions
   const handleCreateAlbum = () => {
     if (newAlbumName.trim()) {
@@ -555,11 +758,11 @@ const DigitalBrain: React.FC = () => {
           </AtmoCard>
 
           {/* Card 2 - AI Insights / Journal */}
-          <AtmoCard variant="orange" className="w-full h-full p-4" hover={true}>
+          <AtmoCard variant="orange" className="w-full h-full overflow-hidden" hover={true}>
             <div className="h-full flex flex-col">
-              
-              {/* Header with ATMO Insights/Journal, centered toggle, and Journal icon */}
-              <div className="flex items-center mb-4">
+
+              {/* Header with ATMO Insights/Journal, centered toggle, and Journal icon - FIXED */}
+              <div className="flex items-center px-4 pt-4 pb-3 flex-shrink-0">
                 <div className="flex-1">
                   <h3 className="text-sm font-semibold text-white">
                     {showJournal ? 'Journal' : 'ATMO Insights'}
@@ -607,16 +810,18 @@ const DigitalBrain: React.FC = () => {
                 </div>
               </div>
 
-              {showJournal ? (
-                /* Journal View - Apple Photos Style */
-                <div className="flex-1 overflow-hidden">
+              {/* Scrollable Content Area */}
+              <div className="flex-1 overflow-y-auto px-4 pb-4 min-h-0" style={{ scrollBehavior: 'smooth' }}>
+                {showJournal ? (
+                  /* Journal View - Apple Photos Style */
+                  <>
                   <div className="mb-3">
                     <h4 className="text-sm font-medium text-white mb-2">Digital Wardrobe</h4>
                     <p className="text-xs text-white/60">Your curated collection organized in albums</p>
                   </div>
-                  
+
                   {/* Album Tabs with Create Button */}
-                  <div className="flex gap-1 mb-4 overflow-x-auto scrollbar-hide">
+                  <div className="flex gap-1 mb-4 overflow-x-auto scrollbar-hide flex-shrink-0">
                     {albums.map(album => (
                       <div key={album.id} className="relative group">
                         <button
@@ -650,9 +855,10 @@ const DigitalBrain: React.FC = () => {
                       <Plus size={12} className="text-white/60 hover:text-[#89AC76]" />
                     </button>
                   </div>
-                  
-                  {/* Items Grid - Apple Photos Style with Enhanced Scrolling */}
-                  <div className="flex-1 overflow-y-auto min-h-0" style={{ maxHeight: 'calc(100% - 120px)' }}>
+
+
+                  {/* Items Grid - Apple Photos Style */}
+                  <div className="flex-1 min-h-0">
                     <div className="grid grid-cols-2 gap-2 pb-4">
                       {albums
                         .find(album => album.id === selectedAlbum)
@@ -697,12 +903,12 @@ const DigitalBrain: React.FC = () => {
                       </div>
                     </div>
                   </div>
-                </div>
-              ) : (
-                /* AI Insights View */
-                <>
-                  {/* Opportunity Radar Section - 3 Small Cards */}
-                  <div className="mb-3">
+                  </>
+                ) : (
+                  /* AI Insights View */
+                  <>
+                    {/* Opportunity Radar Section - 3 Small Cards */}
+                    <div className="mb-3">
                     <div className="flex items-center gap-2 mb-2">
                       <Radar size={12} className="text-[#89AC76]" />
                       <span className="text-xs font-medium text-[#89AC76]">Opportunity Radar</span>
@@ -727,18 +933,20 @@ const DigitalBrain: React.FC = () => {
                             </p>
                           </div>
                           <div className="flex gap-1 justify-center">
-                            <button 
+                            <button
+                              onClick={() => sendOpportunityToChat(opportunity, 'radar')}
+                              disabled={sendingOpportunityIds.has(`radar-${opportunity.id}`)}
+                              className="w-6 h-6 bg-[#89AC76]/20 text-[#89AC76] rounded border border-[#89AC76]/30 hover:bg-[#89AC76]/30 transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Send to Chat"
+                            >
+                              <Circle size={8} className="fill-current" />
+                            </button>
+                            <button
                               onClick={() => handleSaveOpportunity(opportunity)}
                               className="w-6 h-6 bg-[#89AC76]/20 text-[#89AC76] rounded border border-[#89AC76]/30 hover:bg-[#89AC76]/30 transition-colors flex items-center justify-center"
                               title="Save to Journal"
                             >
                               <Plus size={10} />
-                            </button>
-                            <button 
-                              className="w-6 h-6 bg-[#89AC76]/20 text-[#89AC76] rounded border border-[#89AC76]/30 hover:bg-[#89AC76]/30 transition-colors flex items-center justify-center"
-                              title="Bring to Chat"
-                            >
-                              <Circle size={8} className="fill-current" />
                             </button>
                           </div>
                         </div>
@@ -799,11 +1007,16 @@ const DigitalBrain: React.FC = () => {
                             {insight.metadata}
                           </p>
                           <div className="flex gap-1 justify-center">
-                            <button className="w-6 h-6 bg-[#89AC76]/20 text-[#89AC76] rounded border border-[#89AC76]/30 hover:bg-[#89AC76]/30 transition-colors flex items-center justify-center">
-                              <Plus size={10} />
+                            <button
+                              onClick={() => sendOpportunityToChat(insight, 'insight')}
+                              disabled={sendingOpportunityIds.has(`insight-${insight.id}`)}
+                              className="w-6 h-6 bg-[#89AC76]/20 text-[#89AC76] rounded border border-[#89AC76]/30 hover:bg-[#89AC76]/30 transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Send to Chat"
+                            >
+                              <Circle size={8} className="fill-current" />
                             </button>
                             <button className="w-6 h-6 bg-[#89AC76]/20 text-[#89AC76] rounded border border-[#89AC76]/30 hover:bg-[#89AC76]/30 transition-colors flex items-center justify-center">
-                              <Circle size={8} className="fill-current" />
+                              <Plus size={10} />
                             </button>
                           </div>
                         </div>
@@ -811,7 +1024,8 @@ const DigitalBrain: React.FC = () => {
                     </div>
                   </div>
                 </>
-              )}
+                )}
+              </div>
             </div>
 
             {/* Save Opportunity Modal */}
@@ -876,17 +1090,9 @@ const DigitalBrain: React.FC = () => {
             )}
           </AtmoCard>
 
-          {/* Card 3 - Knowledge Graph */}
-          <AtmoCard variant="blue" className="w-full h-full" hover={true}>
-            <CardHeader className="px-6 py-4">
-              <h3 className="text-lg font-semibold text-white text-center">Knowledge Graph</h3>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="text-center text-white/60">
-                <Brain size={32} className="mx-auto mb-2 text-blue-400" />
-                <p className="text-sm">Coming soon</p>
-              </div>
-            </CardContent>
+          {/* Card 3 - Knowledge Craft */}
+          <AtmoCard variant="blue" className="w-full h-full overflow-hidden" hover={true}>
+            <KnowledgeCraftCard nodes={knowledgeNodes} links={knowledgeLinks} />
           </AtmoCard>
 
           {/* Card 4 - Analytics with Scheduler */}
@@ -902,42 +1108,119 @@ const DigitalBrain: React.FC = () => {
         </div>
       </div>
 
-      {/* Right Panel - Avatar */}
-      <div className="w-64 h-full flex flex-col items-center justify-start p-6 pt-32">
-        <div
-          className="relative"
-          style={{
-            filter: 'drop-shadow(0 0 15px rgba(204, 85, 0, 0.15))',
-          }}
-        >
-          <SphereChat
-            size={90}
-            isActive={isCapturing}
-            isListening={isCapturing}
-            onClick={handleQuickCapture}
-            voiceSupported={true}
-          />
+      {/* Right Panel - Avatar and Chat */}
+      <div className="w-64 h-full flex flex-col p-6 pt-32">
+        {/* Avatar Section */}
+        <div className="flex flex-col items-center mb-6">
+          <div
+            className="relative"
+            style={{
+              filter: 'drop-shadow(0 0 15px rgba(204, 85, 0, 0.15))',
+            }}
+          >
+            <SphereChat
+              size={90}
+              isActive={isCapturing}
+              isListening={isCapturing}
+              onClick={handleQuickCapture}
+              voiceSupported={true}
+            />
 
-          {/* Subtle glow effects */}
-          <div className={`absolute inset-0 -z-10 bg-[#CC5500]/10 rounded-full blur-xl transition-all duration-300 ${
-            isCapturing ? 'animate-pulse scale-110' : 'animate-pulse-soft'
-          }`}></div>
-          <div className={`absolute inset-0 -z-20 bg-[#CC5500]/5 rounded-full blur-2xl scale-150 transition-all duration-300 ${
-            isCapturing ? 'animate-pulse scale-125' : 'animate-pulse-soft'
-          }`}></div>
+            {/* Subtle glow effects */}
+            <div className={`absolute inset-0 -z-10 bg-[#CC5500]/10 rounded-full blur-xl transition-all duration-300 ${
+              isCapturing ? 'animate-pulse scale-110' : 'animate-pulse-soft'
+            }`}></div>
+            <div className={`absolute inset-0 -z-20 bg-[#CC5500]/5 rounded-full blur-2xl scale-150 transition-all duration-300 ${
+              isCapturing ? 'animate-pulse scale-125' : 'animate-pulse-soft'
+            }`}></div>
+          </div>
+
+          {/* Voice Control X Button */}
+          {isCapturing && (
+            <div className="mt-6">
+              <button
+                onClick={() => setIsCapturing(false)}
+                className="w-9 h-9 rounded-full bg-slate-800/60 hover:bg-slate-700/80 border border-slate-600/40 text-white/80 hover:text-white transition-all duration-200 backdrop-blur-sm shadow-lg flex items-center justify-center"
+              >
+                ✕
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Voice Control X Button */}
-        {isCapturing && (
-          <div className="mt-16">
-            <button
-              onClick={() => setIsCapturing(false)}
-              className="w-9 h-9 rounded-full bg-slate-800/60 hover:bg-slate-700/80 border border-slate-600/40 text-white/80 hover:text-white transition-all duration-200 backdrop-blur-sm shadow-lg flex items-center justify-center"
-            >
-              ✕
-            </button>
+        {/* Chat Section - Blue outlined area */}
+        <div className="flex-1 flex flex-col min-h-0">
+          {/* Chat Messages Container - Scrollable */}
+          <div
+            ref={chatContainerRef}
+            className="flex-1 overflow-y-auto mb-4 space-y-3 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent pr-2"
+            style={{
+              scrollBehavior: 'smooth',
+              maskImage: 'linear-gradient(to bottom, transparent 0%, black 3%, black 100%)',
+              WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 3%, black 100%)'
+            }}
+          >
+            {chatMessages.map((message) => (
+              <div
+                key={message.id}
+                className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'} animate-[slideIn_0.3s_ease-out]`}
+              >
+                <div
+                  className={`max-w-[85%] px-3 py-2 ${
+                    message.sender === 'user'
+                      ? 'bg-gradient-to-br from-[#CC5500]/80 to-[#CC5500]/60 text-white rounded-[18px] rounded-br-[6px]'
+                      : 'bg-white/10 text-white/90 rounded-[18px] rounded-bl-[6px] backdrop-blur-sm border border-white/10'
+                  } shadow-lg`}
+                >
+                  <p className="text-sm leading-relaxed">{message.text}</p>
+                  <span className="text-[10px] opacity-60 mt-1 block">
+                    {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
-        )}
+
+          {/* Chat Input Box - Red outlined area (fixed at bottom) */}
+          <div className="flex-shrink-0">
+            <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-[20px] p-3 shadow-xl">
+              <div className="flex items-end gap-2">
+                <textarea
+                  ref={chatInputRef}
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  placeholder="Type your message..."
+                  className="flex-1 bg-transparent text-white text-sm placeholder:text-white/40 outline-none resize-none min-h-[32px] max-h-[120px] py-1 px-2 rounded-xl"
+                  rows={1}
+                  style={{
+                    scrollbarWidth: 'thin',
+                    scrollbarColor: 'rgba(255,255,255,0.1) transparent'
+                  }}
+                />
+                <button
+                  onClick={handleSendMessage}
+                  disabled={!chatInput.trim()}
+                  className="flex-shrink-0 w-9 h-9 rounded-full bg-gradient-to-br from-[#CC5500] to-[#CC5500]/80 hover:from-[#CC5500]/90 hover:to-[#CC5500]/70 disabled:from-white/10 disabled:to-white/5 disabled:cursor-not-allowed text-white flex items-center justify-center transition-all duration-200 shadow-lg"
+                >
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                    />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

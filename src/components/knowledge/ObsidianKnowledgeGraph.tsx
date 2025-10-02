@@ -11,57 +11,53 @@ const MAIN_CATEGORIES = [
   {
     id: 'personal',
     label: 'Personal',
-    icon: '👤',
     color: '#3B82F6', // Blue
     position: { x: 200, y: 150 },
     subNodes: [
-      { id: 'personal-goals', label: 'Life Goals', icon: '🎯' },
-      { id: 'personal-habits', label: 'Daily Habits', icon: '⚡' },
-      { id: 'personal-growth', label: 'Self Development', icon: '📈' },
-      { id: 'personal-relationships', label: 'Relationships', icon: '💝' },
-      { id: 'personal-finance', label: 'Finance', icon: '💰' },
+      { id: 'personal-goals', label: 'Life Goals' },
+      { id: 'personal-habits', label: 'Daily Habits' },
+      { id: 'personal-growth', label: 'Self Development' },
+      { id: 'personal-relationships', label: 'Relationships' },
+      { id: 'personal-finance', label: 'Finance' },
     ]
   },
   {
     id: 'projects',
     label: 'Projects',
-    icon: '🚀',
     color: '#10B981', // Green
     position: { x: 400, y: 150 },
     subNodes: [
-      { id: 'project-atmo', label: 'ATMO Platform', icon: '🧠' },
-      { id: 'project-startup', label: 'Startup Ideas', icon: '💡' },
-      { id: 'project-learning', label: 'Learning Projects', icon: '📚' },
-      { id: 'project-side', label: 'Side Projects', icon: '🔧' },
-      { id: 'project-collab', label: 'Collaborations', icon: '🤝' },
+      { id: 'project-atmo', label: 'ATMO Platform' },
+      { id: 'project-startup', label: 'Startup Ideas' },
+      { id: 'project-learning', label: 'Learning Projects' },
+      { id: 'project-side', label: 'Side Projects' },
+      { id: 'project-collab', label: 'Collaborations' },
     ]
   },
   {
     id: 'inspo',
     label: 'Inspo',
-    icon: '✨',
     color: '#F59E0B', // Orange
     position: { x: 200, y: 350 },
     subNodes: [
-      { id: 'inspo-quotes', label: 'Quotes', icon: '💭' },
-      { id: 'inspo-books', label: 'Books', icon: '📖' },
-      { id: 'inspo-articles', label: 'Articles', icon: '📄' },
-      { id: 'inspo-videos', label: 'Videos', icon: '🎥' },
-      { id: 'inspo-people', label: 'Inspiring People', icon: '🌟' },
+      { id: 'inspo-quotes', label: 'Quotes' },
+      { id: 'inspo-books', label: 'Books' },
+      { id: 'inspo-articles', label: 'Articles' },
+      { id: 'inspo-videos', label: 'Videos' },
+      { id: 'inspo-people', label: 'Inspiring People' },
     ]
   },
   {
     id: 'health',
     label: 'Health',
-    icon: '🌱',
     color: '#8B5CF6', // Purple
     position: { x: 400, y: 350 },
     subNodes: [
-      { id: 'health-fitness', label: 'Fitness', icon: '💪' },
-      { id: 'health-nutrition', label: 'Nutrition', icon: '🥗' },
-      { id: 'health-mental', label: 'Mental Health', icon: '🧘' },
-      { id: 'health-sleep', label: 'Sleep', icon: '😴' },
-      { id: 'health-medical', label: 'Medical', icon: '🏥' },
+      { id: 'health-fitness', label: 'Fitness' },
+      { id: 'health-nutrition', label: 'Nutrition' },
+      { id: 'health-mental', label: 'Mental Health' },
+      { id: 'health-sleep', label: 'Sleep' },
+      { id: 'health-medical', label: 'Medical' },
     ]
   }
 ];
@@ -75,10 +71,13 @@ export const ObsidianKnowledgeGraph: React.FC<ObsidianKnowledgeGraphProps> = ({ 
   const [draggedNode, setDraggedNode] = useState<string | null>(null);
   const [nodePositions, setNodePositions] = useState<Record<string, {x: number, y: number}>>({});
   
-  // Pan and zoom state
-  const [viewBox, setViewBox] = useState({ x: 0, y: 0, scale: 1 });
+  // Pan and zoom state for both compact and expanded views
+  const [compactViewBox, setCompactViewBox] = useState({ x: 0, y: 0, scale: 1 });
+  const [expandedViewBox, setExpandedViewBox] = useState({ x: 0, y: 0, scale: 1 });
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+  const [lastTouchDistance, setLastTouchDistance] = useState(0);
+  const [touchStart, setTouchStart] = useState<{ x: number, y: number } | null>(null);
   
   const svgRef = useRef<SVGSVGElement>(null);
 
@@ -108,29 +107,32 @@ export const ObsidianKnowledgeGraph: React.FC<ObsidianKnowledgeGraphProps> = ({ 
     setSelectedNode(nodeId);
   }, []);
 
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+  const handleMouseMove = useCallback((e: React.MouseEvent, isCompact: boolean = false) => {
+    const currentViewBox = isCompact ? compactViewBox : expandedViewBox;
+    const setCurrentViewBox = isCompact ? setCompactViewBox : setExpandedViewBox;
+    
     if (isDragging && draggedNode && svgRef.current) {
       const rect = svgRef.current.getBoundingClientRect();
-      const x = (e.clientX - rect.left) / viewBox.scale;
-      const y = (e.clientY - rect.top) / viewBox.scale;
+      const x = (e.clientX - rect.left) / currentViewBox.scale;
+      const y = (e.clientY - rect.top) / currentViewBox.scale;
       
       setNodePositions(prev => ({
         ...prev,
         [draggedNode]: { x, y }
       }));
     } else if (isPanning) {
-      const deltaX = e.clientX - panStart.x;
-      const deltaY = e.clientY - panStart.y;
+      const deltaX = (e.clientX - panStart.x) / currentViewBox.scale;
+      const deltaY = (e.clientY - panStart.y) / currentViewBox.scale;
       
-      setViewBox(prev => ({
+      setCurrentViewBox(prev => ({
         ...prev,
-        x: prev.x + deltaX,
-        y: prev.y + deltaY
+        x: prev.x - deltaX,
+        y: prev.y - deltaY
       }));
       
       setPanStart({ x: e.clientX, y: e.clientY });
     }
-  }, [isDragging, draggedNode, isPanning, panStart, viewBox]);
+  }, [isDragging, draggedNode, isPanning, panStart, compactViewBox, expandedViewBox]);
 
   const handleMouseUp = useCallback(() => {
     setIsDragging(false);
@@ -146,31 +148,123 @@ export const ObsidianKnowledgeGraph: React.FC<ObsidianKnowledgeGraphProps> = ({ 
     }
   }, [isDragging]);
 
-  // Zoom functionality
-  const handleWheel = useCallback((e: React.WheelEvent) => {
+  // Enhanced wheel/trackpad handling for both zoom and pan
+  const handleWheel = useCallback((e: React.WheelEvent, isCompact: boolean = false) => {
     e.preventDefault();
-    const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
-    setViewBox(prev => ({
-      ...prev,
-      scale: Math.max(0.1, Math.min(3, prev.scale * zoomFactor))
-    }));
+    const currentViewBox = isCompact ? compactViewBox : expandedViewBox;
+    const setCurrentViewBox = isCompact ? setCompactViewBox : setExpandedViewBox;
+    
+    // Detect if this is a pinch gesture (ctrlKey is set for trackpad pinch)
+    if (e.ctrlKey) {
+      // Pinch to zoom
+      const zoomFactor = e.deltaY > 0 ? 0.95 : 1.05;
+      setCurrentViewBox(prev => ({
+        ...prev,
+        scale: Math.max(0.1, Math.min(3, prev.scale * zoomFactor))
+      }));
+    } else {
+      // Two-finger pan gesture
+      const panSpeed = 1 / currentViewBox.scale;
+      setCurrentViewBox(prev => ({
+        ...prev,
+        x: prev.x + e.deltaX * panSpeed,
+        y: prev.y + e.deltaY * panSpeed
+      }));
+    }
+  }, [compactViewBox, expandedViewBox]);
+
+  // Touch event handlers for mobile and trackpad gestures
+  const handleTouchStart = useCallback((e: React.TouchEvent, isCompact: boolean = false) => {
+    if (e.touches.length === 1) {
+      // Single touch - prepare for potential pan
+      const touch = e.touches[0];
+      setTouchStart({ x: touch.clientX, y: touch.clientY });
+    } else if (e.touches.length === 2) {
+      // Two finger touch - prepare for pinch/zoom
+      const touch1 = e.touches[0];
+      const touch2 = e.touches[1];
+      const distance = Math.sqrt(
+        Math.pow(touch2.clientX - touch1.clientX, 2) + 
+        Math.pow(touch2.clientY - touch1.clientY, 2)
+      );
+      setLastTouchDistance(distance);
+      
+      // Set touch start for pan
+      const centerX = (touch1.clientX + touch2.clientX) / 2;
+      const centerY = (touch1.clientY + touch2.clientY) / 2;
+      setTouchStart({ x: centerX, y: centerY });
+    }
+  }, []);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent, isCompact: boolean = false) => {
+    e.preventDefault();
+    const currentViewBox = isCompact ? compactViewBox : expandedViewBox;
+    const setCurrentViewBox = isCompact ? setCompactViewBox : setExpandedViewBox;
+
+    if (e.touches.length === 1 && touchStart) {
+      // Single finger pan
+      const touch = e.touches[0];
+      const deltaX = (touch.clientX - touchStart.x) / currentViewBox.scale;
+      const deltaY = (touch.clientY - touchStart.y) / currentViewBox.scale;
+      
+      setCurrentViewBox(prev => ({
+        ...prev,
+        x: prev.x - deltaX * 0.5,
+        y: prev.y - deltaY * 0.5
+      }));
+      
+      setTouchStart({ x: touch.clientX, y: touch.clientY });
+    } else if (e.touches.length === 2 && touchStart && lastTouchDistance > 0) {
+      // Two finger pinch and pan
+      const touch1 = e.touches[0];
+      const touch2 = e.touches[1];
+      
+      // Calculate new distance for zoom
+      const newDistance = Math.sqrt(
+        Math.pow(touch2.clientX - touch1.clientX, 2) + 
+        Math.pow(touch2.clientY - touch1.clientY, 2)
+      );
+      
+      // Calculate zoom factor
+      const zoomFactor = newDistance / lastTouchDistance;
+      
+      // Calculate center for pan
+      const centerX = (touch1.clientX + touch2.clientX) / 2;
+      const centerY = (touch1.clientY + touch2.clientY) / 2;
+      const deltaX = (centerX - touchStart.x) / currentViewBox.scale;
+      const deltaY = (centerY - touchStart.y) / currentViewBox.scale;
+      
+      setCurrentViewBox(prev => ({
+        x: prev.x - deltaX * 0.5,
+        y: prev.y - deltaY * 0.5,
+        scale: Math.max(0.1, Math.min(3, prev.scale * zoomFactor))
+      }));
+      
+      setLastTouchDistance(newDistance);
+      setTouchStart({ x: centerX, y: centerY });
+    }
+  }, [compactViewBox, expandedViewBox, touchStart, lastTouchDistance]);
+
+  const handleTouchEnd = useCallback(() => {
+    setTouchStart(null);
+    setLastTouchDistance(0);
   }, []);
 
   // Reset view
   const resetView = useCallback(() => {
-    setViewBox({ x: 0, y: 0, scale: 1 });
+    setExpandedViewBox({ x: 0, y: 0, scale: 1 });
   }, []);
 
-  // Zoom controls
+  // Zoom controls for expanded view
   const zoomIn = useCallback(() => {
-    setViewBox(prev => ({
+    setExpandedViewBox(prev => ({
       ...prev,
       scale: Math.min(3, prev.scale * 1.2)
     }));
   }, []);
 
   const zoomOut = useCallback(() => {
-    setViewBox(prev => ({
+    setExpandedViewBox(prev => ({
       ...prev,
       scale: Math.max(0.1, prev.scale * 0.8)
     }));
@@ -198,7 +292,6 @@ export const ObsidianKnowledgeGraph: React.FC<ObsidianKnowledgeGraphProps> = ({ 
       if (category.id === nodeId) {
         return {
           label: category.label,
-          icon: category.icon,
           type: 'Main Category',
           subCount: category.subNodes.length
         };
@@ -207,7 +300,6 @@ export const ObsidianKnowledgeGraph: React.FC<ObsidianKnowledgeGraphProps> = ({ 
       if (subNode) {
         return {
           label: subNode.label,
-          icon: subNode.icon,
           type: 'Sub Node',
           category: category.label
         };
@@ -220,12 +312,16 @@ export const ObsidianKnowledgeGraph: React.FC<ObsidianKnowledgeGraphProps> = ({ 
   const CompactGraphPreview = () => (
     <div className="flex-1 knowledge-graph-cosmic rounded-lg border border-blue-400/20 relative overflow-hidden">
       <svg 
-        className="w-full h-full cursor-move" 
-        viewBox="0 0 600 500"
+        className="w-full h-full cursor-move touch-none" 
+        viewBox={`${compactViewBox.x} ${compactViewBox.y} ${600 / compactViewBox.scale} ${500 / compactViewBox.scale}`}
         onMouseDown={handlePanStart}
-        onMouseMove={handleMouseMove}
+        onMouseMove={(e) => handleMouseMove(e, true)}
         onMouseUp={handleMouseUp}
-        onWheel={handleWheel}
+        onWheel={(e) => handleWheel(e, true)}
+        onTouchStart={(e) => handleTouchStart(e, true)}
+        onTouchMove={(e) => handleTouchMove(e, true)}
+        onTouchEnd={handleTouchEnd}
+        style={{ touchAction: 'none' }}
       >
         {/* Render connections */}
         {MAIN_CATEGORIES.map(category => {
@@ -258,15 +354,14 @@ export const ObsidianKnowledgeGraph: React.FC<ObsidianKnowledgeGraphProps> = ({ 
                 onMouseEnter={() => setHoveredNode(category.id)}
                 onMouseLeave={() => setHoveredNode(null)}
               />
-              <text
-                x={pos.x}
-                y={pos.y}
-                className="text-sm font-medium fill-white text-center pointer-events-none"
-                textAnchor="middle"
-                dominantBaseline="middle"
-              >
-                {category.icon}
-              </text>
+              <circle
+                cx={pos.x}
+                cy={pos.y}
+                r="8"
+                fill="white"
+                opacity="0.9"
+                className="pointer-events-none"
+              />
               <text
                 x={pos.x}
                 y={pos.y + 40}
@@ -287,13 +382,21 @@ export const ObsidianKnowledgeGraph: React.FC<ObsidianKnowledgeGraphProps> = ({ 
               <circle
                 cx={subNode.x}
                 cy={subNode.y}
-                r="8"
+                r="6"
                 fill={category.color}
-                opacity="0.7"
+                opacity="0.8"
                 className="sub-node cursor-pointer"
                 onMouseDown={(e) => handleNodeMouseDown(e, subNode.id)}
                 onMouseEnter={() => setHoveredNode(subNode.id)}
                 onMouseLeave={() => setHoveredNode(null)}
+              />
+              <circle
+                cx={subNode.x}
+                cy={subNode.y}
+                r="2"
+                fill="white"
+                opacity="0.9"
+                className="pointer-events-none"
               />
               {hoveredNode === subNode.id && (
                 <text
@@ -310,15 +413,6 @@ export const ObsidianKnowledgeGraph: React.FC<ObsidianKnowledgeGraphProps> = ({ 
         })}
       </svg>
       
-      {/* Click to expand overlay */}
-      <div 
-        className="absolute inset-0 bg-transparent hover:bg-blue-400/5 transition-colors cursor-pointer flex items-center justify-center"
-        onClick={() => setExpandedGraph(true)}
-      >
-        <div className="opacity-0 hover:opacity-100 transition-opacity bg-blue-400/90 text-white px-3 py-1 rounded-full text-xs">
-          Click to explore cosmos
-        </div>
-      </div>
     </div>
   );
 
@@ -397,12 +491,16 @@ export const ObsidianKnowledgeGraph: React.FC<ObsidianKnowledgeGraphProps> = ({ 
             <div className="flex-1 knowledge-graph-cosmic relative">
               <svg 
                 ref={svgRef}
-                className="w-full h-full cursor-move" 
-                viewBox={`${-viewBox.x / viewBox.scale} ${-viewBox.y / viewBox.scale} ${1200 / viewBox.scale} ${600 / viewBox.scale}`}
+                className="w-full h-full cursor-move touch-none" 
+                viewBox={`${expandedViewBox.x} ${expandedViewBox.y} ${1200 / expandedViewBox.scale} ${600 / expandedViewBox.scale}`}
                 onMouseDown={handlePanStart}
-                onMouseMove={handleMouseMove}
+                onMouseMove={(e) => handleMouseMove(e, false)}
                 onMouseUp={handleMouseUp}
-                onWheel={handleWheel}
+                onWheel={(e) => handleWheel(e, false)}
+                onTouchStart={(e) => handleTouchStart(e, false)}
+                onTouchMove={(e) => handleTouchMove(e, false)}
+                onTouchEnd={handleTouchEnd}
+                style={{ touchAction: 'none' }}
               >
                 {/* Enhanced connections with glow effects */}
                 {MAIN_CATEGORIES.map(category => {
@@ -415,9 +513,9 @@ export const ObsidianKnowledgeGraph: React.FC<ObsidianKnowledgeGraphProps> = ({ 
                       y1={mainPos.y}
                       x2={subNode.x}
                       y2={subNode.y}
-                      stroke={category.color}
-                      strokeWidth={hoveredNode === category.id || hoveredNode === subNode.id ? "2" : "1"}
-                      opacity={hoveredNode === category.id || hoveredNode === subNode.id ? "0.8" : "0.3"}
+                      stroke="rgba(255, 255, 255, 0.3)"
+                      strokeWidth={hoveredNode === category.id || hoveredNode === subNode.id ? "1.5" : "1"}
+                      opacity={hoveredNode === category.id || hoveredNode === subNode.id ? "0.6" : "0.3"}
                       className="connection-line transition-all duration-300"
                     />
                   ));
@@ -441,15 +539,14 @@ export const ObsidianKnowledgeGraph: React.FC<ObsidianKnowledgeGraphProps> = ({ 
                           filter: `drop-shadow(0 0 ${hoveredNode === category.id ? '30px' : '20px'} ${category.color}50)`
                         }}
                       />
-                      <text
-                        x={pos.x}
-                        y={pos.y}
-                        className="text-lg font-medium fill-white text-center pointer-events-none"
-                        textAnchor="middle"
-                        dominantBaseline="middle"
-                      >
-                        {category.icon}
-                      </text>
+                      <circle
+                        cx={pos.x}
+                        cy={pos.y}
+                        r="10"
+                        fill="white"
+                        opacity="0.9"
+                        className="pointer-events-none"
+                      />
                       <text
                         x={pos.x}
                         y={pos.y + 50}
@@ -470,7 +567,7 @@ export const ObsidianKnowledgeGraph: React.FC<ObsidianKnowledgeGraphProps> = ({ 
                       <circle
                         cx={subNode.x}
                         cy={subNode.y}
-                        r="12"
+                        r="10"
                         fill={category.color}
                         opacity="0.8"
                         className="sub-node cursor-pointer"
@@ -481,15 +578,14 @@ export const ObsidianKnowledgeGraph: React.FC<ObsidianKnowledgeGraphProps> = ({ 
                           filter: `drop-shadow(0 0 ${hoveredNode === subNode.id ? '15px' : '8px'} rgba(255,255,255,0.4))`
                         }}
                       />
-                      <text
-                        x={subNode.x}
-                        y={subNode.y}
-                        className="text-xs font-medium fill-white text-center pointer-events-none"
-                        textAnchor="middle"
-                        dominantBaseline="middle"
-                      >
-                        {subNode.icon}
-                      </text>
+                      <circle
+                        cx={subNode.x}
+                        cy={subNode.y}
+                        r="3"
+                        fill="white"
+                        opacity="0.9"
+                        className="pointer-events-none"
+                      />
                       {(hoveredNode === subNode.id || selectedNode === subNode.id) && (
                         <text
                           x={subNode.x}
@@ -508,8 +604,7 @@ export const ObsidianKnowledgeGraph: React.FC<ObsidianKnowledgeGraphProps> = ({ 
               {/* Floating Info Panel */}
               {selectedNode && (
                 <div className="absolute top-4 left-4 bg-slate-800/90 backdrop-blur-sm rounded-lg p-4 border border-blue-400/30 max-w-xs">
-                  <h4 className="text-white font-semibold mb-2 flex items-center gap-2">
-                    <span>{getNodeDetails(selectedNode)?.icon}</span>
+                  <h4 className="text-white font-semibold mb-2">
                     Node Details
                   </h4>
                   <div className="space-y-1 text-sm">
@@ -529,8 +624,8 @@ export const ObsidianKnowledgeGraph: React.FC<ObsidianKnowledgeGraphProps> = ({ 
               <div className="absolute bottom-4 right-4 bg-slate-800/90 backdrop-blur-sm rounded-lg p-3 border border-blue-400/30">
                 <div className="text-xs text-white/70 space-y-1">
                   <p>• Drag nodes to move them</p>
-                  <p>• Scroll to zoom in/out</p>
-                  <p>• Click and drag to pan</p>
+                  <p>• Two-finger pan to navigate</p>
+                  <p>• Pinch to zoom in/out</p>
                   <p>• Hover for details</p>
                 </div>
               </div>

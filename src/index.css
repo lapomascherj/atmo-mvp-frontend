@@ -50,6 +50,11 @@
   background: radial-gradient(ellipse at center, #0f1419 0%, #000000 100%);
   position: relative;
   overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
 }
 
 .knowledge-graph-cosmic::before {
@@ -79,7 +84,6 @@
 }
 
 .main-node {
-  filter: drop-shadow(0 0 20px rgba(59, 130, 246, 0.5));
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: grab;
 }
@@ -89,12 +93,10 @@
 }
 
 .main-node:hover {
-  filter: drop-shadow(0 0 30px rgba(59, 130, 246, 0.8));
-  transform: scale(1.1);
+  transform: scale(1.05);
 }
 
 .sub-node {
-  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.2));
   transition: all 0.2s ease;
   cursor: grab;
 }
@@ -104,20 +106,18 @@
 }
 
 .sub-node:hover {
-  filter: drop-shadow(0 0 15px rgba(255, 255, 255, 0.4));
-  transform: scale(1.05);
+  transform: scale(1.1);
 }
 
 .connection-line {
-  stroke: rgba(59, 130, 246, 0.3);
+  stroke: rgba(255, 255, 255, 0.2);
   stroke-width: 1;
   transition: all 0.3s ease;
 }
 
 .connection-line.active {
-  stroke: rgba(59, 130, 246, 0.8);
-  stroke-width: 2;
-  animation: pulse-connection 2s ease-in-out infinite;
+  stroke: rgba(255, 255, 255, 0.5);
+  stroke-width: 1.5;
 }
 
 /* Cosmic glow effects */
@@ -161,6 +161,33 @@
 
 .selected-node {
   animation: cosmic-pulse 2s ease-in-out infinite;
+}
+
+/* Touch and gesture optimizations */
+.touch-none {
+  touch-action: none !important;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* Smooth gesture animations */
+.gesture-smooth {
+  transition: transform 0.1s ease-out;
+  will-change: transform;
+}
+
+/* Prevent text selection during gestures */
+.no-select {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
 }
 
 /* Custom utilities for AI Insights card */

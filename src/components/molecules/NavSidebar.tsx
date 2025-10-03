@@ -1,7 +1,7 @@
 import React from 'react';
 import {Link, useLocation} from 'react-router-dom';
 import {Brain, ChevronLeft, ChevronRight, LayoutDashboard, LogOut} from 'lucide-react';
-import {useAuth} from '@/hooks/useRealAuth';
+import {useAuth} from '@/hooks/useMockAuth';
 import {useSidebar} from '@/context/SidebarContext';
 import {cn} from '@/utils/utils.ts';
 import {Avatar, AvatarFallback, AvatarImage} from '@/components/atoms/Avatar.tsx';

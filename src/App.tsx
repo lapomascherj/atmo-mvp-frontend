@@ -60,29 +60,37 @@ const AppContent: React.FC = () => {
                 </ProtectedRoute>
             } />
 
-            {/* App Routes - Temporarily without authentication */}
+            {/* Protected App Routes */}
             <Route path="/" element={
-                <AppLayout>
-                    <Index />
-                </AppLayout>
+                <ProtectedRoute>
+                    <AppLayout>
+                        <Index />
+                    </AppLayout>
+                </ProtectedRoute>
             } />
 
             <Route path="/dashboard" element={
-                <AppLayout>
-                    <Index />
-                </AppLayout>
+                <ProtectedRoute>
+                    <AppLayout>
+                        <Index />
+                    </AppLayout>
+                </ProtectedRoute>
             } />
 
             <Route path="/profile" element={
-                <AppLayout>
-                    <Profile />
-                </AppLayout>
+                <ProtectedRoute>
+                    <AppLayout>
+                        <Profile />
+                    </AppLayout>
+                </ProtectedRoute>
             } />
 
             <Route path="/digital-brain" element={
-                <AppLayout>
-                    <DigitalBrain />
-                </AppLayout>
+                <ProtectedRoute>
+                    <AppLayout>
+                        <DigitalBrain />
+                    </AppLayout>
+                </ProtectedRoute>
             } />
 
             {/* 404 Route */}

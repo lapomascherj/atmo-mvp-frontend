@@ -93,7 +93,11 @@ const Onboarding: React.FC = () => {
         {/* Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center mb-4">
-            <Sparkles size={32} className="text-blue-400" />
+            <img
+              src="/atmo-logo.png"
+              alt="ATMO Logo"
+              className="w-20 h-20 object-contain drop-shadow-[0_0_20px_rgba(255,127,80,0.3)]"
+            />
           </div>
           <h1 className="text-4xl font-bold text-white mb-2">
             Let's personalize ATMO for you

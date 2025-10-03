@@ -23,9 +23,9 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children, title, subtitl
           <div className="inline-flex items-center justify-center mb-4">
             <div className="relative">
               <img
-                src="/AtmoPNG.png"
+                src="/atmo-logo.png"
                 alt="ATMO Logo"
-                className="w-20 h-20 object-contain"
+                className="w-24 h-24 object-contain drop-shadow-[0_0_20px_rgba(255,127,80,0.3)]"
               />
             </div>
           </div>

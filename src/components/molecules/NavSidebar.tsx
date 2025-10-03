@@ -100,7 +100,11 @@ const NavSidebar: React.FC = () => {
             )}>
                 <div className="flex items-center">
                     <div className="w-8 h-8 flex items-center justify-center">
-                        <img src="/AtmoPNG.png" alt="Atmo" className="w-full h-full object-contain" />
+                        <img
+                          src="/atmo-logo.png"
+                          alt="Atmo"
+                          className="w-full h-full object-contain drop-shadow-[0_0_8px_rgba(255,127,80,0.2)]"
+                        />
                     </div>
                     {!isCollapsed && (
                         <span className="text-[#E3E3E3] text-base ml-2 font-light">ATMO</span>

@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PocketBase Connection Test</title>
+</head>
+<body>
+    <h1>PocketBase Connection Test</h1>
+    <button onclick="testConnection()">Test Connection</button>
+    <button onclick="testSignup()">Test Signup</button>
+    <pre id="result"></pre>
+
+    <script type="module">
+        import PocketBase from 'https://cdn.jsdelivr.net/npm/pocketbase@0.21.5/+esm';
+
+        const pb = new PocketBase('https://atmo-backend-31f7193d582c.herokuapp.com');
+
+        window.testConnection = async function() {
+            const resultEl = document.getElementById('result');
+            try {
+                resultEl.textContent = 'Testing connection...';
+                const health = await pb.health.check();
+                resultEl.textContent = 'Connection SUCCESS!\n' + JSON.stringify(health, null, 2);
+            } catch (error) {
+                resultEl.textContent = 'Connection FAILED!\n' + error.message + '\n' + JSON.stringify(error, null, 2);
+            }
+        };
+
+        window.testSignup = async function() {
+            const resultEl = document.getElementById('result');
+            try {
+                resultEl.textContent = 'Testing signup...';
+                const email = 'testhtml' + Date.now() + '@test.com';
+                const user = await pb.collection('users').create({
+                    email: email,
+                    password: 'test123456',
+                    passwordConfirm: 'test123456',
+                    name: 'Test HTML User'
+                });
+                resultEl.textContent = 'Signup SUCCESS!\n' + JSON.stringify(user, null, 2);
+            } catch (error) {
+                resultEl.textContent = 'Signup FAILED!\n' + error.message + '\n' + JSON.stringify(error, null, 2);
+            }
+        };
+    </script>
+</body>
+</html>

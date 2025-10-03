@@ -6,10 +6,13 @@ interface GlobalState {
   sidebarOpen: boolean;
   theme: 'light' | 'dark';
   loading: boolean;
-  
+
   // Navigation
   currentPage: string;
-  
+
+  // Preferences
+  timeFormat: '12h' | '24h';
+
   // Notifications
   notifications: Array<{
     id: string;
@@ -17,12 +20,13 @@ interface GlobalState {
     message: string;
     timestamp: Date;
   }>;
-  
+
   // Actions
   setSidebarOpen: (open: boolean) => void;
   setTheme: (theme: 'light' | 'dark') => void;
   setLoading: (loading: boolean) => void;
   setCurrentPage: (page: string) => void;
+  setTimeFormat: (format: '12h' | '24h') => void;
   addNotification: (notification: {
     type: 'success' | 'error' | 'warning' | 'info';
     message: string;
@@ -39,13 +43,18 @@ export const useGlobalStore = create<GlobalState>()(
       theme: 'dark',
       loading: false,
       currentPage: '/',
+      timeFormat: (localStorage.getItem('timeFormat') as '12h' | '24h') || '24h',
       notifications: [],
-      
+
       // Actions
       setSidebarOpen: (open) => set({ sidebarOpen: open }),
       setTheme: (theme) => set({ theme }),
       setLoading: (loading) => set({ loading }),
       setCurrentPage: (page) => set({ currentPage: page }),
+      setTimeFormat: (format) => {
+        localStorage.setItem('timeFormat', format);
+        set({ timeFormat: format });
+      },
       
       addNotification: (notification) => {
         const id = Math.random().toString(36).substr(2, 9);

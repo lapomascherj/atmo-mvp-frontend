@@ -55,19 +55,19 @@ export const EventCard: React.FC<EventCardProps> = ({
       </div>
 
       {/* Task Content */}
-      <div className="ml-4 flex items-center justify-between">
+      <div className="ml-4 flex flex-col">
         <div className="flex-1 min-w-0">
-          <h4 className="text-sm font-medium text-white truncate">
+          <h4 className="text-sm font-medium text-white truncate pr-2">
             {event.title}
           </h4>
         </div>
+      </div>
 
-        {/* Duration Badge */}
-        <div className="ml-3 flex-shrink-0">
-          <span className="text-xs text-white/60 bg-white/5 px-2 py-0.5 rounded-md border border-white/10">
-            [ {formatDuration(event.duration)} ]
-          </span>
-        </div>
+      {/* Time display - bottom right */}
+      <div className="absolute bottom-1 right-2">
+        <span className="text-[10px] text-white/40">
+          {event.startTime}
+        </span>
       </div>
 
       {/* Optional category indicator dot */}

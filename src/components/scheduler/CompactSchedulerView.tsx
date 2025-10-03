@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Plus, Calendar, RefreshCw } from 'lucide-react';
+import { Plus, Calendar } from 'lucide-react';
 import { TimeRuler } from './TimeRuler';
 import { EventCard } from './EventCard';
 import { EditEventModal } from './EditEventModal';
@@ -12,14 +12,14 @@ import {
 } from '@/types/scheduler';
 import { useGlobalStore } from '@/stores/globalStore';
 
-interface SchedulerViewProps {
+interface CompactSchedulerViewProps {
   events: SchedulerEvent[];
   onEventsChange: (events: SchedulerEvent[]) => void;
   selectedDate: Date;
   onDateChange: (date: Date) => void;
 }
 
-export const SchedulerView: React.FC<SchedulerViewProps> = ({
+export const CompactSchedulerView: React.FC<CompactSchedulerViewProps> = ({
   events,
   onEventsChange,
   selectedDate,
@@ -28,7 +28,6 @@ export const SchedulerView: React.FC<SchedulerViewProps> = ({
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
-  const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
   const [dragState, setDragState] = useState<{
     isDragging: boolean;
     eventId: string | null;
@@ -43,11 +42,28 @@ export const SchedulerView: React.FC<SchedulerViewProps> = ({
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const eventsContainerRef = useRef<HTMLDivElement>(null);
-  const [focusedEventIndex, setFocusedEventIndex] = useState<number>(-1);
   const { timeFormat } = useGlobalStore();
 
-  // Constants for layout calculations
-  const HOUR_HEIGHT = 60; // pixels per hour
+  // Auto-scroll to first task on mount
+  useEffect(() => {
+    if (scrollContainerRef.current && events.length > 0) {
+      // Find the earliest task
+      const sortedEvents = [...events].sort((a, b) => {
+        const timeA = timeToMinutes(a.startTime);
+        const timeB = timeToMinutes(b.startTime);
+        return timeA - timeB;
+      });
+
+      const firstTask = sortedEvents[0];
+      const taskPosition = calculateEventPosition(firstTask.startTime);
+
+      // Scroll to first task with some offset
+      scrollContainerRef.current.scrollTop = Math.max(0, taskPosition - 50);
+    }
+  }, []); // Only run on mount
+
+  // Constants for layout calculations - Compact version
+  const HOUR_HEIGHT = 50; // Reduced from 60 for compact view
   const START_HOUR = 1; // Start at 1am
   const END_HOUR = 24; // End at midnight (24 = 00:00 next day)
   const TOTAL_HOURS = END_HOUR - START_HOUR;
@@ -177,95 +193,77 @@ export const SchedulerView: React.FC<SchedulerViewProps> = ({
     onEventsChange(updatedEvents);
   };
 
-  // Format selected date for display
+  // Format selected date for display - Compact version
   const formatDate = (date: Date): string => {
-    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-    return `${days[date.getDay()]}, ${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${months[date.getMonth()]} ${date.getDate()}`;
   };
 
   const selectedEvent = selectedEventId ? events.find((ev) => ev.id === selectedEventId) : null;
-
-  // Keyboard navigation for event list
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (events.length === 0) return;
-
-      // Focus on first event with Tab when no event is focused
-      if (e.key === 'Tab' && focusedEventIndex === -1) {
-        e.preventDefault();
-        setFocusedEventIndex(0);
-        return;
-      }
-
-      // Navigate events with arrow keys
-      if (e.key === 'ArrowDown' && focusedEventIndex < events.length - 1) {
-        e.preventDefault();
-        setFocusedEventIndex(focusedEventIndex + 1);
-      } else if (e.key === 'ArrowUp' && focusedEventIndex > 0) {
-        e.preventDefault();
-        setFocusedEventIndex(focusedEventIndex - 1);
-      }
-    };
-
-    if (focusedEventIndex >= 0) {
-      document.addEventListener('keydown', handleKeyDown);
-      return () => document.removeEventListener('keydown', handleKeyDown);
-    }
-  }, [focusedEventIndex, events.length]);
 
   return (
     <div
       className="h-full flex flex-col bg-gradient-to-br from-slate-950/40 via-slate-900/40 to-slate-950/40"
       role="application"
-      aria-label="Task scheduler"
+      aria-label="Compact task scheduler"
     >
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 flex-shrink-0">
+      {/* Compact Header */}
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/10 flex-shrink-0">
         <div>
-          <h2 className="text-lg font-semibold text-white">Your Roadmap</h2>
+          <h3 className="text-sm font-semibold text-white">Roadmap</h3>
           <p className="text-xs text-white/60 mt-0.5">{formatDate(selectedDate)}</p>
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Sync button */}
-          <button
-            onClick={() => setIsSyncModalOpen(true)}
-            className="w-9 h-9 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center transition-colors"
-            aria-label="Sync calendar"
-          >
-            <RefreshCw size={16} className="text-white/70" />
-          </button>
-
           {/* Calendar button */}
           <button
             onClick={() => setIsCalendarOpen(true)}
-            className="w-9 h-9 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center transition-colors"
+            className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center transition-colors"
             aria-label="Select date"
           >
-            <Calendar size={16} className="text-white/70" />
+            <Calendar size={15} className="text-white/70" />
           </button>
 
           {/* Add task button */}
           <button
             onClick={handleAddEvent}
-            className="w-9 h-9 rounded-lg bg-orange-500 hover:bg-orange-600 flex items-center justify-center transition-colors shadow-lg shadow-orange-500/20"
+            className="w-8 h-8 rounded-lg bg-orange-500 hover:bg-orange-600 flex items-center justify-center transition-colors shadow-lg shadow-orange-500/20"
             aria-label="Add task"
           >
-            <Plus size={16} className="text-white" />
+            <Plus size={15} className="text-white" />
           </button>
         </div>
       </div>
 
-      {/* Scheduler Content - Scrollable */}
+      {/* Compact Scheduler Content - Scrollable */}
       <div
         ref={scrollContainerRef}
-        className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4"
+        className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-3"
         style={{ scrollBehavior: 'smooth' }}
       >
-        <div className="flex gap-4">
+        <div className="flex gap-1">
           {/* Time Ruler - Respects time format preference */}
-          <TimeRuler currentTime={getCurrentTime()} hourHeight={HOUR_HEIGHT} timeFormat={timeFormat} />
+          <div className="flex-shrink-0 flex flex-col gap-0 w-7">
+            {Array.from({ length: TOTAL_HOURS + 1 }).map((_, index) => {
+              const hour = START_HOUR + index;
+              const actualHour = hour === 24 ? 0 : hour; // Display 24 as 0 (midnight)
+              const displayHour = timeFormat === '24h'
+                ? actualHour
+                : (actualHour === 0 ? 12 : (actualHour > 12 ? actualHour - 12 : actualHour));
+
+              return (
+                <div
+                  key={index}
+                  className="relative"
+                  style={{ height: `${HOUR_HEIGHT}px` }}
+                >
+                  <span className="absolute -top-2 left-0 text-xs font-medium text-white/50">
+                    {displayHour}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
 
           {/* Events Column */}
           <div
@@ -293,7 +291,7 @@ export const SchedulerView: React.FC<SchedulerViewProps> = ({
             {events.map((event) => (
               <div
                 key={event.id}
-                className="absolute left-0 right-0 px-2"
+                className="absolute left-0 right-0 px-1"
                 style={{
                   top: `${calculateEventPosition(event.startTime)}px`,
                   height: `${calculateEventHeight(event.duration)}px`,
@@ -312,75 +310,48 @@ export const SchedulerView: React.FC<SchedulerViewProps> = ({
         </div>
       </div>
 
-      {/* Modals */}
-      <EditEventModal
-        isOpen={isEditModalOpen}
-        onClose={() => {
-          setIsEditModalOpen(false);
-          setSelectedEventId(null);
-        }}
-        onSave={handleSaveEvent}
-        onDelete={handleDeleteEvent}
-        event={selectedEvent}
-      />
-
-      <MonthPicker
-        selectedDate={selectedDate}
-        onDateSelect={onDateChange}
-        isOpen={isCalendarOpen}
-        onClose={() => setIsCalendarOpen(false)}
-      />
-
-      {/* Sync Modal */}
-      {isSyncModalOpen && (
+      {/* Compact Modals - Adaptive sizes for card view */}
+      {isEditModalOpen && (
         <div
           className="absolute inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center rounded-lg"
-          onClick={() => setIsSyncModalOpen(false)}
+          onClick={() => {
+            setIsEditModalOpen(false);
+            setSelectedEventId(null);
+          }}
         >
           <div
-            className="relative w-[90%] max-w-[320px] bg-gradient-to-br from-slate-900/98 to-slate-800/98 rounded-lg border border-slate-700/60 shadow-2xl"
+            className="w-[90%] max-w-[220px] bg-gradient-to-br from-slate-900/98 to-slate-800/98 rounded-lg border border-slate-700/60 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-700/40">
-              <h2 className="text-sm font-semibold text-white">Sync Calendar</h2>
-              <button
-                onClick={() => setIsSyncModalOpen(false)}
-                className="w-5 h-5 rounded-md bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors"
-                aria-label="Close modal"
-              >
-                <Plus size={12} className="text-white/60 rotate-45" />
-              </button>
-            </div>
+            <EditEventModal
+              isOpen={isEditModalOpen}
+              onClose={() => {
+                setIsEditModalOpen(false);
+                setSelectedEventId(null);
+              }}
+              onSave={handleSaveEvent}
+              onDelete={handleDeleteEvent}
+              event={selectedEvent}
+            />
+          </div>
+        </div>
+      )}
 
-            <div className="px-4 py-4 space-y-3">
-              <p className="text-xs text-white/70 mb-4">
-                Connect your calendar to keep your tasks synchronized across devices.
-              </p>
-
-              <button
-                onClick={() => {
-                  // Handle Apple Calendar sync
-                  alert('Apple Calendar sync coming soon!');
-                  setIsSyncModalOpen(false);
-                }}
-                className="w-full px-4 py-3 bg-slate-800/60 hover:bg-slate-800/80 border border-slate-700/60 rounded-lg text-sm text-white transition-colors flex items-center justify-between"
-              >
-                <span>Apple Calendar</span>
-                <RefreshCw size={16} className="text-white/60" />
-              </button>
-
-              <button
-                onClick={() => {
-                  // Handle Google Calendar sync
-                  alert('Google Calendar sync coming soon!');
-                  setIsSyncModalOpen(false);
-                }}
-                className="w-full px-4 py-3 bg-slate-800/60 hover:bg-slate-800/80 border border-slate-700/60 rounded-lg text-sm text-white transition-colors flex items-center justify-between"
-              >
-                <span>Google Calendar</span>
-                <RefreshCw size={16} className="text-white/60" />
-              </button>
-            </div>
+      {isCalendarOpen && (
+        <div
+          className="absolute inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center rounded-lg"
+          onClick={() => setIsCalendarOpen(false)}
+        >
+          <div
+            className="w-[88%] max-w-[200px] bg-gradient-to-br from-slate-900/98 to-slate-800/98 rounded-lg border border-slate-700/60 shadow-2xl scale-90"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <MonthPicker
+              selectedDate={selectedDate}
+              onDateSelect={onDateChange}
+              isOpen={isCalendarOpen}
+              onClose={() => setIsCalendarOpen(false)}
+            />
           </div>
         </div>
       )}

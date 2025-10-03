@@ -107,3 +107,11 @@ ehthumbs.db
 # yarn.lock
 # pnpm-lock.yaml
 
+# PocketBase
+pocketbase/pb_data/*
+!pocketbase/pb_data/.gitkeep
+pocketbase/pocketbase
+pocketbase/CHANGELOG.md
+pocketbase/LICENSE.md
+pocketbase/*.zip
+

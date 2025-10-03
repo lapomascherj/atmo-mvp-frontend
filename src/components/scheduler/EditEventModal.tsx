@@ -30,7 +30,7 @@ export const EditEventModal: React.FC<EditEventModalProps> = ({
       // Reset for new event
       setTitle('');
       setDuration('30');
-      setStartTime('08:00');
+      setStartTime('09:00');
     }
   }, [event, isOpen]);
 

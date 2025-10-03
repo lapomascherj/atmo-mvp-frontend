@@ -292,11 +292,9 @@ export const usePersonasStore = create<PersonasStoreState>((set, get) => ({
           forceRefresh ? "(forced)" : ""
         );
 
-        // Ensure PocketBase is authenticated before making the request
-        const { getAuthenticatedPocketBase } = await import(
-          "@/hooks/useMockPocketBase"
-        );
-        const authenticatedPb = await getAuthenticatedPocketBase();
+        // Use real PocketBase client
+        const { pb } = await import("@/lib/pocketbase");
+        const authenticatedPb = pb;
 
         try {
           console.debug("🔍 PERSONA STORE: Making PocketBase request for personas");

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import CenterColumn from '../layouts/CenterColumn.tsx';
 import DailySnapshot from '../organisms/DailySnapshot.tsx';
 import { AtmoCard } from '../molecules/AtmoCard.tsx';
@@ -16,6 +16,9 @@ import ProjectForm from '@/components/molecules/ProjectForm.tsx';
 import FlowerOfLife from '@/components/atoms/FlowerOfLife.tsx';
 import GetCenteredCard from '@/components/molecules/GetCenteredCard.tsx';
 import InteractiveDivider from '@/components/atoms/InteractiveDivider.tsx';
+import { CompactSchedulerView } from '@/components/scheduler/CompactSchedulerView.tsx';
+import { useSchedulerSync } from '@/hooks/useSchedulerSync.ts';
+import { PriorityStreamEnhanced } from '@/components/organisms/PriorityStreamEnhanced';
 
 interface DashboardLayoutProps {
   userName: string;
@@ -43,6 +46,10 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ userName }) => {
 
   // Interactive divider state
   const [dividerPosition, setDividerPosition] = useState(50);
+
+  // Scheduler state - synced across dashboard and Digital Brain
+  const { events: schedulerEvents, updateEvents: setSchedulerEvents } = useSchedulerSync();
+  const [selectedDate, setSelectedDate] = useState(new Date());
 
   // Check for new mantra content (6am daily)
   React.useEffect(() => {
@@ -170,54 +177,44 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ userName }) => {
 
               {/* Right Section - Perfect Mosaic Layout with Minimum Width Protection */}
               <div
-                className="h-full flex flex-col items-center justify-center overflow-hidden p-4"
+                className="h-full flex flex-col overflow-hidden p-4"
                 style={{
                   width: `${100 - dividerPosition}%`,
                   minWidth: '600px' // Ensure cards don't collapse
                 }}
               >
-                {/* Title - Centered in RIGHT section */}
-                <div className="w-full text-center mb-12 mt-16 flex-shrink-0">
-                  <h1 className="text-2xl font-bold text-white mb-2">Daily Roadmap</h1>
-                  <p className="text-white/70 text-sm">Small daily actions → big growth</p>
+                {/* Title - at top */}
+                <div className="text-center mt-4 mb-2 flex-shrink-0">
+                  <h1 className="text-xl font-bold text-white mb-0.5">Daily Roadmap</h1>
+                  <p className="text-white/60 text-xs">Small daily actions → big growth</p>
                 </div>
 
-                {/* Cards Row */}
-                <div className="flex items-center justify-center gap-4 flex-1">
-                  {/* Daily Snapshot - Full Height */}
-                  <div className="h-full flex items-center justify-center">
-                    <ErrorBoundary fallback={
-                      <AtmoCard className="w-full h-full">
-                        <CardContent className="h-full flex items-center justify-center p-4 text-center text-white/60">
-                          <p>Daily snapshot temporarily unavailable</p>
-                        </CardContent>
-                      </AtmoCard>
-                    }>
-                      <DailySnapshot />
-                    </ErrorBoundary>
-                  </div>
+                {/* Cards Row - centered in remaining space */}
+                <div className="flex-1 flex items-center justify-center min-h-0">
+                  <div className="flex items-stretch gap-4 h-full max-h-[600px]">
+                    {/* Daily Snapshot - Full Height */}
+                    <div className="flex items-center">
+                      <ErrorBoundary fallback={
+                        <AtmoCard className="w-full h-full">
+                          <CardContent className="h-full flex items-center justify-center p-4 text-center text-white/60">
+                            <p>Daily snapshot temporarily unavailable</p>
+                          </CardContent>
+                        </AtmoCard>
+                      }>
+                        <DailySnapshot />
+                      </ErrorBoundary>
+                    </div>
 
-                {/* Cards Column - Centered vertically */}
-                <div className="h-full flex flex-col justify-center gap-1">
-                  {/* Card 1 */}
-                  <AtmoCard
-                    className="w-64 h-1/3"
-                    variant="purple"
-                  >
-                    <CardContent className="h-full flex items-center justify-center p-4">
-                      <div className="text-center text-white/40">
-                        <div className="w-10 h-10 mx-auto mb-3 rounded-full bg-purple-500/20 flex items-center justify-center">
-                          <div className="w-4 h-4 rounded-full bg-purple-500/60"></div>
-                        </div>
-                        <p className="text-sm font-medium">Card 1</p>
-                        <p className="text-xs opacity-60 mt-1">Coming Soon</p>
-                      </div>
-                    </CardContent>
-                  </AtmoCard>
+                    {/* Cards Column - Centered vertically */}
+                    <div className="flex flex-col justify-center gap-4">
+                  {/* Card 1 - Priority Stream (Mission Control) */}
+                  <div className="w-72 h-[420px]">
+                    <PriorityStreamEnhanced compact={false} priorityOnly={true} className="w-full h-full" />
+                  </div>
 
                   {/* Card 2 */}
                   <AtmoCard
-                    className="w-64 h-1/3"
+                    className="w-72 h-64"
                     variant="gold"
                   >
                     <CardContent className="h-full flex items-center justify-center p-4">
@@ -230,6 +227,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ userName }) => {
                       </div>
                     </CardContent>
                   </AtmoCard>
+                  </div>
                 </div>
               </div>
               </div>

@@ -4,10 +4,21 @@ import { generateTimeSlots, type TimeSlot } from '@/types/scheduler';
 interface TimeRulerProps {
   currentTime?: string; // HH:MM format to highlight current time
   hourHeight?: number; // Height in pixels for each hour
+  timeFormat?: '12h' | '24h'; // Time format preference
 }
 
-export const TimeRuler: React.FC<TimeRulerProps> = ({ currentTime, hourHeight = 60 }) => {
+export const TimeRuler: React.FC<TimeRulerProps> = ({ currentTime, hourHeight = 60, timeFormat = '24h' }) => {
   const timeSlots = generateTimeSlots(true); // Include half-hours
+
+  // Format time display based on preference
+  const formatTime = (slot: TimeSlot): string => {
+    if (timeFormat === '12h') {
+      const hour = slot.hour > 12 ? slot.hour - 12 : (slot.hour === 0 ? 12 : slot.hour);
+      const period = slot.hour >= 12 ? 'PM' : 'AM';
+      return slot.minute === 0 ? `${hour}${period.toLowerCase()}` : `${hour}:${slot.minute.toString().padStart(2, '0')}`;
+    }
+    return slot.displayTime;
+  };
 
   // Calculate if a time slot is the current hour/half-hour
   const isCurrentTime = (slot: TimeSlot): boolean => {
@@ -41,7 +52,7 @@ export const TimeRuler: React.FC<TimeRulerProps> = ({ currentTime, hourHeight = 
                   : 'text-xs text-white/60'
               } ${isCurrentTime(slot) ? 'text-orange-400' : ''}`}
             >
-              {slot.displayTime}
+              {formatTime(slot)}
             </span>
 
             {/* Circular node */}

@@ -13,8 +13,10 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/atoms/Avatar';
 import { Input } from '@/components/atoms/Input';
 import { TextArea } from '@/components/atoms/TextArea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/atoms/Select';
+import { Switch } from '@/components/atoms/Switch';
 import { JobTitle } from '@/models/JobTitle';
 import { Focus } from '@/models/Focus';
+import { useGlobalStore } from '@/stores/globalStore';
 
 type ProfileSection = 'profile' | 'professional' | 'personal' | 'preferences' | 'account';
 
@@ -23,6 +25,7 @@ const Profile: React.FC = () => {
   const { toast } = useToast();
   const { isCollapsed, sidebarWidth } = useSidebar();
   const navigate = useNavigate();
+  const { timeFormat, setTimeFormat } = useGlobalStore();
 
   // State management
   const [currentSection, setCurrentSection] = useState<ProfileSection>('profile');
@@ -407,6 +410,25 @@ const Profile: React.FC = () => {
                   <SelectItem value="professional">Professional & Formal</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="p-4 bg-white/5 rounded-lg border border-white/10">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-white font-medium text-sm">Time Format</div>
+                  <div className="text-white/60 text-xs">
+                    {timeFormat === '24h' ? '24-hour (13:00, 14:00)' : '12-hour (1:00 PM, 2:00 PM)'}
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-white/50">12h</span>
+                  <Switch
+                    checked={timeFormat === '24h'}
+                    onCheckedChange={(checked) => setTimeFormat(checked ? '24h' : '12h')}
+                  />
+                  <span className="text-xs text-white/50">24h</span>
+                </div>
+              </div>
             </div>
           </div>
         );

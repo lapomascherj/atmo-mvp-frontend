@@ -58,21 +58,22 @@ export const snapTo30Minutes = (minutes: number): number => {
   return Math.round(minutes / 30) * 30;
 };
 
-// Helper function to generate time slots for the day (08:00 - 17:00) with 30-min intervals
+// Helper function to generate time slots for the day (01:00 - 24:00/00:00) with 30-min intervals
 export const generateTimeSlots = (includeHalfHours: boolean = false): TimeSlot[] => {
   const slots: TimeSlot[] = [];
-  for (let hour = 8; hour <= 17; hour++) {
+  for (let hour = 1; hour <= 24; hour++) {
+    const displayHour = hour === 24 ? 0 : hour; // Display 24 as 00
     slots.push({
-      hour,
+      hour: displayHour,
       minute: 0,
-      displayTime: `${hour.toString().padStart(2, '0')}:00`,
+      displayTime: `${displayHour.toString().padStart(2, '0')}:00`,
     });
 
-    if (includeHalfHours && hour < 17) {
+    if (includeHalfHours && hour < 24) {
       slots.push({
-        hour,
+        hour: displayHour,
         minute: 30,
-        displayTime: `${hour.toString().padStart(2, '0')}:30`,
+        displayTime: `${displayHour.toString().padStart(2, '0')}:30`,
       });
     }
   }

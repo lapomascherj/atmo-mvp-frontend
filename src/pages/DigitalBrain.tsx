@@ -4,10 +4,10 @@ import { CardContent, CardHeader } from '@/components/atoms/Card';
 import SphereChat from '@/components/atoms/SphereChat';
 import { User, BarChart3, Brain, Lightbulb, ChevronUp, TrendingUp, Target, Zap, Star, Radar, Settings, Filter, BookOpen, Plus, Circle, X, Edit3 } from 'lucide-react';
 import { SchedulerView } from '@/components/scheduler/SchedulerView';
-import { type SchedulerEvent } from '@/types/scheduler';
+import { useSchedulerSync } from '@/hooks/useSchedulerSync';
 import { ObsidianKnowledgeGraph } from '@/components/knowledge/ObsidianKnowledgeGraph';
-
-const STORAGE_KEY = 'atmo_roadmap_tasks';
+import { ChatOverlay } from '@/components/organisms/ChatOverlay';
+import { PriorityStreamEnhanced } from '@/components/organisms/PriorityStreamEnhanced';
 
 const DigitalBrain: React.FC = () => {
   const [isCapturing, setIsCapturing] = useState(false);
@@ -22,79 +22,11 @@ const DigitalBrain: React.FC = () => {
   // Chat state
   const [chatMessages, setChatMessages] = useState<Array<{id: string, text: string, sender: 'user' | 'ai', timestamp: Date}>>([]);
   const [chatInput, setChatInput] = useState('');
-  const chatContainerRef = React.useRef<HTMLDivElement>(null);
-  const chatInputRef = React.useRef<HTMLTextAreaElement>(null);
   const [sendingOpportunityIds, setSendingOpportunityIds] = useState<Set<string>>(new Set());
+  const [showChatOverlay, setShowChatOverlay] = useState(false);
 
-  // Load tasks from localStorage on mount
-  const loadTasksFromStorage = (): SchedulerEvent[] => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        return JSON.parse(stored);
-      }
-    } catch (error) {
-      console.error('Failed to load tasks from localStorage:', error);
-    }
-    // Default tasks if nothing in storage
-    return [
-      {
-        id: 'task-1',
-        title: 'Morning Meeting',
-        startTime: '08:00',
-        duration: 30,
-      },
-      {
-        id: 'task-2',
-        title: 'Project Planning',
-        startTime: '09:00',
-        duration: 60,
-      },
-      {
-        id: 'task-3',
-        title: 'Team Sync',
-        startTime: '10:00',
-        duration: 45,
-      },
-      {
-        id: 'task-4',
-        title: 'Lunch Break',
-        startTime: '12:00',
-        duration: 60,
-      },
-      {
-        id: 'task-5',
-        title: 'Design Review',
-        startTime: '14:00',
-        duration: 90,
-      },
-      {
-        id: 'task-6',
-        title: 'Client Call',
-        startTime: '16:00',
-        duration: 45,
-      },
-      {
-        id: 'task-7',
-        title: 'Wrap Up',
-        startTime: '17:00',
-        duration: 30,
-      },
-    ];
-  };
-
-  const [events, setEvents] = useState<SchedulerEvent[]>(loadTasksFromStorage());
-
-  // Save tasks to localStorage whenever they change
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(events));
-      // TODO: Add API call here for cross-device sync
-      // await syncTasksToBackend(events);
-    } catch (error) {
-      console.error('Failed to save tasks to localStorage:', error);
-    }
-  }, [events]);
+  // Scheduler sync - shared with Dashboard
+  const { events, updateEvents: setEvents } = useSchedulerSync();
 
   // Knowledge Graph is now data-driven from Zustand stores
 
@@ -407,29 +339,6 @@ const DigitalBrain: React.FC = () => {
     ]
   };
 
-  const handleQuickCapture = () => {
-    setIsCapturing(!isCapturing);
-  };
-
-  // Chat functions
-  const scrollToBottom = () => {
-    if (chatContainerRef.current) {
-      // Force instant scroll to bottom without animation for perfect snapping
-      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
-    }
-  };
-
-  const focusChatInput = () => {
-    if (chatInputRef.current) {
-      chatInputRef.current.focus();
-    }
-  };
-
-  React.useEffect(() => {
-    // Scroll to bottom whenever messages change
-    scrollToBottom();
-  }, [chatMessages]);
-
   // Send opportunity to chat
   const sendOpportunityToChat = (opportunity: any, type: 'radar' | 'insight') => {
     const opportunityId = `${type}-${opportunity.id}`;
@@ -471,10 +380,8 @@ const DigitalBrain: React.FC = () => {
 
     setChatMessages(prev => [...prev, newMessage]);
 
-    // Focus chat input after short delay
+    // Remove from sending set after debounce period
     setTimeout(() => {
-      focusChatInput();
-      // Remove from sending set after debounce period
       setSendingOpportunityIds(prev => {
         const newSet = new Set(prev);
         newSet.delete(opportunityId);
@@ -492,37 +399,9 @@ const DigitalBrain: React.FC = () => {
       };
       setChatMessages(prev => [...prev, aiResponse]);
     }, 1500);
-  };
 
-  const handleSendMessage = () => {
-    if (chatInput.trim()) {
-      const newMessage = {
-        id: Date.now().toString(),
-        text: chatInput,
-        sender: 'user' as const,
-        timestamp: new Date()
-      };
-      setChatMessages(prev => [...prev, newMessage]);
-      setChatInput('');
-
-      // Simulate AI response
-      setTimeout(() => {
-        const aiMessage = {
-          id: (Date.now() + 1).toString(),
-          text: "I'm processing your request. This is a demo response!",
-          sender: 'ai' as const,
-          timestamp: new Date()
-        };
-        setChatMessages(prev => [...prev, aiMessage]);
-      }, 1000);
-    }
-  };
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage();
-    }
+    // Open chat overlay
+    setShowChatOverlay(true);
   };
 
   // Album management functions
@@ -577,22 +456,34 @@ const DigitalBrain: React.FC = () => {
   };
 
   return (
-    <div className="h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 relative overflow-hidden flex">
+    <div className="h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 relative overflow-hidden">
       {/* Background effects */}
       <div className="absolute inset-0 bg-[url('/bg-grid.svg')] bg-fixed opacity-[0.01] pointer-events-none" />
       <div className="fixed top-[20%] right-[25%] -z-10 w-72 h-72 bg-blue-500/5 rounded-full blur-[100px] animate-pulse-soft" />
       <div className="fixed top-[60%] left-[15%] -z-10 w-96 h-96 bg-orange-500/3 rounded-full blur-[120px] animate-pulse-soft" />
 
-      {/* Left Section - Cards Grid */}
-      <div className="flex-1 h-full flex flex-col p-6 pl-8 pr-4">
-        {/* Page Title - Top Left */}
+      {/* Main Content */}
+      <div className="h-full flex flex-col p-6">
+        {/* Page Title with Avatar */}
         <div className="mb-4">
-          <h1 className="text-2xl font-bold text-white mb-1">Digital Brain</h1>
-          <p className="text-white/60 text-xs">Your personal knowledge ecosystem</p>
+          <div className="flex items-center gap-3 mb-1">
+            <h1 className="text-3xl font-bold text-white">Digital Brain</h1>
+
+            {/* Orange Avatar Dot */}
+            <button
+              onClick={() => setShowChatOverlay(true)}
+              className="relative w-12 h-12 rounded-full bg-gradient-to-br from-[#CC5500] to-[#CC5500]/80 hover:from-[#CC5500]/90 hover:to-[#CC5500]/70 flex items-center justify-center transition-all duration-200 shadow-lg hover:shadow-[0_0_20px_rgba(204,85,0,0.4)] cursor-pointer"
+              title="Open Chat"
+            >
+              <div className="absolute inset-0 bg-[#CC5500]/20 rounded-full blur-md -z-10 animate-pulse-soft" />
+            </button>
+          </div>
+
+          <p className="text-white/60 text-sm">Your personal knowledge ecosystem</p>
         </div>
 
-        {/* 2x2 Grid of Cards - Smaller */}
-        <div className="grid grid-cols-2 grid-rows-2 gap-4 max-h-[calc(100vh-140px)]">
+        {/* 2x2 Grid of Cards - Full Width */}
+        <div className="grid grid-cols-2 grid-rows-2 gap-6 flex-1 min-h-0">
 
           {/* Card 1 - User Profile (Lapo's Design) */}
           <AtmoCard variant="purple" className="w-full h-full p-4" hover={true}>
@@ -1042,133 +933,23 @@ const DigitalBrain: React.FC = () => {
           {/* Card 3 - Obsidian Knowledge Graph */}
           <ObsidianKnowledgeGraph className="w-full h-full overflow-hidden" />
 
-          {/* Card 4 - Analytics with Scheduler */}
-          <AtmoCard variant="gold" className="w-full h-full overflow-hidden" hover={true}>
-            <SchedulerView
-              events={events}
-              onEventsChange={setEvents}
-              selectedDate={selectedDate}
-              onDateChange={setSelectedDate}
-            />
-          </AtmoCard>
+          {/* Card 4 - Priority Stream (Mission Control - Replaces Roadmap) */}
+          <PriorityStreamEnhanced compact={true} className="w-full h-full" />
 
         </div>
       </div>
 
-      {/* Right Panel - Avatar and Chat */}
-      <div className="w-64 h-full flex flex-col p-6 pt-32">
-        {/* Avatar Section */}
-        <div className="flex flex-col items-center mb-6">
-          <div
-            className="relative"
-            style={{
-              filter: 'drop-shadow(0 0 15px rgba(204, 85, 0, 0.15))',
-            }}
-          >
-            <SphereChat
-              size={90}
-              isActive={isCapturing}
-              isListening={isCapturing}
-              onClick={handleQuickCapture}
-              voiceSupported={true}
-            />
-
-            {/* Subtle glow effects */}
-            <div className={`absolute inset-0 -z-10 bg-[#CC5500]/10 rounded-full blur-xl transition-all duration-300 ${
-              isCapturing ? 'animate-pulse scale-110' : 'animate-pulse-soft'
-            }`}></div>
-            <div className={`absolute inset-0 -z-20 bg-[#CC5500]/5 rounded-full blur-2xl scale-150 transition-all duration-300 ${
-              isCapturing ? 'animate-pulse scale-125' : 'animate-pulse-soft'
-            }`}></div>
-          </div>
-
-          {/* Voice Control X Button */}
-          {isCapturing && (
-            <div className="mt-6">
-              <button
-                onClick={() => setIsCapturing(false)}
-                className="w-9 h-9 rounded-full bg-slate-800/60 hover:bg-slate-700/80 border border-slate-600/40 text-white/80 hover:text-white transition-all duration-200 backdrop-blur-sm shadow-lg flex items-center justify-center"
-              >
-                ✕
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Chat Section - Blue outlined area */}
-        <div className="flex-1 flex flex-col min-h-0">
-          {/* Chat Messages Container - Scrollable */}
-          <div
-            ref={chatContainerRef}
-            className="flex-1 overflow-y-auto mb-4 space-y-3 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent pr-2"
-            style={{
-              scrollBehavior: 'smooth',
-              maskImage: 'linear-gradient(to bottom, transparent 0%, black 3%, black 100%)',
-              WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 3%, black 100%)'
-            }}
-          >
-            {chatMessages.map((message) => (
-              <div
-                key={message.id}
-                className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'} animate-[slideIn_0.3s_ease-out]`}
-              >
-                <div
-                  className={`max-w-[85%] px-3 py-2 ${
-                    message.sender === 'user'
-                      ? 'bg-gradient-to-br from-[#CC5500]/80 to-[#CC5500]/60 text-white rounded-[18px] rounded-br-[6px]'
-                      : 'bg-white/10 text-white/90 rounded-[18px] rounded-bl-[6px] backdrop-blur-sm border border-white/10'
-                  } shadow-lg`}
-                >
-                  <p className="text-sm leading-relaxed">{message.text}</p>
-                  <span className="text-[10px] opacity-60 mt-1 block">
-                    {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Chat Input Box - Red outlined area (fixed at bottom) */}
-          <div className="flex-shrink-0">
-            <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-[20px] p-3 shadow-xl">
-              <div className="flex items-end gap-2">
-                <textarea
-                  ref={chatInputRef}
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  placeholder="Type your message..."
-                  className="flex-1 bg-transparent text-white text-sm placeholder:text-white/40 outline-none resize-none min-h-[32px] max-h-[120px] py-1 px-2 rounded-xl"
-                  rows={1}
-                  style={{
-                    scrollbarWidth: 'thin',
-                    scrollbarColor: 'rgba(255,255,255,0.1) transparent'
-                  }}
-                />
-                <button
-                  onClick={handleSendMessage}
-                  disabled={!chatInput.trim()}
-                  className="flex-shrink-0 w-9 h-9 rounded-full bg-gradient-to-br from-[#CC5500] to-[#CC5500]/80 hover:from-[#CC5500]/90 hover:to-[#CC5500]/70 disabled:from-white/10 disabled:to-white/5 disabled:cursor-not-allowed text-white flex items-center justify-center transition-all duration-200 shadow-lg"
-                >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-                    />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* Chat Overlay */}
+      <ChatOverlay
+        isOpen={showChatOverlay}
+        onClose={() => setShowChatOverlay(false)}
+        chatMessages={chatMessages}
+        setChatMessages={setChatMessages}
+        chatInput={chatInput}
+        setChatInput={setChatInput}
+        isCapturing={isCapturing}
+        setIsCapturing={setIsCapturing}
+      />
     </div>
   );
 };

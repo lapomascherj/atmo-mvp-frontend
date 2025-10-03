@@ -11,11 +11,17 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import Profile from "./pages/Profile";
 import DigitalBrain from "./pages/DigitalBrain";
+import Login from "./pages/Login";
+import Signup from "./pages/Signup";
+import ForgotPassword from "./pages/ForgotPassword";
+import Onboarding from "./pages/Onboarding";
+import TestConnection from "./pages/TestConnection";
 
 // Components
 import NavSidebar from "./components/molecules/NavSidebar.tsx";
 import {DailyMapCtxProvider} from "@/context/DailyMapCtx.tsx";
 import {SidebarProvider, useSidebar} from "@/context/SidebarContext.tsx";
+import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 
 const queryClient = new QueryClient();
 
@@ -35,27 +41,56 @@ const AppLayout: React.FC<{children: React.ReactNode}> = ({children}) => {
     );
 };
 
-// Main App Content with routing - no authentication required
+// Main App Content with routing
 const AppContent: React.FC = () => {
     return (
         <Routes>
-            {/* Main App Routes - Essential pages only */}
+            {/* Test Route */}
+            <Route path="/test-connection" element={<TestConnection />} />
+
+            {/* Public Auth Routes */}
+            <Route path="/auth/login" element={<Login />} />
+            <Route path="/auth/signup" element={<Signup />} />
+            <Route path="/auth/forgot-password" element={<ForgotPassword />} />
+
+            {/* Onboarding Route (Protected) */}
+            <Route path="/onboarding" element={
+                <ProtectedRoute>
+                    <Onboarding />
+                </ProtectedRoute>
+            } />
+
+            {/* Protected App Routes */}
             <Route path="/" element={
-                <AppLayout>
-                    <Index />
-                </AppLayout>
+                <ProtectedRoute>
+                    <AppLayout>
+                        <Index />
+                    </AppLayout>
+                </ProtectedRoute>
+            } />
+
+            <Route path="/dashboard" element={
+                <ProtectedRoute>
+                    <AppLayout>
+                        <Index />
+                    </AppLayout>
+                </ProtectedRoute>
             } />
 
             <Route path="/profile" element={
-                <AppLayout>
-                    <Profile />
-                </AppLayout>
+                <ProtectedRoute>
+                    <AppLayout>
+                        <Profile />
+                    </AppLayout>
+                </ProtectedRoute>
             } />
 
             <Route path="/digital-brain" element={
-                <AppLayout>
-                    <DigitalBrain />
-                </AppLayout>
+                <ProtectedRoute>
+                    <AppLayout>
+                        <DigitalBrain />
+                    </AppLayout>
+                </ProtectedRoute>
             } />
 
             {/* 404 Route */}

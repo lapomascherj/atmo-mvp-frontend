@@ -191,12 +191,12 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
     return (
         <div className="h-full flex flex-col overflow-hidden w-full">
 
-            {/* Avatar - Centered initially, moves UP when conversation starts */}
+            {/* Avatar - Centered initially, moves UP when conversation starts - LOWERED */}
             <div className={`relative w-full transition-all duration-700 ease-out z-30 flex-shrink-0 ${
-                history.length > 0 ? 'h-[240px] md:h-[260px]' : 'h-[50vh]'
+                history.length > 0 ? 'h-[200px] md:h-[220px]' : 'h-[45vh]'
             }`}>
                 <div className={`absolute left-1/2 transform -translate-x-1/2 transition-all duration-700 ease-out ${
-                    history.length > 0 ? 'top-16 md:top-20' : 'top-1/2 -translate-y-1/2'
+                    history.length > 0 ? 'top-12 md:top-14' : 'top-1/2 -translate-y-1/2'
                 }`}
                 style={{
                     filter: 'drop-shadow(0 0 20px rgba(204, 85, 0, 0.15))',

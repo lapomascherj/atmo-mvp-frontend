@@ -184,7 +184,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ userName }) => {
                 }}
               >
                 {/* Title - at top */}
-                <div className="text-center mt-4 mb-2 flex-shrink-0">
+                <div className="text-center mt-12 mb-2 flex-shrink-0">
                   <h1 className="text-xl font-bold text-white mb-0.5">Daily Roadmap</h1>
                   <p className="text-white/60 text-xs">Small daily actions → big growth</p>
                 </div>

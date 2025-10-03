@@ -1,3 +1,4 @@
+import React from 'react';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { pb } from '@/lib/pocketbase';
@@ -284,14 +285,56 @@ if (typeof window !== 'undefined') {
 // Compatibility hook that matches useMockAuth interface
 export const useAuth = () => {
   const { user: authUser, isAuthenticated, isLoading, logout } = useRealAuth();
+  const [personaData, setPersonaData] = React.useState<any>(null);
+
+  // Load persona data when user changes
+  React.useEffect(() => {
+    const loadPersona = async () => {
+      if (!authUser) {
+        setPersonaData(null);
+        return;
+      }
+
+      try {
+        const personas = await pb.collection('personas').getFullList({
+          filter: `iam = "${authUser.id}"`
+        });
+
+        if (personas.length > 0) {
+          setPersonaData(personas[0]);
+        }
+      } catch (error) {
+        console.error('Failed to load persona:', error);
+      }
+    };
+
+    loadPersona();
+  }, [authUser]);
 
   // Convert to UserProfile format expected by components
-  const user = authUser ? {
+  const user = authUser && personaData ? {
+    id: authUser.id,
+    nickname: personaData.nickname || authUser.name || authUser.email.split('@')[0],
+    email: authUser.email,
+    iam: authUser.id,
+    onboarding_completed: personaData.onboarding_completed || false,
+    avatar_url: authUser.avatar,
+    bio: personaData.bio,
+    job_title: personaData.job_title,
+    focus: personaData.focus,
+    location: personaData.location,
+    website: personaData.website,
+    company: personaData.company,
+    phone: personaData.phone,
+    timezone: personaData.timezone,
+    aiPreferences: personaData.aiPreferences,
+    communicationStyle: personaData.communicationStyle,
+  } : authUser ? {
     id: authUser.id,
     nickname: authUser.name || authUser.email.split('@')[0],
     email: authUser.email,
     iam: authUser.id,
-    onboarding_completed: true, // TODO: Get from persona record
+    onboarding_completed: false,
     avatar_url: authUser.avatar,
   } : null;
 
@@ -307,9 +350,40 @@ export const useAuth = () => {
       // Not used in current implementation
       return true;
     },
-    updateUserProfile: async () => {
-      // TODO: Implement if needed
-      return true;
+    updateUserProfile: async (updates: any) => {
+      if (!authUser || !personaData) {
+        console.error('No user or persona to update');
+        return false;
+      }
+
+      try {
+        // Update persona record with profile data
+        await pb.collection('personas').update(personaData.id, {
+          nickname: updates.nickname,
+          bio: updates.bio,
+          job_title: updates.job_title,
+          focus: updates.focus,
+          location: updates.location,
+          website: updates.website,
+          company: updates.company,
+          phone: updates.phone,
+          timezone: updates.timezone,
+        });
+
+        // Reload persona data
+        const updatedPersonas = await pb.collection('personas').getFullList({
+          filter: `iam = "${authUser.id}"`
+        });
+
+        if (updatedPersonas.length > 0) {
+          setPersonaData(updatedPersonas[0]);
+        }
+
+        return true;
+      } catch (error) {
+        console.error('Failed to update persona:', error);
+        return false;
+      }
     },
     isAuthenticated,
   };

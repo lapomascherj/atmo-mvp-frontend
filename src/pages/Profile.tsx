@@ -5,7 +5,7 @@ import {
   Camera, Check, X, LogOut, Loader2,
   MapPin, Globe, Phone, Clock
 } from 'lucide-react';
-import { useAuth } from '@/hooks/useMockAuth';
+import { useAuth } from '@/hooks/useRealAuth';
 import { useToast } from '@/hooks/useToast';
 import { useSidebar } from '@/context/SidebarContext';
 import { Button } from '@/components/atoms/Button';

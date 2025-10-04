@@ -61,9 +61,12 @@ const NavSidebar: React.FC = () => {
     const location = useLocation();
     const {user, signOut} = useAuth();
 
+    // Determine if we're in demo mode
+    const isDemoMode = location.pathname.startsWith('/demo');
+    
     const navItems = [
-        {icon: <LayoutDashboard size={20}/>, label: 'Dashboard', to: '/'},
-        {icon: <Brain size={20}/>, label: 'Digital Brain', to: '/digital-brain'},
+        {icon: <LayoutDashboard size={20}/>, label: 'Dashboard', to: isDemoMode ? '/demo' : '/'},
+        {icon: <Brain size={20}/>, label: 'Digital Brain', to: isDemoMode ? '/demo/digital-brain' : '/digital-brain'},
     ];
 
     const userInitial = user?.nickname

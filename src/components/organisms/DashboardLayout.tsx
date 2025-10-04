@@ -29,12 +29,23 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ userName }) => {
   // Subscribe to the actual state to ensure re-renders when data changes
   const currentPersona = usePersonasStore(state => state.currentPersona);
   const loading = usePersonasStore(state => state.loading);
+  const fetchPersonaByIam = usePersonasStore(state => state.fetchPersonaByIam);
   const getProjects = usePersonasStore(state => state.getProjects);
   const getTasks = usePersonasStore(state => state.getTasks);
   const getGoals = usePersonasStore(state => state.getGoals);
   
   // Get user data for dashboard
   const { user } = useAuth();
+
+  // Initialize PersonasStore when user is available
+  useEffect(() => {
+    if (user?.iam && !currentPersona && !loading) {
+      console.log("📊 DASHBOARD: Initializing PersonasStore for user:", user.iam);
+      fetchPersonaByIam(null as any, user.iam).catch(error => {
+        console.debug("PersonasStore initialization completed or auto-cancelled");
+      });
+    }
+  }, [user?.iam, currentPersona, loading, fetchPersonaByIam]);
 
   // Add modal state for project creation
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);

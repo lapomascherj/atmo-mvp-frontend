@@ -45,9 +45,13 @@
   }
 }
 
-/* Obsidian-style Cosmic Knowledge Graph */
+/* Obsidian-style Cosmic Knowledge Graph - Enhanced Space Theme */
 .knowledge-graph-cosmic {
-  background: radial-gradient(ellipse at center, #0f1419 0%, #000000 100%);
+  background: radial-gradient(ellipse at center, 
+    #0a0f1a 0%, 
+    #1a1f2e 30%, 
+    #0d1117 70%, 
+    #000000 100%);
   position: relative;
   overflow: hidden;
   touch-action: none;
@@ -65,27 +69,50 @@
   right: 0;
   bottom: 0;
   background-image: 
-    radial-gradient(2px 2px at 20px 30px, rgba(255,255,255,0.1), transparent),
-    radial-gradient(2px 2px at 40px 70px, rgba(255,255,255,0.05), transparent),
-    radial-gradient(1px 1px at 90px 40px, rgba(255,255,255,0.08), transparent),
-    radial-gradient(1px 1px at 130px 80px, rgba(59,130,246,0.1), transparent),
-    radial-gradient(2px 2px at 160px 30px, rgba(139,92,246,0.08), transparent);
+    /* Distant stars */
+    radial-gradient(1px 1px at 20px 30px, rgba(255,255,255,0.15), transparent),
+    radial-gradient(1px 1px at 40px 70px, rgba(255,255,255,0.08), transparent),
+    radial-gradient(0.5px 0.5px at 90px 40px, rgba(255,255,255,0.12), transparent),
+    radial-gradient(1px 1px at 130px 80px, rgba(255,255,255,0.06), transparent),
+    radial-gradient(0.5px 0.5px at 160px 30px, rgba(255,255,255,0.1), transparent),
+    /* Orange nebula accents */
+    radial-gradient(3px 3px at 60px 120px, rgba(255, 165, 0, 0.03), transparent),
+    radial-gradient(2px 2px at 180px 60px, rgba(255, 140, 0, 0.02), transparent),
+    radial-gradient(4px 4px at 300px 200px, rgba(255, 165, 0, 0.025), transparent),
+    radial-gradient(1.5px 1.5px at 250px 150px, rgba(255, 185, 0, 0.015), transparent),
+    /* Subtle cosmic dust */
+    radial-gradient(2px 2px at 100px 180px, rgba(255, 200, 100, 0.01), transparent),
+    radial-gradient(1px 1px at 320px 90px, rgba(255, 160, 50, 0.008), transparent);
   background-repeat: repeat;
-  background-size: 200px 160px;
-  animation: stars-twinkle 20s linear infinite;
+  background-size: 400px 320px;
+  animation: cosmic-drift 25s linear infinite;
   pointer-events: none;
 }
 
-@keyframes stars-twinkle {
-  0%, 100% { opacity: 0.3; }
-  25% { opacity: 0.8; }
-  50% { opacity: 0.5; }
-  75% { opacity: 0.9; }
+@keyframes cosmic-drift {
+  0%, 100% { 
+    opacity: 0.4; 
+    transform: translateX(0px) translateY(0px);
+  }
+  25% { 
+    opacity: 0.7; 
+    transform: translateX(2px) translateY(-1px);
+  }
+  50% { 
+    opacity: 0.5; 
+    transform: translateX(1px) translateY(1px);
+  }
+  75% { 
+    opacity: 0.8; 
+    transform: translateX(-1px) translateY(-2px);
+  }
 }
 
 .main-node {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: grab;
+  filter: drop-shadow(0 0 15px rgba(255, 165, 0, 0.4)) 
+          drop-shadow(0 0 30px rgba(255, 140, 0, 0.2));
 }
 
 .main-node:active {
@@ -93,12 +120,16 @@
 }
 
 .main-node:hover {
-  transform: scale(1.05);
+  transform: scale(1.08);
+  filter: drop-shadow(0 0 20px rgba(255, 165, 0, 0.6)) 
+          drop-shadow(0 0 40px rgba(255, 140, 0, 0.3));
 }
 
 .sub-node {
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: grab;
+  filter: drop-shadow(0 0 8px rgba(255, 180, 50, 0.3)) 
+          drop-shadow(0 0 16px rgba(255, 160, 0, 0.15));
 }
 
 .sub-node:active {
@@ -106,18 +137,22 @@
 }
 
 .sub-node:hover {
-  transform: scale(1.1);
+  transform: scale(1.15);
+  filter: drop-shadow(0 0 12px rgba(255, 180, 50, 0.5)) 
+          drop-shadow(0 0 24px rgba(255, 160, 0, 0.25));
 }
 
 .connection-line {
-  stroke: rgba(255, 255, 255, 0.2);
+  stroke: rgba(255, 165, 0, 0.15);
   stroke-width: 1;
-  transition: all 0.3s ease;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  filter: drop-shadow(0 0 2px rgba(255, 165, 0, 0.1));
 }
 
 .connection-line.active {
-  stroke: rgba(255, 255, 255, 0.5);
-  stroke-width: 1.5;
+  stroke: rgba(255, 165, 0, 0.4);
+  stroke-width: 1.8;
+  filter: drop-shadow(0 0 4px rgba(255, 165, 0, 0.3));
 }
 
 /* Cosmic glow effects */

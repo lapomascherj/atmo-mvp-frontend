@@ -6,58 +6,62 @@ interface ObsidianKnowledgeGraphProps {
   className?: string;
 }
 
-// Main categories with sub-nodes
+// Main categories with sub-nodes - All Orange Shades with Varying Sizes
 const MAIN_CATEGORIES = [
   {
     id: 'personal',
     label: 'Personal',
-    color: '#3B82F6', // Blue
+    color: '#FF6B35', // Vibrant orange-red
+    size: 28, // Larger main node
     position: { x: 200, y: 150 },
     subNodes: [
-      { id: 'personal-goals', label: 'Life Goals' },
-      { id: 'personal-habits', label: 'Daily Habits' },
-      { id: 'personal-growth', label: 'Self Development' },
-      { id: 'personal-relationships', label: 'Relationships' },
-      { id: 'personal-finance', label: 'Finance' },
+      { id: 'personal-goals', label: 'Life Goals', size: 8 },
+      { id: 'personal-habits', label: 'Daily Habits', size: 6 },
+      { id: 'personal-growth', label: 'Self Development', size: 9 },
+      { id: 'personal-relationships', label: 'Relationships', size: 7 },
+      { id: 'personal-finance', label: 'Finance', size: 6 },
     ]
   },
   {
     id: 'projects',
     label: 'Projects',
-    color: '#10B981', // Green
+    color: '#FF8C42', // Warm orange
+    size: 32, // Largest main node (most important)
     position: { x: 400, y: 150 },
     subNodes: [
-      { id: 'project-atmo', label: 'ATMO Platform' },
-      { id: 'project-startup', label: 'Startup Ideas' },
-      { id: 'project-learning', label: 'Learning Projects' },
-      { id: 'project-side', label: 'Side Projects' },
-      { id: 'project-collab', label: 'Collaborations' },
+      { id: 'project-atmo', label: 'ATMO Platform', size: 10 },
+      { id: 'project-startup', label: 'Startup Ideas', size: 8 },
+      { id: 'project-learning', label: 'Learning Projects', size: 7 },
+      { id: 'project-side', label: 'Side Projects', size: 6 },
+      { id: 'project-collab', label: 'Collaborations', size: 9 },
     ]
   },
   {
     id: 'inspo',
     label: 'Inspo',
-    color: '#F59E0B', // Orange
+    color: '#FFB366', // Light orange
+    size: 25, // Medium main node
     position: { x: 200, y: 350 },
     subNodes: [
-      { id: 'inspo-quotes', label: 'Quotes' },
-      { id: 'inspo-books', label: 'Books' },
-      { id: 'inspo-articles', label: 'Articles' },
-      { id: 'inspo-videos', label: 'Videos' },
-      { id: 'inspo-people', label: 'Inspiring People' },
+      { id: 'inspo-quotes', label: 'Quotes', size: 5 },
+      { id: 'inspo-books', label: 'Books', size: 8 },
+      { id: 'inspo-articles', label: 'Articles', size: 6 },
+      { id: 'inspo-videos', label: 'Videos', size: 7 },
+      { id: 'inspo-people', label: 'Inspiring People', size: 9 },
     ]
   },
   {
     id: 'health',
     label: 'Health',
-    color: '#8B5CF6', // Purple
+    color: '#FFA726', // Golden orange
+    size: 30, // Large main node
     position: { x: 400, y: 350 },
     subNodes: [
-      { id: 'health-fitness', label: 'Fitness' },
-      { id: 'health-nutrition', label: 'Nutrition' },
-      { id: 'health-mental', label: 'Mental Health' },
-      { id: 'health-sleep', label: 'Sleep' },
-      { id: 'health-medical', label: 'Medical' },
+      { id: 'health-fitness', label: 'Fitness', size: 9 },
+      { id: 'health-nutrition', label: 'Nutrition', size: 8 },
+      { id: 'health-mental', label: 'Mental Health', size: 10 },
+      { id: 'health-sleep', label: 'Sleep', size: 7 },
+      { id: 'health-medical', label: 'Medical', size: 6 },
     ]
   }
 ];
@@ -270,13 +274,18 @@ export const ObsidianKnowledgeGraph: React.FC<ObsidianKnowledgeGraphProps> = ({ 
     }));
   }, []);
 
-  // Generate sub-node positions around main nodes
+  // Generate sub-node positions around main nodes with natural variation
   const generateSubNodePositions = (mainNode: any, subNodes: any[]) => {
-    const radius = expandedGraph ? 120 : 60;
+    const baseRadius = expandedGraph ? 120 : 60;
     const angleStep = (2 * Math.PI) / subNodes.length;
     
     return subNodes.map((subNode, index) => {
-      const angle = index * angleStep;
+      // Add natural variation to radius and angle
+      const radiusVariation = 0.3 + Math.sin(index * 2.5) * 0.2; // Natural radius variation
+      const angleVariation = Math.sin(index * 1.7) * 0.4; // Natural angle variation
+      const radius = baseRadius * (0.8 + radiusVariation);
+      const angle = index * angleStep + angleVariation;
+      
       const mainPos = nodePositions[mainNode.id] || mainNode.position;
       return {
         ...subNode,
@@ -323,23 +332,28 @@ export const ObsidianKnowledgeGraph: React.FC<ObsidianKnowledgeGraphProps> = ({ 
         onTouchEnd={handleTouchEnd}
         style={{ touchAction: 'none' }}
       >
-        {/* Render connections */}
+        {/* Render connections with natural curves */}
         {MAIN_CATEGORIES.map(category => {
           const subNodes = generateSubNodePositions(category, category.subNodes);
           const mainPos = nodePositions[category.id] || category.position;
-          return subNodes.map(subNode => (
-            <line
-              key={`${category.id}-${subNode.id}`}
-              x1={mainPos.x}
-              y1={mainPos.y}
-              x2={subNode.x}
-              y2={subNode.y}
-              className={`connection-line ${hoveredNode === category.id || hoveredNode === subNode.id ? 'active' : ''}`}
-            />
-          ));
+          return subNodes.map(subNode => {
+            // Create slightly curved connections for more natural feel
+            const midX = (mainPos.x + subNode.x) / 2 + Math.sin((mainPos.x + subNode.x) * 0.01) * 5;
+            const midY = (mainPos.y + subNode.y) / 2 + Math.cos((mainPos.y + subNode.y) * 0.01) * 3;
+            const pathData = `M ${mainPos.x} ${mainPos.y} Q ${midX} ${midY} ${subNode.x} ${subNode.y}`;
+            
+            return (
+              <path
+                key={`${category.id}-${subNode.id}`}
+                d={pathData}
+                fill="none"
+                className={`connection-line ${hoveredNode === category.id || hoveredNode === subNode.id ? 'active' : ''}`}
+              />
+            );
+          });
         })}
         
-        {/* Render main category nodes */}
+        {/* Render main category nodes with dynamic sizes */}
         {MAIN_CATEGORIES.map(category => {
           const pos = nodePositions[category.id] || category.position;
           return (
@@ -347,7 +361,7 @@ export const ObsidianKnowledgeGraph: React.FC<ObsidianKnowledgeGraphProps> = ({ 
               <circle
                 cx={pos.x}
                 cy={pos.y}
-                r="25"
+                r={category.size}
                 fill={category.color}
                 className="main-node cursor-pointer"
                 onMouseDown={(e) => handleNodeMouseDown(e, category.id)}
@@ -357,14 +371,14 @@ export const ObsidianKnowledgeGraph: React.FC<ObsidianKnowledgeGraphProps> = ({ 
               <circle
                 cx={pos.x}
                 cy={pos.y}
-                r="8"
+                r={category.size * 0.3}
                 fill="white"
                 opacity="0.9"
                 className="pointer-events-none"
               />
               <text
                 x={pos.x}
-                y={pos.y + 40}
+                y={pos.y + category.size + 15}
                 className="text-xs font-medium fill-white text-center pointer-events-none"
                 textAnchor="middle"
               >
@@ -374,7 +388,7 @@ export const ObsidianKnowledgeGraph: React.FC<ObsidianKnowledgeGraphProps> = ({ 
           );
         })}
         
-        {/* Render sub-nodes */}
+        {/* Render sub-nodes with dynamic sizes */}
         {MAIN_CATEGORIES.map(category => {
           const subNodes = generateSubNodePositions(category, category.subNodes);
           return subNodes.map(subNode => (
@@ -382,9 +396,9 @@ export const ObsidianKnowledgeGraph: React.FC<ObsidianKnowledgeGraphProps> = ({ 
               <circle
                 cx={subNode.x}
                 cy={subNode.y}
-                r="6"
+                r={subNode.size}
                 fill={category.color}
-                opacity="0.8"
+                opacity="0.85"
                 className="sub-node cursor-pointer"
                 onMouseDown={(e) => handleNodeMouseDown(e, subNode.id)}
                 onMouseEnter={() => setHoveredNode(subNode.id)}
@@ -393,7 +407,7 @@ export const ObsidianKnowledgeGraph: React.FC<ObsidianKnowledgeGraphProps> = ({ 
               <circle
                 cx={subNode.x}
                 cy={subNode.y}
-                r="2"
+                r={subNode.size * 0.25}
                 fill="white"
                 opacity="0.9"
                 className="pointer-events-none"
@@ -401,8 +415,8 @@ export const ObsidianKnowledgeGraph: React.FC<ObsidianKnowledgeGraphProps> = ({ 
               {hoveredNode === subNode.id && (
                 <text
                   x={subNode.x}
-                  y={subNode.y - 15}
-                  className="text-xs fill-white text-center pointer-events-none"
+                  y={subNode.y - subNode.size - 8}
+                  className="text-xs fill-orange-200 text-center pointer-events-none font-medium"
                   textAnchor="middle"
                 >
                   {subNode.label}
@@ -502,54 +516,63 @@ export const ObsidianKnowledgeGraph: React.FC<ObsidianKnowledgeGraphProps> = ({ 
                 onTouchEnd={handleTouchEnd}
                 style={{ touchAction: 'none' }}
               >
-                {/* Enhanced connections with glow effects */}
+                {/* Enhanced connections with natural curves and orange glow */}
                 {MAIN_CATEGORIES.map(category => {
                   const subNodes = generateSubNodePositions(category, category.subNodes);
                   const mainPos = nodePositions[category.id] || category.position;
-                  return subNodes.map(subNode => (
-                    <line
-                      key={`${category.id}-${subNode.id}`}
-                      x1={mainPos.x}
-                      y1={mainPos.y}
-                      x2={subNode.x}
-                      y2={subNode.y}
-                      stroke="rgba(255, 255, 255, 0.3)"
-                      strokeWidth={hoveredNode === category.id || hoveredNode === subNode.id ? "1.5" : "1"}
-                      opacity={hoveredNode === category.id || hoveredNode === subNode.id ? "0.6" : "0.3"}
-                      className="connection-line transition-all duration-300"
-                    />
-                  ));
+                  return subNodes.map(subNode => {
+                    // Create slightly curved connections for more natural feel
+                    const midX = (mainPos.x + subNode.x) / 2 + Math.sin((mainPos.x + subNode.x) * 0.008) * 8;
+                    const midY = (mainPos.y + subNode.y) / 2 + Math.cos((mainPos.y + subNode.y) * 0.008) * 6;
+                    const pathData = `M ${mainPos.x} ${mainPos.y} Q ${midX} ${midY} ${subNode.x} ${subNode.y}`;
+                    
+                    return (
+                      <path
+                        key={`${category.id}-${subNode.id}`}
+                        d={pathData}
+                        fill="none"
+                        stroke="rgba(255, 165, 0, 0.25)"
+                        strokeWidth={hoveredNode === category.id || hoveredNode === subNode.id ? "2" : "1.2"}
+                        opacity={hoveredNode === category.id || hoveredNode === subNode.id ? "0.6" : "0.3"}
+                        className="connection-line transition-all duration-300"
+                        style={{
+                          filter: `drop-shadow(0 0 ${hoveredNode === category.id || hoveredNode === subNode.id ? '6px' : '3px'} rgba(255, 165, 0, 0.2))`
+                        }}
+                      />
+                    );
+                  });
                 })}
                 
-                {/* Enhanced main nodes with cosmic styling */}
+                {/* Enhanced main nodes with dynamic sizes and orange cosmic styling */}
                 {MAIN_CATEGORIES.map(category => {
                   const pos = nodePositions[category.id] || category.position;
+                  const expandedSize = category.size * 1.2; // Slightly larger in expanded view
                   return (
                     <g key={category.id}>
                       <circle
                         cx={pos.x}
                         cy={pos.y}
-                        r="30"
+                        r={expandedSize}
                         fill={category.color}
                         className="main-node cursor-pointer"
                         onMouseDown={(e) => handleNodeMouseDown(e, category.id)}
                         onMouseEnter={() => setHoveredNode(category.id)}
                         onMouseLeave={() => setHoveredNode(null)}
                         style={{
-                          filter: `drop-shadow(0 0 ${hoveredNode === category.id ? '30px' : '20px'} ${category.color}50)`
+                          filter: `drop-shadow(0 0 ${hoveredNode === category.id ? '35px' : '25px'} ${category.color}60) drop-shadow(0 0 ${hoveredNode === category.id ? '60px' : '40px'} ${category.color}30)`
                         }}
                       />
                       <circle
                         cx={pos.x}
                         cy={pos.y}
-                        r="10"
+                        r={expandedSize * 0.35}
                         fill="white"
                         opacity="0.9"
                         className="pointer-events-none"
                       />
                       <text
                         x={pos.x}
-                        y={pos.y + 50}
+                        y={pos.y + expandedSize + 20}
                         className="text-sm font-medium fill-white text-center pointer-events-none"
                         textAnchor="middle"
                       >
@@ -559,45 +582,48 @@ export const ObsidianKnowledgeGraph: React.FC<ObsidianKnowledgeGraphProps> = ({ 
                   );
                 })}
                 
-                {/* Enhanced sub-nodes with better visibility */}
+                {/* Enhanced sub-nodes with dynamic sizes and orange styling */}
                 {MAIN_CATEGORIES.map(category => {
                   const subNodes = generateSubNodePositions(category, category.subNodes);
-                  return subNodes.map(subNode => (
-                    <g key={subNode.id}>
-                      <circle
-                        cx={subNode.x}
-                        cy={subNode.y}
-                        r="10"
-                        fill={category.color}
-                        opacity="0.8"
-                        className="sub-node cursor-pointer"
-                        onMouseDown={(e) => handleNodeMouseDown(e, subNode.id)}
-                        onMouseEnter={() => setHoveredNode(subNode.id)}
-                        onMouseLeave={() => setHoveredNode(null)}
-                        style={{
-                          filter: `drop-shadow(0 0 ${hoveredNode === subNode.id ? '15px' : '8px'} rgba(255,255,255,0.4))`
-                        }}
-                      />
-                      <circle
-                        cx={subNode.x}
-                        cy={subNode.y}
-                        r="3"
-                        fill="white"
-                        opacity="0.9"
-                        className="pointer-events-none"
-                      />
-                      {(hoveredNode === subNode.id || selectedNode === subNode.id) && (
-                        <text
-                          x={subNode.x}
-                          y={subNode.y - 25}
-                          className="text-xs fill-white text-center pointer-events-none font-medium"
-                          textAnchor="middle"
-                        >
-                          {subNode.label}
-                        </text>
-                      )}
-                    </g>
-                  ));
+                  return subNodes.map(subNode => {
+                    const expandedSubSize = subNode.size * 1.4; // Larger in expanded view
+                    return (
+                      <g key={subNode.id}>
+                        <circle
+                          cx={subNode.x}
+                          cy={subNode.y}
+                          r={expandedSubSize}
+                          fill={category.color}
+                          opacity="0.85"
+                          className="sub-node cursor-pointer"
+                          onMouseDown={(e) => handleNodeMouseDown(e, subNode.id)}
+                          onMouseEnter={() => setHoveredNode(subNode.id)}
+                          onMouseLeave={() => setHoveredNode(null)}
+                          style={{
+                            filter: `drop-shadow(0 0 ${hoveredNode === subNode.id ? '20px' : '12px'} ${category.color}40) drop-shadow(0 0 ${hoveredNode === subNode.id ? '35px' : '20px'} ${category.color}20)`
+                          }}
+                        />
+                        <circle
+                          cx={subNode.x}
+                          cy={subNode.y}
+                          r={expandedSubSize * 0.3}
+                          fill="white"
+                          opacity="0.9"
+                          className="pointer-events-none"
+                        />
+                        {(hoveredNode === subNode.id || selectedNode === subNode.id) && (
+                          <text
+                            x={subNode.x}
+                            y={subNode.y - expandedSubSize - 12}
+                            className="text-xs fill-orange-200 text-center pointer-events-none font-medium"
+                            textAnchor="middle"
+                          >
+                            {subNode.label}
+                          </text>
+                        )}
+                      </g>
+                    );
+                  });
                 })}
               </svg>
               

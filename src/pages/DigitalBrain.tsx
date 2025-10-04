@@ -9,6 +9,7 @@ import { ObsidianKnowledgeGraph } from '@/components/knowledge/ObsidianKnowledge
 import { ChatOverlay } from '@/components/organisms/ChatOverlay';
 import { PriorityStreamEnhanced } from '@/components/organisms/PriorityStreamEnhanced';
 import { usePersonasStore } from '@/stores/usePersonasStore';
+import { useAuth } from '@/hooks/useMockAuth';
 
 const DigitalBrain: React.FC = () => {
   const [isCapturing, setIsCapturing] = useState(false);
@@ -31,8 +32,23 @@ const DigitalBrain: React.FC = () => {
 
   // PersonasStore data
   const currentPersona = usePersonasStore(state => state.currentPersona);
+  const loading = usePersonasStore(state => state.loading);
+  const fetchPersonaByIam = usePersonasStore(state => state.fetchPersonaByIam);
   const getProjects = usePersonasStore(state => state.getProjects);
   const getMilestones = usePersonasStore(state => state.getMilestones);
+
+  // Get user for initialization
+  const { user } = useAuth();
+
+  // Initialize PersonasStore when user is available
+  useEffect(() => {
+    if (user?.iam && !currentPersona && !loading) {
+      console.log("🧠 DIGITAL BRAIN: Initializing PersonasStore for user:", user.iam);
+      fetchPersonaByIam(null as any, user.iam).catch(error => {
+        console.debug("PersonasStore initialization completed or auto-cancelled");
+      });
+    }
+  }, [user?.iam, currentPersona, loading, fetchPersonaByIam]);
 
   // Memoize data retrieval to prevent unnecessary recalculations
   const { projects, milestones } = useMemo(() => {

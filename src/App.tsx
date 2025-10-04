@@ -21,7 +21,7 @@ import TestConnection from "./pages/TestConnection";
 import NavSidebar from "./components/molecules/NavSidebar.tsx";
 import {DailyMapCtxProvider} from "@/context/DailyMapCtx.tsx";
 import {SidebarProvider, useSidebar} from "@/context/SidebarContext.tsx";
-import { ProtectedRoute } from "./components/auth/ProtectedRoute";
+import ProtectedRoute from "./components/molecules/ProtectedRoute";
 
 const queryClient = new QueryClient();
 
@@ -45,6 +45,18 @@ const AppLayout: React.FC<{children: React.ReactNode}> = ({children}) => {
 const AppContent: React.FC = () => {
     return (
         <Routes>
+            {/* Demo Routes - Direct Access */}
+            <Route path="/demo" element={
+                <AppLayout>
+                    <Index />
+                </AppLayout>
+            } />
+            <Route path="/demo/digital-brain" element={
+                <AppLayout>
+                    <DigitalBrain />
+                </AppLayout>
+            } />
+
             {/* Test Route */}
             <Route path="/test-connection" element={<TestConnection />} />
 

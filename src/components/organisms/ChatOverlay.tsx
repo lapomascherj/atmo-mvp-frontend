@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import SphereChat from '@/components/atoms/SphereChat';
 import { X } from 'lucide-react';
 
@@ -32,6 +32,209 @@ export const ChatOverlay: React.FC<ChatOverlayProps> = ({
 }) => {
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
+  
+  // State for dragging and blur - SIMPLIFIED
+  const [isDragging, setIsDragging] = useState(false);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isBlurred, setIsBlurred] = useState(true);
+  const [lastClickTime, setLastClickTime] = useState(0);
+  const [initialMousePos, setInitialMousePos] = useState({ x: 0, y: 0 });
+  const [initialModalPos, setInitialModalPos] = useState({ x: 0, y: 0 });
+
+  // BULLETPROOF DRAG SYSTEM - SIMPLE AND CLEAN
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    // Only allow dragging from header, but exclude buttons
+    const target = e.target as HTMLElement;
+    if (target.closest('button') || target.closest('.no-drag')) {
+      return;
+    }
+    
+    if (headerRef.current && headerRef.current.contains(e.target as Node)) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // Store initial positions - NO OFFSET CALCULATION
+      setInitialMousePos({ x: e.clientX, y: e.clientY });
+      setInitialModalPos({ x: position.x, y: position.y });
+      setIsDragging(true);
+    }
+  }, [position]);
+
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (isDragging) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // Calculate how much the mouse has moved from initial position
+      const deltaX = e.clientX - initialMousePos.x;
+      const deltaY = e.clientY - initialMousePos.y;
+      
+      // Add the movement to the initial modal position
+      const newX = initialModalPos.x + deltaX;
+      const newY = initialModalPos.y + deltaY;
+      
+      // Get viewport dimensions and modal dimensions dynamically
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const modalRect = modalRef.current?.getBoundingClientRect();
+      const modalWidth = modalRect?.width || 600;
+      const modalHeight = modalRect?.height || 700;
+      
+      // Allow movement to all edges with minimal padding (5px)
+      const padding = 5;
+      const minX = -modalWidth + padding; // Allow moving mostly off-screen to the left
+      const maxX = viewportWidth - padding; // Allow moving mostly off-screen to the right
+      const minY = -modalHeight + 100; // Keep header visible when moving up
+      const maxY = viewportHeight - padding; // Allow moving mostly off-screen down
+      
+      const boundedX = Math.max(minX, Math.min(maxX, newX));
+      const boundedY = Math.max(minY, Math.min(maxY, newY));
+      
+      // Use requestAnimationFrame for ultra-smooth 60fps movement
+      requestAnimationFrame(() => {
+        setPosition({ x: boundedX, y: boundedY });
+      });
+    }
+  }, [isDragging, initialMousePos, initialModalPos]);
+
+  const handleMouseUp = useCallback((e: MouseEvent) => {
+    if (isDragging) {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(false);
+    }
+  }, [isDragging]);
+
+  // Touch handlers - SIMPLIFIED
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length !== 1) return;
+    
+    const target = e.target as HTMLElement;
+    if (target.closest('button') || target.closest('.no-drag')) {
+      return;
+    }
+    
+    if (headerRef.current && headerRef.current.contains(e.target as Node)) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const touch = e.touches[0];
+      setInitialMousePos({ x: touch.clientX, y: touch.clientY });
+      setInitialModalPos({ x: position.x, y: position.y });
+      setIsDragging(true);
+    }
+  }, [position]);
+
+  const handleTouchMove = useCallback((e: TouchEvent) => {
+    if (isDragging && e.touches.length === 1) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const touch = e.touches[0];
+      
+      // Calculate movement delta
+      const deltaX = touch.clientX - initialMousePos.x;
+      const deltaY = touch.clientY - initialMousePos.y;
+      
+      // Apply to initial position
+      const newX = initialModalPos.x + deltaX;
+      const newY = initialModalPos.y + deltaY;
+      
+      // Get viewport dimensions and modal dimensions dynamically
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const modalRect = modalRef.current?.getBoundingClientRect();
+      const modalWidth = modalRect?.width || 600;
+      const modalHeight = modalRect?.height || 700;
+      
+      // Allow movement to all edges with minimal padding (5px)
+      const padding = 5;
+      const minX = -modalWidth + padding; // Allow moving mostly off-screen to the left
+      const maxX = viewportWidth - padding; // Allow moving mostly off-screen to the right
+      const minY = -modalHeight + 100; // Keep header visible when moving up
+      const maxY = viewportHeight - padding; // Allow moving mostly off-screen down
+      
+      const boundedX = Math.max(minX, Math.min(maxX, newX));
+      const boundedY = Math.max(minY, Math.min(maxY, newY));
+      
+      // Use requestAnimationFrame for ultra-smooth touch movement
+      requestAnimationFrame(() => {
+        setPosition({ x: boundedX, y: boundedY });
+      });
+    }
+  }, [isDragging, initialMousePos, initialModalPos]);
+
+  const handleTouchEnd = useCallback((e: TouchEvent) => {
+    if (isDragging) {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(false);
+    }
+  }, [isDragging]);
+  const handleHeaderDoubleClick = useCallback((e: React.MouseEvent) => {
+    const currentTime = Date.now();
+    if (currentTime - lastClickTime < 300) {
+      setIsBlurred(!isBlurred);
+    }
+    setLastClickTime(currentTime);
+  }, [lastClickTime, isBlurred]);
+
+  // Reset position when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setPosition({ x: 0, y: 0 });
+    }
+  }, [isOpen]);
+
+  // Ultra-smooth event listeners with performance optimizations
+  useEffect(() => {
+    if (isDragging) {
+      const options = { passive: false, capture: true };
+      
+      document.addEventListener('mousemove', handleMouseMove, options);
+      document.addEventListener('mouseup', handleMouseUp, options);
+      document.addEventListener('touchmove', handleTouchMove, options);
+      document.addEventListener('touchend', handleTouchEnd, options);
+      
+      // Enhanced drag styling for better performance
+      document.body.style.cursor = 'grabbing';
+      document.body.style.userSelect = 'none';
+      document.body.style.WebkitUserSelect = 'none';
+      document.body.style.MozUserSelect = 'none';
+      document.body.style.msUserSelect = 'none';
+      document.body.style.WebkitTouchCallout = 'none';
+      document.body.style.pointerEvents = 'none';
+      
+      // Optimize rendering during drag
+      document.body.style.textRendering = 'optimizeSpeed';
+      document.body.style.imageRendering = 'auto';
+      
+      if (modalRef.current) {
+        modalRef.current.style.pointerEvents = 'auto';
+      }
+    }
+
+    return () => {
+      const options = { passive: false, capture: true };
+      document.removeEventListener('mousemove', handleMouseMove, options);
+      document.removeEventListener('mouseup', handleMouseUp, options);
+      document.removeEventListener('touchmove', handleTouchMove, options);
+      document.removeEventListener('touchend', handleTouchEnd, options);
+      
+      // Reset all styles
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.body.style.WebkitUserSelect = '';
+      document.body.style.MozUserSelect = '';
+      document.body.style.msUserSelect = '';
+      document.body.style.WebkitTouchCallout = '';
+      document.body.style.pointerEvents = '';
+      document.body.style.textRendering = '';
+      document.body.style.imageRendering = '';
+    };
+  }, [isDragging, handleMouseMove, handleMouseUp, handleTouchMove, handleTouchEnd]);
 
   const scrollToBottom = () => {
     if (chatContainerRef.current) {
@@ -87,23 +290,82 @@ export const ChatOverlay: React.FC<ChatOverlayProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div
-      className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
+      {/* Semi-transparent backdrop - allows seeing background */}
+      <div 
+        className={`absolute inset-0 transition-all duration-300 ${
+          isBlurred ? 'bg-black/20 backdrop-blur-sm' : 'bg-black/10'
+        }`}
+        onClick={onClose}
+        style={{ pointerEvents: 'auto' }}
+      />
+      
+      {/* Draggable Modal - ULTRA SMOOTH & FREE MOVEMENT */}
       <div
-        className="w-[600px] h-[700px] bg-gradient-to-br from-slate-950/95 via-slate-900/95 to-slate-950/95 rounded-2xl border border-white/10 shadow-2xl flex flex-col overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
+        ref={modalRef}
+        className={`w-[600px] h-[700px] bg-gradient-to-br from-slate-950/90 via-slate-900/85 to-slate-950/90 rounded-2xl border border-white/20 shadow-2xl flex flex-col overflow-hidden ${
+          isDragging ? 'transition-none select-none' : 'transition-all duration-300 ease-out'
+        }`}
+        style={{
+          transform: `translate3d(${position.x}px, ${position.y}px, 0)`,
+          pointerEvents: 'auto',
+          backdropFilter: isBlurred ? 'blur(20px)' : 'blur(5px)',
+          boxShadow: isDragging 
+            ? '0 30px 60px -12px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.15)' 
+            : '0 20px 40px -8px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.1)',
+          willChange: isDragging ? 'transform' : 'auto',
+          zIndex: isDragging ? 9999 : 'auto',
+          // Enhanced GPU acceleration for ultra-smooth movement
+          contain: 'layout style paint',
+          isolation: 'isolate',
+          backfaceVisibility: 'hidden',
+          perspective: '1000px',
+          transformStyle: 'preserve-3d',
+          // Ensure smooth rendering during movement
+          imageRendering: 'auto',
+          textRendering: 'optimizeSpeed'
+        }}
+        onMouseDown={handleMouseDown}
+        onTouchStart={handleTouchStart}
       >
-        {/* Header with close button */}
-        <div className="flex items-center justify-between p-4 border-b border-white/10 flex-shrink-0">
-          <h3 className="text-white font-semibold">Chat with ATMO</h3>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors"
-          >
-            <X size={16} className="text-white/70" />
-          </button>
+        {/* Draggable Header */}
+        <div 
+          ref={headerRef}
+          className={`flex items-center justify-between p-4 border-b border-white/10 flex-shrink-0 transition-all duration-200 ${
+            isDragging ? 'cursor-grabbing' : 'cursor-grab'
+          }`}
+          onClick={handleHeaderDoubleClick}
+          style={{ userSelect: 'none' }}
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex gap-1">
+              {/* macOS-style window controls */}
+              <div className="w-3 h-3 rounded-full bg-red-500/80 hover:bg-red-500 transition-colors"></div>
+              <div className="w-3 h-3 rounded-full bg-yellow-500/80 hover:bg-yellow-500 transition-colors"></div>
+              <div className="w-3 h-3 rounded-full bg-green-500/80 hover:bg-green-500 transition-colors"></div>
+            </div>
+            <h3 className="text-white font-semibold">Chat with ATMO</h3>
+            {!isBlurred && (
+              <span className="text-xs text-white/50 bg-white/10 px-2 py-1 rounded-full">
+                Transparent Mode
+              </span>
+            )}
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <div className="text-xs text-white/40 hidden sm:block">
+              Double-click to toggle blur
+            </div>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onClose();
+              }}
+              className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors"
+            >
+              <X size={16} className="text-white/70" />
+            </button>
+          </div>
         </div>
 
         {/* Avatar Section */}

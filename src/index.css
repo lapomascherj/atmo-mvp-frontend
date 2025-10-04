@@ -190,7 +190,50 @@
   user-select: none;
 }
 
-/* Custom utilities for AI Insights card */
+/* Chat overlay improvements */
+.chat-modal-dragging {
+  transition: none !important;
+  user-select: none;
+}
+
+.chat-modal-smooth {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* macOS-style window controls */
+.macos-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.macos-control {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.macos-control:hover {
+  transform: scale(1.1);
+  filter: brightness(1.2);
+}
+
+/* Smooth backdrop transitions */
+.backdrop-transition {
+  transition: background-color 0.3s ease, backdrop-filter 0.3s ease;
+}
+
+/* Draggable header cursor states */
+.draggable-header {
+  cursor: grab;
+  user-select: none;
+}
+
+.draggable-header:active,
+.draggable-header.dragging {
+  cursor: grabbing;
+}
 .scrollbar-hide {
   -ms-overflow-style: none;
   scrollbar-width: none;

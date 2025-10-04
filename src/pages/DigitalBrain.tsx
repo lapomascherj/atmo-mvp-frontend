@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { AtmoCard } from '@/components/molecules/AtmoCard';
 import { CardContent, CardHeader } from '@/components/atoms/Card';
 import SphereChat from '@/components/atoms/SphereChat';
@@ -8,6 +8,7 @@ import { useSchedulerSync } from '@/hooks/useSchedulerSync';
 import { ObsidianKnowledgeGraph } from '@/components/knowledge/ObsidianKnowledgeGraph';
 import { ChatOverlay } from '@/components/organisms/ChatOverlay';
 import { PriorityStreamEnhanced } from '@/components/organisms/PriorityStreamEnhanced';
+import { usePersonasStore } from '@/stores/usePersonasStore';
 
 const DigitalBrain: React.FC = () => {
   const [isCapturing, setIsCapturing] = useState(false);
@@ -27,6 +28,23 @@ const DigitalBrain: React.FC = () => {
 
   // Scheduler sync - shared with Dashboard
   const { events, updateEvents: setEvents } = useSchedulerSync();
+
+  // PersonasStore data
+  const currentPersona = usePersonasStore(state => state.currentPersona);
+  const getProjects = usePersonasStore(state => state.getProjects);
+  const getMilestones = usePersonasStore(state => state.getMilestones);
+
+  // Memoize data retrieval to prevent unnecessary recalculations
+  const { projects, milestones } = useMemo(() => {
+    if (!currentPersona) {
+      return { projects: [], milestones: [] };
+    }
+    
+    const projects = getProjects();
+    const milestones = getMilestones();
+    
+    return { projects, milestones };
+  }, [currentPersona, getProjects, getMilestones]);
 
   // Knowledge Graph is now data-driven from Zustand stores
 
@@ -537,44 +555,115 @@ const DigitalBrain: React.FC = () => {
                 </div>
               </div>
 
-              {/* Visual Section - Growth Mountain */}
-              <div className="flex-1 flex items-center justify-center mb-4">
-                <div className="w-full h-16 relative">
-                  {/* Simple Mountain Line Visual */}
-                  <svg viewBox="0 0 200 60" className="w-full h-full">
-                    <defs>
-                      <linearGradient id="mountainGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                        <stop offset="0%" stopColor="rgb(168 85 247 / 0.3)" />
-                        <stop offset="100%" stopColor="rgb(168 85 247 / 0.1)" />
-                      </linearGradient>
-                    </defs>
-                    {/* Mountain path */}
-                    <path
-                      d="M10,50 L30,35 L50,30 L80,20 L120,15 L160,25 L190,20"
-                      stroke="rgb(168 85 247 / 0.8)"
-                      strokeWidth="2"
-                      fill="none"
-                      className="drop-shadow-sm"
-                    />
-                    {/* Fill area under mountain */}
-                    <path
-                      d="M10,50 L30,35 L50,30 L80,20 L120,15 L160,25 L190,20 L190,50 Z"
-                      fill="url(#mountainGradient)"
-                    />
-                    {/* Current position dot */}
-                    <circle cx="160" cy="25" r="3" fill="rgb(168 85 247)" className="animate-pulse" />
-                  </svg>
+              {/* Middle Section - Three Columns Layout */}
+              <div className="grid grid-cols-3 gap-4 items-start mb-4">
+                {/* Left: Milestones */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Target size={12} className="text-purple-400" />
+                    <span className="text-xs font-medium text-purple-400">Milestones</span>
+                  </div>
+                  <div className="space-y-2">
+                    {milestones.slice(0, 2).map((milestone) => (
+                      <div key={milestone.id} className="bg-white/5 rounded-md p-2 border border-purple-500/20">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-medium text-white truncate">{milestone.name}</span>
+                          <div className={`w-2 h-2 rounded-full ${milestone.completed ? 'bg-green-400' : 'bg-purple-400'}`}></div>
+                        </div>
+                        <div className="w-full bg-white/10 rounded-full h-1">
+                          <div 
+                            className="bg-purple-400 h-1 rounded-full transition-all duration-300"
+                            style={{ width: `${milestone.progress || 0}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    ))}
+                    {milestones.length === 0 && (
+                      <div className="text-xs text-white/40 text-center py-2">
+                        No milestones yet
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Center: Growth Mountain */}
+                <div className="flex flex-col items-center justify-center">
+                  <div className="w-full h-16 relative mb-2">
+                    {/* Enhanced Mountain Line Visual */}
+                    <svg viewBox="0 0 200 60" className="w-full h-full">
+                      <defs>
+                        <linearGradient id="mountainGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                          <stop offset="0%" stopColor="rgb(168 85 247 / 0.3)" />
+                          <stop offset="50%" stopColor="rgb(168 85 247 / 0.4)" />
+                          <stop offset="100%" stopColor="rgb(168 85 247 / 0.2)" />
+                        </linearGradient>
+                      </defs>
+                      {/* Mountain path with better progression */}
+                      <path
+                        d="M10,50 L30,40 L50,32 L80,22 L120,18 L160,28 L190,25"
+                        stroke="rgb(168 85 247 / 0.9)"
+                        strokeWidth="2.5"
+                        fill="none"
+                        className="drop-shadow-sm"
+                      />
+                      {/* Fill area under mountain */}
+                      <path
+                        d="M10,50 L30,40 L50,32 L80,22 L120,18 L160,28 L190,25 L190,50 Z"
+                        fill="url(#mountainGradient)"
+                      />
+                      {/* Current position dot - positioned at peak */}
+                      <circle cx="120" cy="18" r="3" fill="rgb(168 85 247)" className="animate-pulse" />
+                      {/* Small figure at current position */}
+                      <circle cx="120" cy="15" r="1.5" fill="rgb(255 255 255 / 0.8)" />
+                    </svg>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs font-medium text-white">Level 8</p>
+                    <p className="text-xs text-white/50">Peak Performance</p>
+                  </div>
+                </div>
+
+                {/* Right: Active Projects */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Zap size={12} className="text-purple-400" />
+                    <span className="text-xs font-medium text-purple-400">Projects</span>
+                  </div>
+                  <div className="space-y-2">
+                    {projects.slice(0, 2).map((project) => (
+                      <div key={project.id} className="bg-white/5 rounded-md p-2 border border-purple-500/20">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-medium text-white truncate">{project.name}</span>
+                          <div className={`w-2 h-2 rounded-full ${
+                            project.priority === 'high' ? 'bg-red-400' : 
+                            project.priority === 'medium' ? 'bg-yellow-400' : 'bg-green-400'
+                          }`}></div>
+                        </div>
+                        <div className="w-full bg-white/10 rounded-full h-1">
+                          <div 
+                            className="bg-purple-400 h-1 rounded-full transition-all duration-300"
+                            style={{ width: `${project.progress || 0}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    ))}
+                    {projects.length === 0 && (
+                      <div className="text-xs text-white/40 text-center py-2">
+                        No projects yet
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              {/* Bottom Section */}
+              {/* Bottom Section - KPI Data */}
               <div className="flex justify-between items-end">
                 {/* Left: Progress Tracker */}
                 <div className="flex items-center gap-2">
                   <TrendingUp size={14} className="text-purple-400" />
                   <div>
-                    <p className="text-xs font-medium text-white">Level 7</p>
-                    <p className="text-xs text-white/50">142 steps climbed</p>
+                    <p className="text-xs font-medium text-white">Growth Tracker</p>
+                    <p className="text-xs text-white/50">Climbing higher</p>
                   </div>
                 </div>
 
@@ -590,7 +679,7 @@ const DigitalBrain: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-2 justify-end">
                     <span className="text-xs text-white/60">Active projects</span>
-                    <span className="text-xs font-medium text-purple-400">3</span>
+                    <span className="text-xs font-medium text-purple-400">{projects.length}</span>
                   </div>
                 </div>
               </div>

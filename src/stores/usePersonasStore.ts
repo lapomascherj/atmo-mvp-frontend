@@ -248,11 +248,65 @@ export const usePersonasStore = create<PersonasStoreState>((set, get) => ({
           projects: [
             {
               id: 'demo-project-1',
-              name: 'Sample Project',
-              description: 'A demonstration project for the MVP',
+              name: 'ATMO Platform',
+              description: 'Building the next-generation personal AI assistant',
+              status: 'active',
+              priority: 'high',
+              progress: 75,
+              startDate: new Date().toISOString(),
+              expand: {
+                goals: [],
+                items: [],
+                milestones: [
+                  {
+                    id: 'milestone-1',
+                    name: 'MVP Launch',
+                    description: 'Launch the minimum viable product',
+                    target_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+                    completed: false,
+                    progress: 85
+                  },
+                  {
+                    id: 'milestone-2',
+                    name: 'Beta Testing',
+                    description: 'Complete beta testing phase',
+                    target_date: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+                    completed: false,
+                    progress: 60
+                  }
+                ]
+              }
+            },
+            {
+              id: 'demo-project-2',
+              name: 'GrowIn Expansion',
+              description: 'Scale GrowIn to new markets',
               status: 'active',
               priority: 'medium',
-              progress: 45,
+              progress: 35,
+              startDate: new Date().toISOString(),
+              expand: {
+                goals: [],
+                items: [],
+                milestones: [
+                  {
+                    id: 'milestone-3',
+                    name: 'Market Research',
+                    description: 'Complete market analysis',
+                    target_date: new Date(Date.now() + 21 * 24 * 60 * 60 * 1000).toISOString(),
+                    completed: true,
+                    progress: 100
+                  }
+                ]
+              }
+            },
+            {
+              id: 'demo-project-3',
+              name: 'AI Strategy',
+              description: 'Develop comprehensive AI integration strategy',
+              status: 'planning',
+              priority: 'high',
+              progress: 15,
               startDate: new Date().toISOString(),
               expand: {
                 goals: [],

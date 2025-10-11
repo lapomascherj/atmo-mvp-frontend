@@ -34,7 +34,7 @@ import {Project} from "@/models/Project.ts"
 import {KnowledgeItem} from "@/models/KnowledgeItem.ts";
 import {useProjectsStore} from "@/stores/useProjectsStore.ts";
 import {usePersonasStore} from "@/stores/usePersonasStore.ts";
-import {useAuth} from "@/hooks/useMockAuth";
+import useMockAuth from "@/hooks/useMockAuth";
 import { usePocketBase } from "@/hooks/useMockPocketBase";
 import PageHeader from "@/components/atoms/PageHeader.tsx";
 import ProjectForm from "@/components/molecules/ProjectForm.tsx";
@@ -63,7 +63,7 @@ const NewPage: React.FC = () => {
     } = usePersonasStore();
     
     const { integrations, fetchIntegrations } = useIntegrationsStore();
-    const {user} = useAuth();
+    const {user} = useMockAuth();
     const pb = usePocketBase();
     const { toast } = useToast();
     const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());

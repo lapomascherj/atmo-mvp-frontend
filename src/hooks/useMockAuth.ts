@@ -1,8 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useMemo, useEffect } from 'react';
+import { useAuth as useAuthContext } from '@/hooks/useAuth';
 import { Focus } from '@/models/Focus';
 import { JobTitle } from '@/models/JobTitle';
+import { usePersonasStore } from '@/stores/usePersonasStore';
+import { PROFILE_SCHEMA_VERSION } from '@/types/profile';
 
-interface UserProfile {
+export interface LegacyUserProfile {
   id: string;
   nickname: string;
   preferredName?: string;
@@ -21,141 +24,176 @@ interface UserProfile {
   timezone?: string;
   aiPreferences?: string;
   communicationStyle?: string;
+  focusAreas?: string[];
+  mainPriority?: string;
 }
 
-const STORAGE_KEY = 'atmo_user_profile';
-
-const defaultUser: UserProfile = {
-  id: 'demo-user-1',
-  nickname: 'Demo User',
+const defaultProfile: LegacyUserProfile = {
+  id: 'demo-user',
+  iam: 'demo-user',
   email: 'demo@example.com',
-  iam: 'demo-user-iam',
-  onboarding_completed: true,
-  professional_role: 'Developer',
-  bio: 'Frontend demo user with ATMO',
+  nickname: 'ATMO Explorer',
+  onboarding_completed: false,
   focus: Focus.ProjectExecution,
   job_title: JobTitle.Developer,
   avatar_url: null,
-  location: 'San Francisco, CA',
+  professional_role: 'Builder',
+  bio: '',
+  location: '',
   website: '',
-  company: 'ATMO Inc.',
+  company: '',
   phone: '',
-  timezone: 'GMT-8 (Pacific Time)',
-  aiPreferences: 'I prefer detailed explanations and enjoy learning about new technologies.',
-  communicationStyle: 'detailed'
+  timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  aiPreferences: 'detailed',
+  communicationStyle: 'detailed',
+  focusAreas: [],
+  mainPriority: '',
 };
 
-// Mock authentication hook with localStorage persistence
-export const useMockAuth = () => {
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+const mapRoleToJobTitle = (role: string | undefined): JobTitle => {
+  if (!role) return JobTitle.Other;
+  const normalized = role.trim().toLowerCase();
+  if (normalized.includes('founder') || normalized.includes('ceo')) return JobTitle.Executive;
+  if (normalized.includes('manager')) return JobTitle.Manager;
+  if (normalized.includes('product')) return JobTitle.Manager;
+  if (normalized.includes('designer')) return JobTitle.Creator;
+  if (normalized.includes('writer') || normalized.includes('marketer')) return JobTitle.Creator;
+  if (normalized.includes('developer') || normalized.includes('engineer')) return JobTitle.Developer;
+  if (normalized.includes('student')) return JobTitle.Student;
+  return JobTitle.Other;
+};
 
-  // Load user data from localStorage on mount
-  useEffect(() => {
-    try {
-      const storedUser = localStorage.getItem(STORAGE_KEY);
-      if (storedUser) {
-        const parsedUser = JSON.parse(storedUser);
-        setUser(parsedUser);
-      } else {
-        // Set default user and save to localStorage
-        setUser(defaultUser);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultUser));
+const mapProfile = (
+  hydratedProfile: ReturnType<typeof useAuthContext>['hydratedProfile'] | null
+): LegacyUserProfile | null => {
+  if (!hydratedProfile) return null;
+  const data = (hydratedProfile.onboarding_data ?? {}) as Record<string, unknown>;
+  const schemaVersion = (data as { profileSchemaVersion?: unknown }).profileSchemaVersion;
+
+  if (schemaVersion === PROFILE_SCHEMA_VERSION) {
+    const personal = (data.personal as Record<string, unknown>) ?? {};
+    const work = (data.work as Record<string, unknown>) ?? {};
+    const performance = (data.performance as Record<string, unknown>) ?? {};
+    const connections = (data.connections as Record<string, unknown>) ?? {};
+
+    const nickname = typeof personal.nickname === 'string' && personal.nickname.trim()
+      ? personal.nickname.trim()
+      : hydratedProfile.display_name || hydratedProfile.email.split('@')[0];
+
+    const preferredName = typeof personal.preferredName === 'string' && personal.preferredName.trim()
+      ? personal.preferredName.trim()
+      : nickname;
+
+    const role = typeof work.role === 'string' ? work.role : undefined;
+    const focusAreas = Array.isArray(work.focusAreas)
+      ? work.focusAreas.filter((item) => typeof item === 'string' && item.trim()).map((item) => (item as string).trim())
+      : [];
+
+    return {
+      id: hydratedProfile.id,
+      iam: hydratedProfile.id,
+      email: hydratedProfile.email,
+      nickname,
+      preferredName,
+      onboarding_completed: hydratedProfile.onboarding_completed,
+      professional_role: role,
+      bio: typeof personal.bio === 'string' ? personal.bio : undefined,
+      focus: defaultProfile.focus,
+      job_title: mapRoleToJobTitle(role),
+      avatar_url: hydratedProfile.avatar_url,
+      location: hydratedProfile.onboarding_data?.location as string | undefined,
+      website: typeof connections.website === 'string' ? connections.website : undefined,
+      company: typeof work.company === 'string' ? work.company : undefined,
+      phone: hydratedProfile.onboarding_data?.phone as string | undefined,
+      timezone: hydratedProfile.timezone || defaultProfile.timezone,
+      aiPreferences: hydratedProfile.onboarding_data?.aiPreferences as string | undefined,
+      communicationStyle: hydratedProfile.onboarding_data?.assistantTone as string | undefined,
+      focusAreas,
+      mainPriority: typeof performance.northStar === 'string' ? performance.northStar : undefined,
+    };
+  }
+
+  const identity = data.identity as
+    | {
+        role?: string;
+        company?: string;
+        mainProject?: string;
+        secondaryProjects?: string;
+        dueDate?: string;
+        purpose?: string;
       }
-    } catch (err) {
-      console.error('Failed to load user data:', err);
-      setUser(defaultUser);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultUser));
-    }
-  }, []);
-
-  // Update user profile with persistence
-  const updateUserProfile = useCallback(async (updateData: Partial<UserProfile>) => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 800));
-
-      if (!user) throw new Error('No user to update');
-
-      const updatedUser = { ...user, ...updateData };
-
-      // Save to localStorage
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedUser));
-
-      // Update state
-      setUser(updatedUser);
-
-      return true;
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to update profile';
-      setError(errorMessage);
-      throw new Error(errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  }, [user]);
-
-  // Sign out function
-  const signOut = useCallback(async () => {
-    setLoading(true);
-    try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      // Clear user data but keep in localStorage for demo purposes
-      // In a real app, you'd clear localStorage here
-      setUser(null);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // Sign in function
-  const signIn = useCallback(async () => {
-    setLoading(true);
-    try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      const storedUser = localStorage.getItem(STORAGE_KEY);
-      if (storedUser) {
-        setUser(JSON.parse(storedUser));
-      } else {
-        setUser(defaultUser);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultUser));
+    | undefined;
+  const values = data.values as
+    | {
+        keywords?: string[];
+        inspirations?: string;
       }
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    | undefined;
 
-  // Update specific user field
-  const setUserField = useCallback((field: keyof UserProfile, value: any) => {
-    if (user) {
-      const updatedUser = { ...user, [field]: value };
-      setUser(updatedUser);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedUser));
-    }
-  }, [user]);
+  const derivedKeywords = Array.isArray(values?.keywords)
+    ? values!.keywords!.filter((keyword) => keyword && keyword.trim())
+    : [];
 
   return {
-    user,
-    casdoorUser: null,
-    loading,
-    error,
-    token: 'mock-token',
-    signUp: () => Promise.resolve(),
-    signIn,
-    signOut,
-    handleAuthCallbackResponse: async () => Promise.resolve(),
-    updateUserProfile,
-    isOnboardingCompleted: () => user?.onboarding_completed ?? true,
-    getManagementUrl: () => '',
-    setUser: setUserField
+    id: hydratedProfile.id,
+    iam: hydratedProfile.id,
+    email: hydratedProfile.email,
+    nickname:
+      (data.nickname as string) ||
+      hydratedProfile.display_name ||
+      hydratedProfile.email.split('@')[0],
+    preferredName: data.preferredName as string,
+    onboarding_completed: hydratedProfile.onboarding_completed,
+    professional_role: identity?.role || (data.job_title as string) || (data.jobTitle as string),
+    bio: data.bio as string | undefined,
+    focus: defaultProfile.focus,
+    job_title: mapRoleToJobTitle(identity?.role || (data.job_title as string) || undefined),
+    avatar_url: hydratedProfile.avatar_url ?? (data.avatar_url as string | null) ?? (data.avatarUrl as string | null) ?? null,
+    location: data.location as string | undefined,
+    website: data.website as string | undefined,
+    company: identity?.company || (data.company as string | undefined),
+    phone: data.phone as string | undefined,
+    timezone: hydratedProfile.timezone || defaultProfile.timezone,
+    aiPreferences: (data.workStyle as string | undefined) || (data.aiPreferences as string | undefined) || defaultProfile.aiPreferences,
+    communicationStyle:
+      (data.assistantTone as string | undefined) ||
+      (data.communicationStyle as string | undefined) ||
+      defaultProfile.communicationStyle,
+    focusAreas: derivedKeywords,
+    mainPriority:
+      (data.warmup as { successIndicator?: string } | undefined)?.successIndicator?.trim() ||
+      (data.metrics as { weeklyMicroGoal?: string } | undefined)?.weeklyMicroGoal?.trim() ||
+      defaultProfile.mainPriority,
   };
 };
 
-export const useAuth = useMockAuth;
+export const useMockAuth = () => {
+  const auth = useAuthContext();
+
+  const userProfile = useMemo(() => {
+    const mapped = mapProfile(auth.hydratedProfile);
+    return mapped || (auth.session ? defaultProfile : null);
+  }, [auth.session, auth.hydratedProfile]);
+
+  useEffect(() => {
+    usePersonasStore.getState().syncWithProfile(userProfile);
+  }, [userProfile]);
+
+  return {
+    user: userProfile,
+    loading: auth.initializing || auth.profileLoading,
+    error: auth.lastError,
+    token: auth.session?.access_token ?? null,
+    signUp: auth.signUp,
+    signIn: auth.signIn,
+    signOut: auth.signOut,
+    updateUserProfile: auth.updateProfile,
+    completeOnboarding: auth.completeOnboarding,
+    isOnboardingCompleted: () => auth.hydratedProfile?.onboarding_completed ?? false,
+    getManagementUrl: () => '',
+    setUser: () => undefined,
+    handleAuthCallbackResponse: async () => undefined,
+  };
+};
+
+export default useMockAuth;

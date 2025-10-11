@@ -1,4 +1,5 @@
 import React from 'react';
+import { logTelemetryError } from '@/lib/telemetry';
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -24,6 +25,9 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     console.error('ErrorBoundary caught an error:', error, errorInfo);
     console.error('Error stack:', error.stack);
     console.error('Component stack:', errorInfo.componentStack);
+    logTelemetryError('route_error', error, {
+      componentStack: errorInfo.componentStack,
+    });
   }
 
   render() {

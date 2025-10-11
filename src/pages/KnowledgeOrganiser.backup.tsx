@@ -36,7 +36,7 @@ import {Project} from "@/models/Project.ts"
 import {KnowledgeItem} from "@/models/KnowledgeItem.ts";
 import {useProjectsStore} from "@/stores/useProjectsStore.ts";
 import {usePersonasStore} from "@/stores/usePersonasStore.ts";
-import {useAuth} from "@/hooks/useMockAuth";
+import useMockAuth from "@/hooks/useMockAuth";
 import { usePocketBase } from "@/hooks/useMockPocketBase";
 // Temporarily commented out - preserved for future use
 // import PageHeader from "@/components/atoms/PageHeader.tsx";

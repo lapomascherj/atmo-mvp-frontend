@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { useMockAuth } from '@/hooks/useMockAuth';
+import useMockAuth from '@/hooks/useMockAuth';
 import LoadingScreen from '@/components/atoms/LoadingScreen.tsx';
 
 interface ProtectedRouteProps {

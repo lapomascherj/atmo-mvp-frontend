@@ -1,583 +1,945 @@
-import React, { useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import * as TabsPrimitive from '@radix-ui/react-tabs';
+import { useForm, FormProvider, useFieldArray, useFormContext } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import {
-  User, Briefcase, Heart, Settings, Shield,
-  Camera, Check, X, LogOut, Loader2,
-  MapPin, Globe, Phone, Clock
+  LayoutDashboard,
+  User,
+  Briefcase,
+  Target,
+  ListChecks,
+  Heart,
+  Link as LinkIcon,
+  FileText,
+  Loader2,
+  Camera,
+  Trash2,
+  LogOut,
+  Clock,
+  Compass,
+  Sparkles,
 } from 'lucide-react';
-import { useAuth } from '@/hooks/useRealAuth';
+import useRealAuth from '@/hooks/useRealAuth';
 import { useToast } from '@/hooks/useToast';
-import { useSidebar } from '@/context/SidebarContext';
+import { useGlobalStore } from '@/stores/globalStore';
 import { Button } from '@/components/atoms/Button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/atoms/Avatar';
 import { Input } from '@/components/atoms/Input';
 import { TextArea } from '@/components/atoms/TextArea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/atoms/Select';
 import { Switch } from '@/components/atoms/Switch';
-import { JobTitle } from '@/models/JobTitle';
-import { Focus } from '@/models/Focus';
-import { useGlobalStore } from '@/stores/globalStore';
+import {
+  useProfileStore,
+  selectProfileDraft,
+  selectProfileTab,
+  selectProfileDirty,
+  selectProfileSaving,
+  ProfileTabId,
+} from '@/stores/profileStore';
+import { ProfileDraft, ProfileDraftSchema, PROFILE_SCHEMA_VERSION, createEmptyHabit } from '@/types/profile';
+import { mapProfileToDraft, mapDraftToOnboardingPayload } from '@/lib/profileMapper';
+import { cn } from '@/utils/utils';
 
-type ProfileSection = 'profile' | 'professional' | 'personal' | 'preferences' | 'account';
+const TAB_CONFIG: Array<{
+  id: ProfileTabId;
+  label: string;
+  icon: React.ComponentType<{ size?: number }>;
+  description: string;
+}> = [
+  {
+    id: 'overview',
+    label: 'Overview',
+    icon: LayoutDashboard,
+    description: 'Snapshot of your workspace profile at a glance.',
+  },
+  {
+    id: 'personal',
+    label: 'Identity',
+    icon: User,
+    description: 'Names, headline, and how ATMO should greet you.',
+  },
+  {
+    id: 'work',
+    label: 'Work System',
+    icon: Briefcase,
+    description: 'Roles, projects, and where you need leverage.',
+  },
+  {
+    id: 'performance',
+    label: 'Performance',
+    icon: Target,
+    description: 'North star outcomes and the metrics you track.',
+  },
+  {
+    id: 'rituals',
+    label: 'Rituals',
+    icon: ListChecks,
+    description: 'Operating cadence and the habits that keep you sharp.',
+  },
+  {
+    id: 'wellness',
+    label: 'Wellness',
+    icon: Heart,
+    description: 'Energy signals so ATMO can pace support responsibly.',
+  },
+  {
+    id: 'connections',
+    label: 'Connections',
+    icon: LinkIcon,
+    description: 'Integrations and enrichment preferences.',
+  },
+  {
+    id: 'documents',
+    label: 'Documents',
+    icon: FileText,
+    description: 'Reference files that help ATMO brief faster.',
+  },
+];
 
-const Profile: React.FC = () => {
-  const { user, updateUserProfile, signOut } = useAuth();
-  const { toast } = useToast();
-  const { isCollapsed, sidebarWidth } = useSidebar();
-  const navigate = useNavigate();
-  const { timeFormat, setTimeFormat } = useGlobalStore();
+const SummaryLine = ({ label, value }: { label: string; value: string }) => (
+  <div className="flex flex-col gap-1">
+    <span className="text-xs uppercase tracking-wide text-white/40">{label}</span>
+    <span className="text-sm text-white/90">{value}</span>
+  </div>
+);
 
-  // State management
-  const [currentSection, setCurrentSection] = useState<ProfileSection>('profile');
-  const [isLoading, setIsLoading] = useState(false);
-  const [isSigningOut, setIsSigningOut] = useState(false);
+const OverviewPanel: React.FC<{ values: ProfileDraft }> = ({ values }) => {
+  const primaryHabit = values.rituals.habits.find((habit) => habit.name.trim()) ?? values.rituals.habits[0];
+  const focusAreas = values.work.focusAreas.filter((entry) => entry.trim());
+  const secondaryProjects = values.work.secondaryProjects.filter((entry) => entry.trim());
+  const metrics = values.performance.metrics.filter((metric) => metric.label.trim());
 
-  // Form state
-  const [formData, setFormData] = useState({
-    nickname: user?.nickname || '',
-    preferredName: user?.preferredName || '',
-    bio: user?.bio || '',
-    job_title: user?.job_title || JobTitle.Other,
-    focus: user?.focus || Focus.PersonalDevelopment,
-    location: user?.location || '',
-    website: user?.website || '',
-    company: user?.company || '',
-    phone: user?.phone || '',
-    timezone: user?.timezone || '',
-    aiPreferences: user?.aiPreferences || '',
-    communicationStyle: user?.communicationStyle || 'detailed',
-  });
+  return (
+    <div className="grid gap-4">
+      <div className="rounded-xl border border-white/10 bg-slate-900/60 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="space-y-2">
+            <p className="text-xs uppercase tracking-wide text-white/40">Current identity</p>
+            <h3 className="text-lg font-semibold text-white">{values.account.displayName}</h3>
+            <p className="text-sm text-white/60">
+              {[values.work.role || 'Role not set', values.work.company || 'Organisation not set']
+                .filter(Boolean)
+                .join(' · ')}
+            </p>
+          </div>
+          <div className="flex items-center gap-6 text-sm text-white/70">
+            <SummaryLine
+              label="North star"
+              value={values.performance.northStar || 'Define the outcome you are chasing.'}
+            />
+            <SummaryLine
+              label="Weekly commitment"
+              value={values.performance.weeklyCommitment || 'Capture the move you promise to make this week.'}
+            />
+          </div>
+        </div>
+      </div>
 
-  // Avatar handling
-  const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="rounded-xl border border-white/10 bg-slate-900/60 p-5 space-y-3">
+          <div className="flex items-center gap-2 text-white/80">
+            <Briefcase size={16} />
+            <span className="text-sm font-medium">Projects in focus</span>
+          </div>
+          <div className="space-y-2">
+            <SummaryLine
+              label="Primary"
+              value={values.work.mainProject || 'Outline your headline initiative.'}
+            />
+            <SummaryLine
+              label="Supporting"
+              value={secondaryProjects.join(' · ') || 'Document the supporting tracks if relevant.'}
+            />
+          </div>
+        </div>
 
-  // Derived values
-  const displayName = formData.nickname || user?.nickname || 'ATMO User';
-  const email = user?.email || 'demo@example.com';
-  const userInitial = displayName.charAt(0).toUpperCase();
-  const avatarUrl = avatarPreview || user?.avatar_url;
+        <div className="rounded-xl border border-white/10 bg-slate-900/60 p-5 space-y-3">
+          <div className="flex items-center gap-2 text-white/80">
+            <Sparkles size={16} />
+            <span className="text-sm font-medium">Focus areas</span>
+          </div>
+          {focusAreas.length ? (
+            <div className="flex flex-wrap gap-2">
+              {focusAreas.map((area) => (
+                <span
+                  key={area}
+                  className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs text-white/80"
+                >
+                  {area}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-white/50">
+              List the themes where ATMO should surface context without prompting.
+            </p>
+          )}
+        </div>
 
-  // Handle form changes
-  const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+        <div className="rounded-xl border border-white/10 bg-slate-900/60 p-5 space-y-3">
+          <div className="flex items-center gap-2 text-white/80">
+            <ListChecks size={16} />
+            <span className="text-sm font-medium">Operating rhythm</span>
+          </div>
+          <div className="space-y-2">
+            <SummaryLine
+              label="Primary habit"
+              value={
+                primaryHabit?.name
+                  ? `${primaryHabit.name} • ${primaryHabit.cadence || 'Cadence not set'}`
+                  : 'Document at least one ritual so ATMO can reinforce it.'
+              }
+            />
+            <SummaryLine
+              label="Preferred hours"
+              value={values.rituals.operatingHours || 'Tell ATMO when you are typically available.'}
+            />
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-white/10 bg-slate-900/60 p-5 space-y-3">
+          <div className="flex items-center gap-2 text-white/80">
+            <Heart size={16} />
+            <span className="text-sm font-medium">Wellness signals</span>
+          </div>
+          <div className="grid grid-cols-3 gap-3 text-center text-white/80">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-white/40">Sleep</p>
+              <p className="text-lg font-semibold">{values.wellness.sleepHours || '—'}</p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-white/40">Energy</p>
+              <p className="text-lg font-semibold">{values.wellness.energyLevel}</p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-white/40">Stress</p>
+              <p className="text-lg font-semibold">{values.wellness.stressLevel}</p>
+            </div>
+          </div>
+          <p className="text-sm text-white/50">
+            {values.wellness.recoveryPlan || 'Capture what restores you so ATMO can pace momentum wisely.'}
+          </p>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-white/10 bg-slate-900/60 p-5 space-y-3">
+        <div className="flex items-center gap-2 text-white/80">
+          <Target size={16} />
+          <span className="text-sm font-medium">Headline metrics</span>
+        </div>
+        {metrics.length ? (
+          <div className="grid gap-3 md:grid-cols-3">
+            {metrics.map((metric) => (
+              <div key={metric.label} className="rounded-lg border border-white/10 bg-white/5 p-3">
+                <p className="text-xs uppercase tracking-wide text-white/40">{metric.label}</p>
+                <p className="text-base font-semibold text-white mt-1">
+                  {metric.currentValue || 'Tracking'}
+                </p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-white/50">
+            List the three numbers that prove progress so the Digital Brain can surface the right alerts.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const PersonalForm: React.FC = () => {
+  const {
+    register,
+    formState: { errors },
+  } = useFormContext<ProfileDraft>();
+
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-2">
+        <Input
+          label="Display name"
+          {...register('account.displayName')}
+          className="bg-white/5 border-white/10 text-white"
+        />
+        <Input
+          label="Preferred name"
+          {...register('personal.preferredName')}
+          className="bg-white/5 border-white/10 text-white"
+        />
+        <Input
+          label="Nickname"
+          helperText="Used in quick replies and the navigation footer."
+          {...register('personal.nickname')}
+          className="bg-white/5 border-white/10 text-white"
+        />
+        <Input
+          label="Headline"
+          placeholder="What are you optimising for right now?"
+          {...register('personal.headline')}
+          className="bg-white/5 border-white/10 text-white"
+        />
+      </div>
+      <TextArea
+        label="Bio / Mission"
+        placeholder="Give ATMO a concise mission statement to keep every surface aligned."
+        rows={5}
+        {...register('personal.bio')}
+        className="bg-white/5 border-white/10 text-white"
+      />
+      {errors.personal && (
+        <p className="text-sm text-red-400">Check the personal section for validation feedback.</p>
+      )}
+    </div>
+  );
+};
+
+const WorkForm: React.FC = () => {
+  const { register, watch } = useFormContext<ProfileDraft>();
+  const focusAreas = watch('work.focusAreas') ?? [];
+  const secondaryProjects = watch('work.secondaryProjects') ?? [];
+
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-2">
+        <Input
+          label="Role"
+          placeholder="e.g. Founder, Product Lead"
+          {...register('work.role')}
+          className="bg-white/5 border-white/10 text-white"
+        />
+        <Input
+          label="Company or Team"
+          placeholder="Where do you operate?"
+          {...register('work.company')}
+          className="bg-white/5 border-white/10 text-white"
+        />
+      </div>
+      <Input
+        label="Primary initiative"
+        placeholder="What is the main project ATMO should prioritise?"
+        {...register('work.mainProject')}
+        className="bg-white/5 border-white/10 text-white"
+      />
+      <div className="grid gap-4 md:grid-cols-2">
+        {secondaryProjects.map((_, index) => (
+          <Input
+            key={`secondary-${index}`}
+            label={`Supporting initiative ${index + 1}`}
+            placeholder="Optional but useful context"
+            {...register(`work.secondaryProjects.${index}` as const)}
+            className="bg-white/5 border-white/10 text-white"
+          />
+        ))}
+      </div>
+      <TextArea
+        label="Where you need leverage"
+        placeholder="Explain the blockers or responsibilities where ATMO should lean in."
+        rows={4}
+        {...register('work.supportNeeds')}
+        className="bg-white/5 border-white/10 text-white"
+      />
+      <div className="grid gap-4 md:grid-cols-3">
+        {focusAreas.map((_, index) => (
+          <Input
+            key={`focus-${index}`}
+            label={`Focus area ${index + 1}`}
+            placeholder="Theme ATMO should monitor"
+            {...register(`work.focusAreas.${index}` as const)}
+            className="bg-white/5 border-white/10 text-white"
+          />
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const PerformanceForm: React.FC = () => {
+  const { register, control } = useFormContext<ProfileDraft>();
+  const { fields } = useFieldArray({ name: 'performance.metrics', control });
+
+  return (
+    <div className="space-y-6">
+      <Input
+        label="North star outcome"
+        placeholder="Describe the outcome that defines success for you."
+        {...register('performance.northStar')}
+        className="bg-white/5 border-white/10 text-white"
+      />
+      <Input
+        label="Weekly commitment"
+        placeholder="What will you move forward each week?"
+        {...register('performance.weeklyCommitment')}
+        className="bg-white/5 border-white/10 text-white"
+      />
+      <div className="grid gap-4 md:grid-cols-3">
+        {fields.map((field, index) => (
+          <div key={field.id} className="space-y-3 rounded-xl border border-white/10 bg-white/5 p-4">
+            <Input
+              label={`Metric ${index + 1}`}
+              placeholder="Metric name"
+              {...register(`performance.metrics.${index}.label` as const)}
+              className="bg-white/10 border-white/20 text-white"
+            />
+            <Input
+              label="Current signal"
+              placeholder="Optional current value"
+              {...register(`performance.metrics.${index}.currentValue` as const)}
+              className="bg-white/10 border-white/20 text-white"
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const RitualsForm: React.FC = () => {
+  const { control, register } = useFormContext<ProfileDraft>();
+  const { fields, append, remove } = useFieldArray({ name: 'rituals.habits', control });
+
+  return (
+    <div className="space-y-6">
+      <div className="space-y-4">
+        {fields.map((field, index) => (
+          <div
+            key={field.id}
+            className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-4"
+          >
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-white/80">Habit {index + 1}</p>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-white/60 hover:text-red-400"
+                disabled={fields.length === 1}
+                onClick={() => remove(index)}
+              >
+                Remove
+              </Button>
+            </div>
+            <div className="grid gap-4 md:grid-cols-3">
+              <Input
+                label="Habit"
+                placeholder="What do you commit to?"
+                {...register(`rituals.habits.${index}.name` as const)}
+                className="bg-white/10 border-white/20 text-white"
+              />
+              <Input
+                label="Cadence"
+                placeholder="How often?"
+                {...register(`rituals.habits.${index}.cadence` as const)}
+                className="bg-white/10 border-white/20 text-white"
+              />
+              <Input
+                label="Focus"
+                placeholder="What does it support?"
+                {...register(`rituals.habits.${index}.focus` as const)}
+                className="bg-white/10 border-white/20 text-white"
+              />
+            </div>
+          </div>
+        ))}
+        {fields.length < 6 && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="border-dashed border-white/20 text-white/70"
+            onClick={() => append(createEmptyHabit())}
+          >
+            Add habit
+          </Button>
+        )}
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <Input
+          label="Operating hours"
+          placeholder="Your preferred working window"
+          {...register('rituals.operatingHours')}
+          className="bg-white/5 border-white/10 text-white"
+        />
+        <Input
+          label="Meeting cadence"
+          placeholder="How often should ATMO regroup?"
+          {...register('rituals.meetingCadence')}
+          className="bg-white/5 border-white/10 text-white"
+        />
+      </div>
+    </div>
+  );
+};
+
+const WellnessForm: React.FC = () => {
+  const { register } = useFormContext<ProfileDraft>();
+
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-3">
+        <Input
+          label="Sleep (hours)"
+          type="text"
+          inputMode="decimal"
+          placeholder="e.g. 7"
+          {...register('wellness.sleepHours')}
+          className="bg-white/5 border-white/10 text-white"
+        />
+        <Input
+          label="Energy level"
+          type="number"
+          min={1}
+          max={5}
+          {...register('wellness.energyLevel', { valueAsNumber: true })}
+          className="bg-white/5 border-white/10 text-white"
+        />
+        <Input
+          label="Stress level"
+          type="number"
+          min={1}
+          max={5}
+          {...register('wellness.stressLevel', { valueAsNumber: true })}
+          className="bg-white/5 border-white/10 text-white"
+        />
+      </div>
+      <TextArea
+        label="Recovery plan"
+        placeholder="What helps you reset when momentum dips?"
+        rows={4}
+        {...register('wellness.recoveryPlan')}
+        className="bg-white/5 border-white/10 text-white"
+      />
+    </div>
+  );
+};
+
+const ConnectionsForm: React.FC = () => {
+  const { register, setValue, watch } = useFormContext<ProfileDraft>();
+  const autoEnrich = watch('connections.autoEnrich') ?? false;
+
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-2">
+        <Input
+          label="LinkedIn"
+          placeholder="https://linkedin.com/in/you"
+          {...register('connections.linkedin')}
+          className="bg-white/5 border-white/10 text-white"
+        />
+        <Input
+          label="Calendly or scheduling link"
+          placeholder="https://calendly.com/you"
+          {...register('connections.calendly')}
+          className="bg-white/5 border-white/10 text-white"
+        />
+      </div>
+      <Input
+        label="Website"
+        placeholder="https://your-domain.com"
+        {...register('connections.website')}
+        className="bg-white/5 border-white/10 text-white"
+      />
+      <label className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 p-4">
+        <div>
+          <p className="text-sm font-medium text-white/80">Auto-enrich from LinkedIn</p>
+          <p className="text-xs text-white/50">
+            Allow ATMO to refresh your role and company information when new data is available.
+          </p>
+        </div>
+        <Switch
+          checked={autoEnrich}
+          onCheckedChange={(checked) => setValue('connections.autoEnrich', checked, { shouldDirty: true })}
+        />
+      </label>
+    </div>
+  );
+};
+
+const DocumentsForm: React.FC<{ onFileSelect: (file: File | null) => void; currentFileName?: string }>
+  = ({ onFileSelect, currentFileName }) => {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const { setValue } = useFormContext<ProfileDraft>();
+
+  const handleRemove = () => {
+    setValue('documents.resume', null, { shouldDirty: true });
+    onFileSelect(null);
   };
 
-  // Handle avatar upload
-  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  return (
+    <div className="space-y-6">
+      <div className="rounded-xl border border-dashed border-white/15 bg-white/5 p-6 text-center">
+        <p className="text-sm text-white/70">Attach a résumé, deck, or briefing doc for fast onboarding.</p>
+        <div className="mt-4 flex items-center justify-center gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            className="border-white/20 text-white/80"
+            onClick={() => inputRef.current?.click()}
+          >
+            Upload document
+          </Button>
+          {currentFileName && (
+            <Button type="button" variant="ghost" className="text-white/60" onClick={handleRemove}>
+              Remove
+            </Button>
+          )}
+        </div>
+        <input
+          ref={inputRef}
+          type="file"
+          accept=".pdf,.doc,.docx,.ppt,.pptx,.key,.pages"
+          className="hidden"
+          onChange={(event) => onFileSelect(event.target.files?.[0] ?? null)}
+        />
+        <p className="mt-4 text-xs text-white/50">
+          {currentFileName || 'No document stored yet.'}
+        </p>
+      </div>
+    </div>
+  );
+};
 
-    // Validate file type
+const Tabs = TabsPrimitive.Root;
+const TabsList = TabsPrimitive.List;
+const TabsTrigger = TabsPrimitive.Trigger;
+const TabsContent = TabsPrimitive.Content;
+
+const Profile: React.FC = () => {
+  const { profile, updateUserProfile, signOut, isLoading } = useRealAuth();
+  const { toast } = useToast();
+  const { timeFormat, setTimeFormat } = useGlobalStore();
+
+  const initialize = useProfileStore((state) => state.initialize);
+  const setDraft = useProfileStore((state) => state.setDraft);
+  const setTab = useProfileStore((state) => state.setTab);
+  const commitDraft = useProfileStore((state) => state.commitDraft);
+  const setSaving = useProfileStore((state) => state.setSaving);
+  const draft = useProfileStore(selectProfileDraft);
+  const currentTab = useProfileStore(selectProfileTab);
+  const isDirty = useProfileStore(selectProfileDirty);
+  const saving = useProfileStore(selectProfileSaving);
+
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
+
+  const form = useForm<ProfileDraft>({
+    resolver: zodResolver(ProfileDraftSchema),
+    mode: 'onChange',
+    defaultValues: draft ?? undefined,
+  });
+
+  const { handleSubmit, reset, watch: formWatch, setValue } = form;
+  const timezoneValue = formWatch('account.timezone');
+
+  const profileId = profile?.id;
+  const profileUpdatedAt = profile?.updated_at;
+
+  useEffect(() => {
+    console.log('[Profile] useEffect triggered:', { profileId, hasProfile: !!profile, profileUpdatedAt });
+
+    if (!profileId) {
+      console.warn('[Profile] No profileId available');
+      return;
+    }
+
+    if (!profile) {
+      console.warn('[Profile] No profile data, creating default draft');
+      // Create a default draft when profile is missing
+      const defaultDraft = createDefaultProfileDraft({
+        id: profileId,
+        email: 'user@example.com',
+        displayName: 'ATMO User',
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      });
+      initialize(defaultDraft);
+      reset(defaultDraft);
+      setAvatarPreview(null);
+      return;
+    }
+
+    console.log('[Profile] Mapping profile to draft');
+    const nextDraft = mapProfileToDraft(profile);
+    initialize(nextDraft);
+    reset(nextDraft);
+    setAvatarPreview(nextDraft.account.avatarUrl);
+  }, [profileId, profileUpdatedAt, profile, initialize, reset]);
+
+  useEffect(() => {
+    const subscription = formWatch((value) => {
+      const parsed = ProfileDraftSchema.safeParse({
+        schemaVersion: PROFILE_SCHEMA_VERSION,
+        ...value,
+      });
+      if (parsed.success) {
+        setDraft(parsed.data);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [formWatch, setDraft]);
+
+  const handleAvatarChange = (file: File | null) => {
+    if (!file) {
+      setAvatarPreview(null);
+      setValue('account.avatarUrl', null, { shouldDirty: true });
+      return;
+    }
+
     if (!file.type.startsWith('image/')) {
-      toast({
-        title: 'Invalid File',
-        description: 'Please select a valid image file.',
-        variant: 'destructive',
-      });
+      toast({ title: 'Unsupported file', description: 'Please choose an image file.' });
       return;
     }
 
-    // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
-      toast({
-        title: 'File Too Large',
-        description: 'Please select an image smaller than 5MB.',
-        variant: 'destructive',
-      });
+      toast({ title: 'File too large', description: 'Keep avatars below 5 MB.' });
       return;
     }
 
-    setAvatarFile(file);
     const reader = new FileReader();
     reader.onloadend = () => {
-      setAvatarPreview(reader.result as string);
-      toast({
-        title: 'Image Selected',
-        description: 'Your new profile picture has been loaded.',
-      });
+      const dataUrl = reader.result as string;
+      setAvatarPreview(dataUrl);
+      setValue('account.avatarUrl', dataUrl, { shouldDirty: true });
     };
     reader.readAsDataURL(file);
   };
 
-  // Save changes
-  const handleSave = async () => {
-    setIsLoading(true);
+  const handleResumeChange = (file: File | null) => {
+    if (!file) {
+      setValue('documents.resume', null, { shouldDirty: true });
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      toast({ title: 'File too large', description: 'Documents must be 10 MB or smaller.' });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setValue(
+        'documents.resume',
+        {
+          name: file.name,
+          mimeType: file.type,
+          dataUrl: reader.result as string,
+        },
+        { shouldDirty: true }
+      );
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const onSubmit = handleSubmit(async (values) => {
+    setSaving(true);
     try {
-      let avatar_url = user?.avatar_url;
+      const payload = mapDraftToOnboardingPayload(values);
+      const success = await updateUserProfile({
+        display_name: values.account.displayName,
+        timezone: values.account.timezone,
+        onboarding_data: payload,
+        avatar_url: values.account.avatarUrl,
+      });
 
-      // If there's a new avatar file, use the preview (base64 string)
-      if (avatarFile && avatarPreview) {
-        avatar_url = avatarPreview;
+      if (success) {
+        commitDraft();
+        toast({ title: 'Profile updated', description: 'Changes are now live across ATMO.' });
       }
-
-      // Validate required fields
-      if (!formData.nickname.trim()) {
-        throw new Error('Name is required');
-      }
-
-      await updateUserProfile({
-        nickname: formData.nickname.trim(),
-        preferredName: formData.preferredName?.trim() || '',
-        bio: formData.bio?.trim() || '',
-        job_title: formData.job_title,
-        focus: formData.focus,
-        location: formData.location?.trim() || '',
-        website: formData.website?.trim() || '',
-        company: formData.company?.trim() || '',
-        phone: formData.phone?.trim() || '',
-        timezone: formData.timezone?.trim() || '',
-        aiPreferences: formData.aiPreferences?.trim() || '',
-        communicationStyle: formData.communicationStyle,
-        avatar_url,
-      });
-
-      // Clear the temporary file state after successful save
-      setAvatarFile(null);
-      setAvatarPreview(null);
-
-      toast({
-        title: '✅ Profile Updated',
-        description: 'Your ATMO profile has been saved successfully!',
-      });
-    } catch (error) {
-      console.error('Failed to update profile:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to save your profile. Please try again.';
-      toast({
-        title: '❌ Update Failed',
-        description: errorMessage,
-        variant: 'destructive',
-      });
     } finally {
-      setIsLoading(false);
+      setSaving(false);
     }
-  };
+  });
 
-  // Sign out
-  const handleSignOut = async () => {
-    setIsSigningOut(true);
-    try {
-      await signOut();
-      navigate('/');
-    } catch (error) {
-      console.error('Sign out failed:', error);
-    } finally {
-      setIsSigningOut(false);
-    }
-  };
+  const summaryValues = useMemo(() => draft ?? form.getValues(), [draft, form]);
 
-  // Sidebar navigation items
-  const navigationItems = [
-    { id: 'profile' as ProfileSection, label: 'Profile', icon: User },
-    { id: 'professional' as ProfileSection, label: 'Professional', icon: Briefcase },
-    { id: 'personal' as ProfileSection, label: 'Personal', icon: Heart },
-    { id: 'preferences' as ProfileSection, label: 'Preferences', icon: Settings },
-    { id: 'account' as ProfileSection, label: 'Account', icon: Shield },
-  ];
+  // Add console logging for debugging
+  React.useEffect(() => {
+    console.log('[Profile] Debug:', { isLoading, hasProfile: !!profile, hasDraft: !!draft });
+  }, [isLoading, profile, draft]);
 
-  // Render current section content
-  const renderSectionContent = () => {
-    switch (currentSection) {
-      case 'profile':
-        return (
-          <div className="space-y-6">
-            <div>
-              <h2 className="text-lg font-medium text-white mb-2">Profile</h2>
-              <p className="text-white/60 text-sm">Manage your personal information</p>
-            </div>
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-white/60 mx-auto mb-2" />
+          <p className="text-sm text-white/40">Loading profile...</p>
+        </div>
+      </div>
+    );
+  }
 
-            {/* Avatar Section */}
-            <div className="flex items-center gap-4 p-4 bg-white/5 rounded-lg border border-white/10">
-              <div className="relative">
-                <Avatar className="w-16 h-16 border border-white/20">
-                  {avatarUrl ? (
-                    <AvatarImage
-                      src={avatarUrl}
-                      alt={displayName}
-                      className="object-cover w-full h-full"
-                    />
-                  ) : (
-                    <AvatarFallback className="text-white text-lg bg-orange-500/20">
-                      {userInitial}
-                    </AvatarFallback>
-                  )}
-                </Avatar>
-                <Button
-                  size="sm"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="absolute -bottom-1 -right-1 rounded-full h-8 w-8 p-0 bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/30"
-                >
-                  <Camera className="w-3 h-3" />
-                </Button>
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  className="hidden"
-                  accept="image/*"
-                  onChange={handleAvatarChange}
-                />
-              </div>
-              <div>
-                <h3 className="text-white font-medium">{displayName}</h3>
-                <p className="text-white/60 text-sm">{email}</p>
-              </div>
-            </div>
-
-            {/* Name Fields */}
-            <div className="space-y-4">
-              <div>
-                <label className="block text-white/80 text-sm mb-2">Full Name</label>
-                <Input
-                  value={formData.nickname}
-                  onChange={(e) => handleInputChange('nickname', e.target.value)}
-                  className="bg-white/5 border-white/10 text-white focus:border-orange-500/50 focus:ring-orange-500/20"
-                  placeholder="Your full name"
-                />
-              </div>
-
-              <div>
-                <label className="block text-white/80 text-sm mb-2">Preferred Name</label>
-                <Input
-                  value={formData.preferredName}
-                  onChange={(e) => handleInputChange('preferredName', e.target.value)}
-                  className="bg-white/5 border-white/10 text-white focus:border-orange-500/50 focus:ring-orange-500/20"
-                  placeholder="How ATMO should address you"
-                />
-              </div>
-            </div>
-          </div>
-        );
-
-      case 'professional':
-        return (
-          <div className="space-y-6">
-            <div>
-              <h2 className="text-lg font-medium text-white mb-2">Professional</h2>
-              <p className="text-white/60 text-sm">Your work information</p>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-white/80 text-sm mb-2">Job Title</label>
-                <Select
-                  value={formData.job_title}
-                  onValueChange={(value) => handleInputChange('job_title', value)}
-                >
-                  <SelectTrigger className="bg-white/5 border-white/10 text-white focus:border-orange-500/50 focus:ring-orange-500/20">
-                    <SelectValue placeholder="Select your role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.values(JobTitle).map((title) => (
-                      <SelectItem key={title} value={title}>{title}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <label className="block text-white/80 text-sm mb-2">Focus Area</label>
-                <Select
-                  value={formData.focus}
-                  onValueChange={(value) => handleInputChange('focus', value)}
-                >
-                  <SelectTrigger className="bg-white/5 border-white/10 text-white focus:border-orange-500/50 focus:ring-orange-500/20">
-                    <SelectValue placeholder="Primary focus" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.values(Focus).map((focus) => (
-                      <SelectItem key={focus} value={focus}>{focus}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-white/80 text-sm mb-2">Company</label>
-                <Input
-                  value={formData.company}
-                  onChange={(e) => handleInputChange('company', e.target.value)}
-                  className="bg-white/5 border-white/10 text-white focus:border-orange-500/50 focus:ring-orange-500/20"
-                  placeholder="Your company"
-                />
-              </div>
-
-              <div>
-                <label className="block text-white/80 text-sm mb-2">Location</label>
-                <Input
-                  value={formData.location}
-                  onChange={(e) => handleInputChange('location', e.target.value)}
-                  className="bg-white/5 border-white/10 text-white focus:border-orange-500/50 focus:ring-orange-500/20"
-                  placeholder="City, Country"
-                />
-              </div>
-            </div>
-          </div>
-        );
-
-      case 'personal':
-        return (
-          <div className="space-y-6">
-            <div>
-              <h2 className="text-lg font-medium text-white mb-2">Personal</h2>
-              <p className="text-white/60 text-sm">Additional personal information</p>
-            </div>
-
-            <div>
-              <label className="block text-white/80 text-sm mb-2">Bio</label>
-              <TextArea
-                value={formData.bio}
-                onChange={(e) => {
-                  if (e.target.value.length <= 500) {
-                    handleInputChange('bio', e.target.value);
-                  }
-                }}
-                className="bg-white/5 border-white/10 text-white focus:border-orange-500/50 focus:ring-orange-500/20 resize-none"
-                placeholder="Tell us about yourself..."
-                rows={4}
-              />
-              <p className="text-xs text-white/40 mt-1">{formData.bio.length}/500</p>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-white/80 text-sm mb-2">Website</label>
-                <Input
-                  value={formData.website}
-                  onChange={(e) => handleInputChange('website', e.target.value)}
-                  className="bg-white/5 border-white/10 text-white focus:border-orange-500/50 focus:ring-orange-500/20"
-                  placeholder="https://yourwebsite.com"
-                />
-              </div>
-
-              <div>
-                <label className="block text-white/80 text-sm mb-2">Phone</label>
-                <Input
-                  value={formData.phone}
-                  onChange={(e) => handleInputChange('phone', e.target.value)}
-                  className="bg-white/5 border-white/10 text-white focus:border-orange-500/50 focus:ring-orange-500/20"
-                  placeholder="+1 (555) 123-4567"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-white/80 text-sm mb-2">Timezone</label>
-              <Input
-                value={formData.timezone}
-                onChange={(e) => handleInputChange('timezone', e.target.value)}
-                className="bg-white/5 border-white/10 text-white focus:border-orange-500/50 focus:ring-orange-500/20"
-                placeholder="GMT-8 (Pacific Time)"
-              />
-            </div>
-          </div>
-        );
-
-      case 'preferences':
-        return (
-          <div className="space-y-6">
-            <div>
-              <h2 className="text-lg font-medium text-white mb-2">Preferences</h2>
-              <p className="text-white/60 text-sm">Customize your ATMO experience</p>
-            </div>
-
-            <div>
-              <label className="block text-white/80 text-sm mb-2">AI Context</label>
-              <TextArea
-                value={formData.aiPreferences}
-                onChange={(e) => handleInputChange('aiPreferences', e.target.value)}
-                className="bg-white/5 border-white/10 text-white focus:border-orange-500/50 focus:ring-orange-500/20 resize-none"
-                placeholder="Tell ATMO about your preferences, work context, or specific needs..."
-                rows={4}
-              />
-            </div>
-
-            <div>
-              <label className="block text-white/80 text-sm mb-2">Communication Style</label>
-              <Select
-                value={formData.communicationStyle}
-                onValueChange={(value) => handleInputChange('communicationStyle', value)}
-              >
-                <SelectTrigger className="bg-white/5 border-white/10 text-white focus:border-orange-500/50 focus:ring-orange-500/20">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="concise">Concise & Direct</SelectItem>
-                  <SelectItem value="detailed">Detailed & Thorough</SelectItem>
-                  <SelectItem value="friendly">Friendly & Casual</SelectItem>
-                  <SelectItem value="professional">Professional & Formal</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="p-4 bg-white/5 rounded-lg border border-white/10">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-white font-medium text-sm">Time Format</div>
-                  <div className="text-white/60 text-xs">
-                    {timeFormat === '24h' ? '24-hour (13:00, 14:00)' : '12-hour (1:00 PM, 2:00 PM)'}
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-white/50">12h</span>
-                  <Switch
-                    checked={timeFormat === '24h'}
-                    onCheckedChange={(checked) => setTimeFormat(checked ? '24h' : '12h')}
-                  />
-                  <span className="text-xs text-white/50">24h</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-
-      case 'account':
-        return (
-          <div className="space-y-6">
-            <div>
-              <h2 className="text-lg font-medium text-white mb-2">Account</h2>
-              <p className="text-white/60 text-sm">Manage your account settings</p>
-            </div>
-
-            <div className="p-4 bg-white/5 rounded-lg border border-white/10">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-white font-medium text-sm">Sign Out</div>
-                  <div className="text-white/60 text-xs">Sign out from your ATMO account</div>
-                </div>
-                <Button
-                  onClick={handleSignOut}
-                  disabled={isSigningOut}
-                  variant="ghost"
-                  className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                >
-                  {isSigningOut ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Signing out...
-                    </>
-                  ) : (
-                    <>
-                      <LogOut className="w-4 h-4 mr-2" />
-                      Sign Out
-                    </>
-                  )}
-                </Button>
-              </div>
-            </div>
-          </div>
-        );
-
-      default:
-        return null;
-    }
-  };
+  if (!draft) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+        <div className="text-center">
+          <p className="text-white/60 mb-4">Unable to load profile data</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 relative">
-      {/* Background effects - same as dashboard */}
-      <div className="absolute inset-0 bg-[url('/bg-grid.svg')] bg-fixed opacity-[0.01] pointer-events-none" />
-
-      {/* Adaptive container based on actual sidebar state */}
-      <div
-        className="min-h-screen transition-all duration-300"
-        style={{ marginLeft: sidebarWidth }}
-      >
-        <div className="flex min-h-screen">
-          {/* Profile Sidebar - Adaptive to NavSidebar */}
-          <div
-            className="hidden lg:block w-64 border-r border-white/10 bg-slate-900/50 backdrop-blur-sm fixed top-0 h-full z-30 transition-all duration-300"
-            style={{ left: sidebarWidth }}
-          >
-            <div className="p-6">
-              <h1 className="text-lg font-medium text-white mb-6">Settings</h1>
-              <nav className="space-y-1">
-                {navigationItems.map((item) => {
-                  const Icon = item.icon;
-                  const isActive = currentSection === item.id;
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => setCurrentSection(item.id)}
-                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-all ${
-                        isActive
-                          ? 'bg-white/10 text-white border-l-2 border-orange-500'
-                          : 'text-white/70 hover:text-white hover:bg-white/5'
-                      }`}
-                    >
-                      <Icon className="w-4 h-4" />
-                      <span className="text-sm">{item.label}</span>
-                    </button>
-                  );
-                })}
-              </nav>
-            </div>
-          </div>
-
-          {/* Mobile Navigation */}
-          <div
-            className="lg:hidden fixed top-0 right-0 bg-slate-900/80 backdrop-blur-sm border-b border-white/10 z-40 p-4 transition-all duration-300"
-            style={{ left: sidebarWidth }}
-          >
-            <h1 className="text-lg font-medium text-white mb-4">Settings</h1>
-            <div className="flex gap-2 overflow-x-auto">
-              {navigationItems.map((item) => {
-                const Icon = item.icon;
-                const isActive = currentSection === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => setCurrentSection(item.id)}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg whitespace-nowrap transition-all ${
-                      isActive
-                        ? 'bg-white/10 text-white'
-                        : 'text-white/70 hover:text-white hover:bg-white/5'
-                    }`}
-                  >
-                    <Icon className="w-4 h-4" />
-                    <span className="text-sm">{item.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Main Content */}
-          <div className="flex-1 p-4 lg:p-8 lg:ml-64 pt-20 lg:pt-8">
-            <div className="max-w-2xl mx-auto">
-              <div className="bg-slate-900/50 backdrop-blur-sm border border-white/10 rounded-lg p-6 mb-6">
-                {renderSectionContent()}
+    <FormProvider {...form}>
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 pb-16">
+        <div className="mx-auto max-w-6xl px-6 pt-10">
+          <header className="mb-10 flex flex-wrap items-center justify-between gap-6">
+            <div className="flex items-center gap-4">
+              <Avatar className="h-14 w-14 border border-white/15 bg-white/5">
+                {avatarPreview ? (
+                  <AvatarImage src={avatarPreview} alt={draft.account.displayName} className="object-cover" />
+                ) : (
+                  <AvatarFallback className="text-lg text-white/80">
+                    {draft.account.displayName.charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                )}
+              </Avatar>
+              <div>
+                <h1 className="text-2xl font-semibold text-white">Profile</h1>
+                <p className="text-sm text-white/60">
+                  Keep ATMO synced with who you are, how you work, and what you are optimising for.
+                </p>
               </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-4">
+              <Button
+                type="button"
+                variant="outline"
+                className="border-white/20 text-white/80"
+                onClick={() => avatarInputRef.current?.click()}
+              >
+                <Camera size={16} className="mr-2" /> Update avatar
+              </Button>
+              {avatarPreview && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="text-white/60"
+                  onClick={() => handleAvatarChange(null)}
+                >
+                  <Trash2 size={16} className="mr-2" /> Remove
+                </Button>
+              )}
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(event) => handleAvatarChange(event.target.files?.[0] ?? null)}
+              />
+              <Button
+                onClick={onSubmit}
+                disabled={!isDirty || saving}
+                className="bg-[#CC5500] hover:bg-[#CC5500]/90"
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving
+                  </>
+                ) : (
+                  'Save changes'
+                )}
+              </Button>
+            </div>
+          </header>
 
-              {/* Save Button */}
-              {currentSection !== 'account' && (
-                <div className="flex justify-end">
+          <div className="grid gap-8 lg:grid-cols-[320px_1fr]">
+            <aside className="space-y-6">
+              <div className="rounded-xl border border-white/10 bg-slate-900/70 p-6 space-y-4">
+                <SummaryLine label="Email" value={draft.account.email} />
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-white/70">
+                    <Clock size={14} />
+                    <span className="text-sm">Timezone</span>
+                  </div>
+                  <Input
+                    value={timezoneValue ?? ''}
+                    onChange={(event) => setValue('account.timezone', event.target.value, { shouldDirty: true })}
+                    className="h-9 w-40 bg-white/5 border-white/10 text-white"
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-white/70">
+                    <Compass size={14} />
+                    <span className="text-sm">Clock format</span>
+                  </div>
                   <Button
-                    onClick={handleSave}
-                    disabled={isLoading}
-                    className="bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 border border-orange-500/30 px-6"
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="border-white/20 text-white/70"
+                    onClick={() => setTimeFormat(timeFormat === '24h' ? '12h' : '24h')}
                   >
-                    {isLoading ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Saving...
-                      </>
-                    ) : (
-                      <>
-                        <Check className="w-4 h-4 mr-2" />
-                        Save
-                      </>
-                    )}
+                    {timeFormat === '24h' ? '24-hour' : '12-hour'}
                   </Button>
                 </div>
-              )}
-            </div>
+              </div>
+
+              <div className="rounded-xl border border-white/10 bg-slate-900/70 p-6 space-y-3">
+                <p className="text-sm font-medium text-white/80">Session</p>
+                <p className="text-xs text-white/50">
+                  Signed in as {draft.account.email}. Sign out to switch workspaces.
+                </p>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="text-red-400 hover:text-red-300"
+                  onClick={signOut}
+                >
+                  <LogOut size={16} className="mr-2" /> Sign out
+                </Button>
+              </div>
+            </aside>
+
+            <section className="rounded-2xl border border-white/10 bg-slate-900/80 backdrop-blur-sm flex flex-col max-h-[calc(100vh-200px)]">
+              <Tabs value={currentTab} onValueChange={(value) => setTab(value as ProfileTabId)} className="flex flex-col h-full">
+                <TabsList className="flex flex-wrap items-center gap-2 border-b border-white/10 bg-white/5 px-5 py-3 flex-shrink-0">
+                  {TAB_CONFIG.map(({ id, label, icon: Icon }) => (
+                    <TabsTrigger
+                      key={id}
+                      value={id}
+                      className={cn(
+                        'flex items-center gap-2 rounded-full px-4 py-2 text-sm transition-colors',
+                        currentTab === id
+                          ? 'bg-white/20 text-white shadow-inner shadow-white/15'
+                          : 'text-white/60 hover:text-white hover:bg-white/10'
+                      )}
+                    >
+                      <Icon size={16} />
+                      {label}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+
+                {TAB_CONFIG.map(({ id, description }) => (
+                  <TabsContent key={id} value={id} className="flex-1 overflow-y-auto p-6">
+                    <div className="mb-6">
+                      <p className="text-sm text-white/50">{description}</p>
+                    </div>
+                    {id === 'overview' && <OverviewPanel values={summaryValues} />}
+                    {id === 'personal' && <PersonalForm />}
+                    {id === 'work' && <WorkForm />}
+                    {id === 'performance' && <PerformanceForm />}
+                    {id === 'rituals' && <RitualsForm />}
+                    {id === 'wellness' && <WellnessForm />}
+                    {id === 'connections' && <ConnectionsForm />}
+                    {id === 'documents' && (
+                      <DocumentsForm
+                        onFileSelect={handleResumeChange}
+                        currentFileName={summaryValues.documents.resume?.name}
+                      />
+                    )}
+                  </TabsContent>
+                ))}
+              </Tabs>
+            </section>
           </div>
         </div>
       </div>
-    </div>
+    </FormProvider>
   );
 };
 

@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/useToast.ts";
 import { usePocketBase } from "@/hooks/useMockPocketBase";
 import { Project } from "@/models/Project.ts";
 import { Status } from "@/models/Status.ts";
-import { useAuth } from "@/hooks/useMockAuth";
+import useMockAuth from "@/hooks/useMockAuth";
 import { useProjectsStore } from "@/stores/useProjectsStore.ts";
 import { z } from "zod";
 
@@ -65,7 +65,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({
   cancelCallback
 }) => {
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user } = useMockAuth();
   const pb = usePocketBase();
   const { createProject, updateProject, loading } = useProjectsStore();
   const [isSubmitting, setIsSubmitting] = useState(false);

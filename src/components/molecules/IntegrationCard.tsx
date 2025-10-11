@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/atoms/Button';
 import { useIntegrationsStore } from "@/stores/useMockIntegrationsStore";
 import { usePocketBase } from "@/hooks/useMockPocketBase";
-import { useAuth } from '@/hooks/useMockAuth';
+import useMockAuth from '@/hooks/useMockAuth';
 import IntegrationCredentialsForm from './IntegrationCredentialsForm';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/atoms/Dialog';
 import { useToast } from '@/hooks/useToast';
@@ -164,7 +164,7 @@ const IntegrationCard: React.FC<IntegrationCardProps> = ({
   } = useIntegrationsStore();
   
   const pb = usePocketBase();
-  const { user } = useAuth();
+  const { user } = useMockAuth();
   
   const config = INTEGRATION_CONFIGS[integrationType];
   

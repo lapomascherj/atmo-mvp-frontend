@@ -2,26 +2,26 @@ import {Toaster} from "@/components/molecules/Toaster.tsx";
 import {Toaster as Sonner} from "@/components/organisms/Sonner.tsx";
 import {TooltipProvider} from "@/components/atoms/Tooltip.tsx";
 import {QueryClient, QueryClientProvider} from "@tanstack/react-query";
-import {BrowserRouter, Route, Routes} from "react-router-dom";
+import {BrowserRouter, Navigate, Route, Routes} from "react-router-dom";
 import React from "react";
 import ErrorBoundary from "@/components/atoms/ErrorBoundary.tsx";
 
 // Pages
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
-import Profile from "./pages/Profile";
-import DigitalBrain from "./pages/DigitalBrain";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import ForgotPassword from "./pages/ForgotPassword";
 import Onboarding from "./pages/Onboarding";
-import TestConnection from "./pages/TestConnection";
+import DigitalBrain from "./pages/DigitalBrain";
+import Profile from "./pages/Profile";
 
 // Components
 import NavSidebar from "./components/molecules/NavSidebar.tsx";
 import {DailyMapCtxProvider} from "@/context/DailyMapCtx.tsx";
 import {SidebarProvider, useSidebar} from "@/context/SidebarContext.tsx";
-import ProtectedRoute from "./components/molecules/ProtectedRoute";
+import ProtectedRoute from "./components/auth/ProtectedRoute";
+import {AuthProvider} from "@/context/AuthContext";
 
 const queryClient = new QueryClient();
 
@@ -45,20 +45,13 @@ const AppLayout: React.FC<{children: React.ReactNode}> = ({children}) => {
 const AppContent: React.FC = () => {
     return (
         <Routes>
-            {/* Demo Routes - Direct Access */}
-            <Route path="/demo" element={
-                <AppLayout>
-                    <Index />
-                </AppLayout>
+            <Route path="/" element={
+                <ProtectedRoute>
+                    <AppLayout>
+                        <Index />
+                    </AppLayout>
+                </ProtectedRoute>
             } />
-            <Route path="/demo/digital-brain" element={
-                <AppLayout>
-                    <DigitalBrain />
-                </AppLayout>
-            } />
-
-            {/* Test Route */}
-            <Route path="/test-connection" element={<TestConnection />} />
 
             {/* Public Auth Routes */}
             <Route path="/auth/login" element={<Login />} />
@@ -73,7 +66,7 @@ const AppContent: React.FC = () => {
             } />
 
             {/* Protected App Routes */}
-            <Route path="/" element={
+            <Route path="/app" element={
                 <ProtectedRoute>
                     <AppLayout>
                         <Index />
@@ -81,13 +74,7 @@ const AppContent: React.FC = () => {
                 </ProtectedRoute>
             } />
 
-            <Route path="/dashboard" element={
-                <ProtectedRoute>
-                    <AppLayout>
-                        <Index />
-                    </AppLayout>
-                </ProtectedRoute>
-            } />
+            <Route path="/dashboard" element={<Navigate to="/app" replace />} />
 
             <Route path="/profile" element={
                 <ProtectedRoute>
@@ -117,11 +104,13 @@ function App() {
             <QueryClientProvider client={queryClient}>
                 <TooltipProvider>
                     <BrowserRouter>
-                        <SidebarProvider>
-                            <DailyMapCtxProvider>
-                                <AppContent />
-                            </DailyMapCtxProvider>
-                        </SidebarProvider>
+                        <AuthProvider>
+                            <SidebarProvider>
+                                <DailyMapCtxProvider>
+                                    <AppContent />
+                                </DailyMapCtxProvider>
+                            </SidebarProvider>
+                        </AuthProvider>
                     </BrowserRouter>
                 </TooltipProvider>
             </QueryClientProvider>

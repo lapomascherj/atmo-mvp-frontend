@@ -317,116 +317,12 @@ export const ObsidianKnowledgeGraph: React.FC<ObsidianKnowledgeGraphProps> = ({ 
     return null;
   };
 
-  // Compact Graph Preview Component
+  // Compact Graph Preview Component - Empty State
   const CompactGraphPreview = () => (
-    <div className="flex-1 knowledge-graph-cosmic rounded-lg border border-blue-400/20 relative overflow-hidden">
-      <svg 
-        className="w-full h-full cursor-move touch-none" 
-        viewBox={`${compactViewBox.x} ${compactViewBox.y} ${600 / compactViewBox.scale} ${500 / compactViewBox.scale}`}
-        onMouseDown={handlePanStart}
-        onMouseMove={(e) => handleMouseMove(e, true)}
-        onMouseUp={handleMouseUp}
-        onWheel={(e) => handleWheel(e, true)}
-        onTouchStart={(e) => handleTouchStart(e, true)}
-        onTouchMove={(e) => handleTouchMove(e, true)}
-        onTouchEnd={handleTouchEnd}
-        style={{ touchAction: 'none' }}
-      >
-        {/* Render connections with natural curves */}
-        {MAIN_CATEGORIES.map(category => {
-          const subNodes = generateSubNodePositions(category, category.subNodes);
-          const mainPos = nodePositions[category.id] || category.position;
-          return subNodes.map(subNode => {
-            // Create slightly curved connections for more natural feel
-            const midX = (mainPos.x + subNode.x) / 2 + Math.sin((mainPos.x + subNode.x) * 0.01) * 5;
-            const midY = (mainPos.y + subNode.y) / 2 + Math.cos((mainPos.y + subNode.y) * 0.01) * 3;
-            const pathData = `M ${mainPos.x} ${mainPos.y} Q ${midX} ${midY} ${subNode.x} ${subNode.y}`;
-            
-            return (
-              <path
-                key={`${category.id}-${subNode.id}`}
-                d={pathData}
-                fill="none"
-                className={`connection-line ${hoveredNode === category.id || hoveredNode === subNode.id ? 'active' : ''}`}
-              />
-            );
-          });
-        })}
-        
-        {/* Render main category nodes with dynamic sizes */}
-        {MAIN_CATEGORIES.map(category => {
-          const pos = nodePositions[category.id] || category.position;
-          return (
-            <g key={category.id}>
-              <circle
-                cx={pos.x}
-                cy={pos.y}
-                r={category.size}
-                fill={category.color}
-                className="main-node cursor-pointer"
-                onMouseDown={(e) => handleNodeMouseDown(e, category.id)}
-                onMouseEnter={() => setHoveredNode(category.id)}
-                onMouseLeave={() => setHoveredNode(null)}
-              />
-              <circle
-                cx={pos.x}
-                cy={pos.y}
-                r={category.size * 0.3}
-                fill="white"
-                opacity="0.9"
-                className="pointer-events-none"
-              />
-              <text
-                x={pos.x}
-                y={pos.y + category.size + 15}
-                className="text-xs font-medium fill-white text-center pointer-events-none"
-                textAnchor="middle"
-              >
-                {category.label}
-              </text>
-            </g>
-          );
-        })}
-        
-        {/* Render sub-nodes with dynamic sizes */}
-        {MAIN_CATEGORIES.map(category => {
-          const subNodes = generateSubNodePositions(category, category.subNodes);
-          return subNodes.map(subNode => (
-            <g key={subNode.id}>
-              <circle
-                cx={subNode.x}
-                cy={subNode.y}
-                r={subNode.size}
-                fill={category.color}
-                opacity="0.85"
-                className="sub-node cursor-pointer"
-                onMouseDown={(e) => handleNodeMouseDown(e, subNode.id)}
-                onMouseEnter={() => setHoveredNode(subNode.id)}
-                onMouseLeave={() => setHoveredNode(null)}
-              />
-              <circle
-                cx={subNode.x}
-                cy={subNode.y}
-                r={subNode.size * 0.25}
-                fill="white"
-                opacity="0.9"
-                className="pointer-events-none"
-              />
-              {hoveredNode === subNode.id && (
-                <text
-                  x={subNode.x}
-                  y={subNode.y - subNode.size - 8}
-                  className="text-xs fill-orange-200 text-center pointer-events-none font-medium"
-                  textAnchor="middle"
-                >
-                  {subNode.label}
-                </text>
-              )}
-            </g>
-          ));
-        })}
-      </svg>
-      
+    <div className="flex-1 rounded-lg border border-blue-400/20 relative overflow-hidden flex items-center justify-center bg-gradient-to-br from-blue-900/5 to-slate-900/50">
+      <p className="text-sm text-white/40 text-center px-4">
+        Chat with avatar to populate this card
+      </p>
     </div>
   );
 

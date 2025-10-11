@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import SphereChat from '@/components/atoms/SphereChat';
 import { X } from 'lucide-react';
+import { usePersonasStore } from '@/stores/usePersonasStore';
 
 interface ChatMessage {
   id: string;
@@ -256,27 +257,59 @@ export const ChatOverlay: React.FC<ChatOverlayProps> = ({
     setIsCapturing(!isCapturing);
   };
 
-  const handleSendMessage = () => {
-    if (chatInput.trim()) {
+  const sendChatMessage = usePersonasStore(state => state.sendChatMessage);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSendMessage = async () => {
+    if (chatInput.trim() && !isLoading) {
+      const userMessageText = chatInput.trim();
+
+      // Add user message
       const newMessage = {
         id: Date.now().toString(),
-        text: chatInput,
+        text: userMessageText,
         sender: 'user' as const,
         timestamp: new Date()
       };
       setChatMessages(prev => [...prev, newMessage]);
       setChatInput('');
+      setIsLoading(true);
 
-      // Simulate AI response
-      setTimeout(() => {
+      try {
+        // Call Claude AI via Supabase edge function
+        const response = await sendChatMessage(userMessageText);
+
+        // Add AI response
         const aiMessage = {
           id: (Date.now() + 1).toString(),
-          text: "I'm processing your request. This is a demo response!",
+          text: response.response,
           sender: 'ai' as const,
           timestamp: new Date()
         };
         setChatMessages(prev => [...prev, aiMessage]);
-      }, 1000);
+      } catch (error) {
+        console.error('Failed to send message:', error);
+
+        // Show detailed error message to user
+        let errorText = 'Sorry, I encountered an error. Please try again.';
+        if (error instanceof Error) {
+          errorText = error.message;
+          // If it's an auth error, provide clearer message
+          if (error.message.includes('login') || error.message.includes('auth')) {
+            errorText = 'You must be logged in to use chat. Please refresh the page and sign in.';
+          }
+        }
+
+        const errorMessage = {
+          id: (Date.now() + 1).toString(),
+          text: errorText,
+          sender: 'ai' as const,
+          timestamp: new Date()
+        };
+        setChatMessages(prev => [...prev, errorMessage]);
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -435,6 +468,20 @@ export const ChatOverlay: React.FC<ChatOverlayProps> = ({
               </div>
             </div>
           ))}
+          {isLoading && (
+            <div className="flex justify-start animate-[slideIn_0.3s_ease-out]">
+              <div className="max-w-[85%] px-3 py-2 bg-white/10 text-white/90 rounded-[18px] rounded-bl-[6px] backdrop-blur-sm border border-white/10 shadow-lg">
+                <div className="flex items-center gap-2">
+                  <div className="flex space-x-1">
+                    <div className="w-2 h-2 bg-white/60 rounded-full animate-bounce"></div>
+                    <div className="w-2 h-2 bg-white/60 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                    <div className="w-2 h-2 bg-white/60 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                  </div>
+                  <span className="text-xs text-white/60">ATMO is thinking...</span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Chat Input Box - fixed at bottom */}
@@ -456,7 +503,7 @@ export const ChatOverlay: React.FC<ChatOverlayProps> = ({
               />
               <button
                 onClick={handleSendMessage}
-                disabled={!chatInput.trim()}
+                disabled={!chatInput.trim() || isLoading}
                 className="flex-shrink-0 w-9 h-9 rounded-full bg-gradient-to-br from-[#CC5500] to-[#CC5500]/80 hover:from-[#CC5500]/90 hover:to-[#CC5500]/70 disabled:from-white/10 disabled:to-white/5 disabled:cursor-not-allowed text-white flex items-center justify-center transition-all duration-200 shadow-lg"
               >
                 <svg

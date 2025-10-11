@@ -9,7 +9,7 @@ import { ObsidianKnowledgeGraph } from '@/components/knowledge/ObsidianKnowledge
 import { ChatOverlay } from '@/components/organisms/ChatOverlay';
 import { PriorityStreamEnhanced } from '@/components/organisms/PriorityStreamEnhanced';
 import { usePersonasStore } from '@/stores/usePersonasStore';
-import { useAuth } from '@/hooks/useMockAuth';
+import { useMockAuth } from '@/hooks/useMockAuth';
 
 const DigitalBrain: React.FC = () => {
   const [isCapturing, setIsCapturing] = useState(false);
@@ -38,7 +38,7 @@ const DigitalBrain: React.FC = () => {
   const getMilestones = usePersonasStore(state => state.getMilestones);
 
   // Get user for initialization
-  const { user } = useAuth();
+  const { user } = useMockAuth();
 
   // Initialize PersonasStore when user is available
   useEffect(() => {
@@ -55,16 +55,16 @@ const DigitalBrain: React.FC = () => {
     if (!currentPersona) {
       return { projects: [], milestones: [] };
     }
-    
+
     const projects = getProjects();
     const milestones = getMilestones();
-    
+
     return { projects, milestones };
   }, [currentPersona, getProjects, getMilestones]);
 
   // Knowledge Graph is now data-driven from Zustand stores
 
-  // Mock data for AI Insights
+  // AI Insights tags
   const personalTags = [
     { id: 'all', name: 'All' },
     { id: 'partnership', name: 'Partnership' },
@@ -87,131 +87,9 @@ const DigitalBrain: React.FC = () => {
     { id: 'task', name: 'Task' },
   ];
 
-  const personalInsights = [
-    {
-      id: '1',
-      type: 'Task',
-      title: 'Write LinkedIn thought piece on AI trends',
-      metadata: 'Impact: High • 1h ago',
-      action: 'Add to Today',
-      relevance: 94
-    },
-    {
-      id: '2',
-      type: 'Learning',
-      title: 'Leadership in 2024: Remote Team Management',
-      metadata: '15min read • 4h ago',
-      action: 'Read',
-      relevance: 89
-    },
-    {
-      id: '3',
-      type: 'Partnership',
-      title: 'Y Combinator seeks AI startups',
-      metadata: 'Match: 89% • 2h ago',
-      action: 'Connect',
-      relevance: 89
-    },
-    {
-      id: '4',
-      type: 'Opportunity',
-      title: 'TechCrunch Disrupt 2024 Speaker Applications',
-      metadata: 'Networking: High • 6h ago',
-      action: 'Register',
-      relevance: 85
-    },
-    {
-      id: '5',
-      type: 'Trend',
-      title: 'No-code movement growing +47%',
-      metadata: 'Growth: High • 1d ago',
-      action: 'Explore',
-      relevance: 82
-    },
-    {
-      id: '6',
-      type: 'Network',
-      title: 'Connect with Sarah Chen, VP at Notion',
-      metadata: 'Mutual connections: 3 • 3h ago',
-      action: 'Connect',
-      relevance: 88
-    }
-  ];
-
-  const projectInsights = [
-    {
-      id: '1',
-      type: 'Partnership',
-      title: 'Notion API partnership program',
-      metadata: 'Fit: 94% • 3h ago',
-      action: 'Apply',
-      project: 'GrowIn',
-      relevance: 94
-    },
-    {
-      id: '2',
-      type: 'Task',
-      title: 'Update GrowIn landing page copy',
-      metadata: 'Priority: High • 2h ago',
-      action: 'Add to Sprint',
-      project: 'GrowIn',
-      relevance: 92
-    },
-    {
-      id: '3',
-      type: 'Funding',
-      title: 'Seed funding for AI productivity tools',
-      metadata: 'Stage: Perfect • 5h ago',
-      action: 'Learn More',
-      project: 'ATMO',
-      relevance: 90
-    },
-    {
-      id: '4',
-      type: 'Task',
-      title: 'Research ATMO user personas',
-      metadata: 'Deadline: Tomorrow • 4h ago',
-      action: 'Schedule',
-      project: 'ATMO',
-      relevance: 88
-    },
-    {
-      id: '5',
-      type: 'Talent',
-      title: 'Senior React developer available',
-      metadata: 'Skills: 96% match • 8h ago',
-      action: 'Contact',
-      project: 'Both Projects',
-      relevance: 86
-    },
-    {
-      id: '6',
-      type: 'Market',
-      title: 'Productivity software market analysis',
-      metadata: 'Growth: +23% • 1d ago',
-      action: 'Analyze',
-      project: 'All',
-      relevance: 84
-    },
-    {
-      id: '7',
-      type: 'Tool',
-      title: 'New React performance monitoring tool',
-      metadata: 'Relevance: High • 6h ago',
-      action: 'Evaluate',
-      project: 'GrowIn',
-      relevance: 81
-    },
-    {
-      id: '8',
-      type: 'Customer',
-      title: 'Busy professionals segment analysis',
-      metadata: 'Target match: 89% • 12h ago',
-      action: 'Research',
-      project: 'ATMO',
-      relevance: 87
-    }
-  ];
+  // Real insights will be populated from backend/AI
+  const personalInsights: any[] = [];
+  const projectInsights: any[] = [];
 
   const getCurrentInsights = () => {
     const insights = insightMode === 'personal' ? personalInsights : projectInsights;
@@ -224,154 +102,19 @@ const DigitalBrain: React.FC = () => {
   };
 
   // Journal albums and items (Apple Photos style)
-  const journalAlbums = [
-    {
-      id: 'recent',
-      name: 'Recent',
-      count: 8,
-      items: [
-        {
-          id: '1',
-          type: 'Article',
-          title: 'The Future of AI in Productivity Tools',
-          source: 'Harvard Business Review',
-          savedDate: '2 days ago',
-          readTime: '8 min read',
-          thumbnail: 'AI'
-        },
-        {
-          id: '2',
-          type: 'Opportunity',
-          title: 'Y Combinator Application',
-          source: 'YC Website',
-          savedDate: '1 week ago',
-          deadline: 'Dec 15',
-          thumbnail: 'YC'
-        },
-        {
-          id: '3',
-          type: 'Advice',
-          title: 'Building MVP: Core Features',
-          source: 'Paul Graham',
-          savedDate: '3 days ago',
-          readTime: '12 min',
-          thumbnail: 'MVP'
-        },
-        {
-          id: '4',
-          type: 'Article',
-          title: 'Remote Team Leadership',
-          source: 'First Round',
-          savedDate: '1 week ago',
-          readTime: '15 min',
-          thumbnail: 'LEAD'
-        }
-      ]
-    },
-    {
-      id: 'opportunities',
-      name: 'Opportunities',
-      count: 5,
-      items: [
-        {
-          id: '5',
-          type: 'Funding',
-          title: 'Seed Funding Programs',
-          source: 'AngelList',
-          savedDate: '4 days ago',
-          thumbnail: 'FUND'
-        },
-        {
-          id: '6',
-          type: 'Partnership',
-          title: 'Tech Partnership Program',
-          source: 'Microsoft',
-          savedDate: '6 days ago',
-          thumbnail: 'PART'
-        }
-      ]
-    },
-    {
-      id: 'learning',
-      name: 'Learning',
-      count: 12,
-      items: [
-        {
-          id: '7',
-          type: 'Course',
-          title: 'Advanced React Patterns',
-          source: 'Kent C. Dodds',
-          savedDate: '2 weeks ago',
-          thumbnail: 'REACT'
-        },
-        {
-          id: '8',
-          type: 'Book',
-          title: 'The Lean Startup',
-          source: 'Eric Ries',
-          savedDate: '1 month ago',
-          thumbnail: 'LEAN'
-        }
-      ]
-    }
+  const defaultAlbums = [
+    { id: 'recent', name: 'Recent', count: 0, items: [] }
   ];
 
   const [selectedAlbum, setSelectedAlbum] = useState('recent');
-  const [albums, setAlbums] = useState(journalAlbums);
+  const [albums, setAlbums] = useState(defaultAlbums);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [opportunityToSave, setOpportunityToSave] = useState(null);
   const [showCreateAlbum, setShowCreateAlbum] = useState(false);
   const [newAlbumName, setNewAlbumName] = useState('');
 
   // Opportunity Radar data - 3 opportunities
-  const opportunityRadarData = {
-    personal: [
-      {
-        id: '1',
-        title: 'AI Strategy Workshop',
-        subtitle: 'Dec 15 - Online',
-        match: '95%',
-        growth: '+12%'
-      },
-      {
-        id: '2',
-        title: 'Tech Leadership Summit',
-        subtitle: 'Jan 20 - San Francisco',
-        match: '88%',
-        growth: '+8%'
-      },
-      {
-        id: '3',
-        title: 'Startup Accelerator',
-        subtitle: 'Feb 1 - Applications Open',
-        match: '92%',
-        growth: '+15%'
-      }
-    ],
-    projects: [
-      {
-        id: '1',
-        title: 'Notion API Partnership',
-        subtitle: 'Integration Program',
-        relevance: '89%',
-        urgency: 'High'
-      },
-      {
-        id: '2',
-        title: 'Microsoft for Startups',
-        subtitle: 'Azure Credits Program',
-        relevance: '85%',
-        urgency: 'Medium'
-      },
-      {
-        id: '3',
-        title: 'Y Combinator Demo Day',
-        subtitle: 'Investor Network',
-        relevance: '93%',
-        urgency: 'High'
-      }
-    ]
-  };
+  const opportunityRadarData = { personal: [], projects: [] };
 
   // Send opportunity to chat
   const sendOpportunityToChat = (opportunity: any, type: 'radar' | 'insight') => {
@@ -478,8 +221,8 @@ const DigitalBrain: React.FC = () => {
         thumbnail: opportunityToSave.title.substring(0, 3).toUpperCase()
       };
 
-      setAlbums(albums.map(album => 
-        album.id === albumId 
+      setAlbums(albums.map(album =>
+        album.id === albumId
           ? { ...album, items: [...album.items, newItem], count: album.count + 1 }
           : album
       ));
@@ -505,7 +248,12 @@ const DigitalBrain: React.FC = () => {
 
             {/* Orange Avatar Dot */}
             <button
-              onClick={() => setShowChatOverlay(true)}
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setShowChatOverlay(true);
+              }}
               className="relative w-12 h-12 rounded-full bg-gradient-to-br from-[#CC5500] to-[#CC5500]/80 hover:from-[#CC5500]/90 hover:to-[#CC5500]/70 flex items-center justify-center transition-all duration-200 shadow-lg hover:shadow-[0_0_20px_rgba(204,85,0,0.4)] cursor-pointer"
               title="Open Chat"
             >
@@ -519,7 +267,7 @@ const DigitalBrain: React.FC = () => {
         {/* 2x2 Grid of Cards - Full Width */}
         <div className="grid grid-cols-2 grid-rows-2 gap-6 flex-1 min-h-0">
 
-          {/* Card 1 - User Profile (Lapo's Design) */}
+          {/* Card 1 - User Profile */}
           <AtmoCard variant="purple" className="w-full h-full p-4" hover={true}>
             <div className="h-full flex flex-col">
 
@@ -528,13 +276,12 @@ const DigitalBrain: React.FC = () => {
                 <div className="flex items-start gap-3 flex-1">
                   {/* User Avatar */}
                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center text-white font-semibold text-sm shrink-0">
-                    L
+                    {user?.nickname?.charAt(0)?.toUpperCase() || user?.preferredName?.charAt(0)?.toUpperCase() || 'U'}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="text-sm font-semibold text-white">Lapo</h3>
+                    <h3 className="text-sm font-semibold text-white">{user?.nickname || user?.preferredName || user?.email?.split('@')[0] || 'User'}</h3>
                     <p className="text-xs text-white/70 leading-relaxed mt-1 pr-2">
-                      Tech founder building GrowIn, focusing on AI transformation & digital branding.
-                      Specialized in scaling startups through innovative technology solutions and strategic growth hacking.
+                      {user?.bio || user?.mainPriority || 'Building something great. Define your mission in onboarding to see it here.'}
                     </p>
                   </div>
                 </div>
@@ -556,18 +303,20 @@ const DigitalBrain: React.FC = () => {
               <div className="mb-4 px-3 py-2 bg-white/5 rounded-lg border border-purple-500/20">
                 <div className="flex items-center gap-2 mb-2">
                   <Star size={12} className="text-purple-400" />
-                  <span className="text-xs font-medium text-purple-400">Why I'm Special</span>
+                  <span className="text-xs font-medium text-purple-400">Focus Areas</span>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <span className="px-2 py-1 bg-purple-500/10 text-purple-300 text-xs rounded-full border border-purple-500/20">
-                    AI Strategy
-                  </span>
-                  <span className="px-2 py-1 bg-purple-500/10 text-purple-300 text-xs rounded-full border border-purple-500/20">
-                    Growth Hacking
-                  </span>
-                  <span className="px-2 py-1 bg-purple-500/10 text-purple-300 text-xs rounded-full border border-purple-500/20">
-                    Product Vision
-                  </span>
+                  {user?.focusAreas && user.focusAreas.length > 0 ? (
+                    user.focusAreas.slice(0, 3).map((area, index) => (
+                      <span key={index} className="px-2 py-1 bg-purple-500/10 text-purple-300 text-xs rounded-full border border-purple-500/20">
+                        {area}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-xs text-white/40">
+                      Define focus areas in onboarding
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -587,7 +336,7 @@ const DigitalBrain: React.FC = () => {
                           <div className={`w-2 h-2 rounded-full ${milestone.completed ? 'bg-green-400' : 'bg-purple-400'}`}></div>
                         </div>
                         <div className="w-full bg-white/10 rounded-full h-1">
-                          <div 
+                          <div
                             className="bg-purple-400 h-1 rounded-full transition-all duration-300"
                             style={{ width: `${milestone.progress || 0}%` }}
                           ></div>
@@ -651,12 +400,12 @@ const DigitalBrain: React.FC = () => {
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-xs font-medium text-white truncate">{project.name}</span>
                           <div className={`w-2 h-2 rounded-full ${
-                            project.priority === 'high' ? 'bg-red-400' : 
+                            project.priority === 'high' ? 'bg-red-400' :
                             project.priority === 'medium' ? 'bg-yellow-400' : 'bg-green-400'
                           }`}></div>
                         </div>
                         <div className="w-full bg-white/10 rounded-full h-1">
-                          <div 
+                          <div
                             className="bg-purple-400 h-1 rounded-full transition-all duration-300"
                             style={{ width: `${project.progress || 0}%` }}
                           ></div>
@@ -686,14 +435,6 @@ const DigitalBrain: React.FC = () => {
                 {/* Right: Key Metrics */}
                 <div className="text-right space-y-1">
                   <div className="flex items-center gap-2 justify-end">
-                    <span className="text-xs text-white/60">Notes this week</span>
-                    <span className="text-xs font-medium text-purple-400">23</span>
-                  </div>
-                  <div className="flex items-center gap-2 justify-end">
-                    <span className="text-xs text-white/60">Insights explored</span>
-                    <span className="text-xs font-medium text-purple-400">12</span>
-                  </div>
-                  <div className="flex items-center gap-2 justify-end">
                     <span className="text-xs text-white/60">Active projects</span>
                     <span className="text-xs font-medium text-purple-400">{projects.length}</span>
                   </div>
@@ -713,25 +454,25 @@ const DigitalBrain: React.FC = () => {
                     {showJournal ? 'Journal' : 'ATMO Insights'}
                   </h3>
                 </div>
-                
+
                 {/* Perfectly centered mode toggle - only show when not in journal mode */}
                 {!showJournal && (
                   <div className="flex bg-white/5 rounded-lg p-1">
-                    <button 
+                    <button
                       onClick={() => setInsightMode('personal')}
                       className={`px-3 py-1 rounded-md text-xs transition-all ${
-                        insightMode === 'personal' 
-                          ? 'bg-[#89AC76]/20 text-[#89AC76] border border-[#89AC76]/30' 
+                        insightMode === 'personal'
+                          ? 'bg-[#89AC76]/20 text-[#89AC76] border border-[#89AC76]/30'
                           : 'text-white/60 hover:text-white/80'
                       }`}
                     >
                       Personal
                     </button>
-                    <button 
+                    <button
                       onClick={() => setInsightMode('projects')}
                       className={`px-3 py-1 rounded-md text-xs transition-all ${
-                        insightMode === 'projects' 
-                          ? 'bg-[#89AC76]/20 text-[#89AC76] border border-[#89AC76]/30' 
+                        insightMode === 'projects'
+                          ? 'bg-[#89AC76]/20 text-[#89AC76] border border-[#89AC76]/30'
                           : 'text-white/60 hover:text-white/80'
                       }`}
                     >
@@ -739,14 +480,14 @@ const DigitalBrain: React.FC = () => {
                     </button>
                   </div>
                 )}
-                
+
                 {/* Journal icon */}
                 <div className="flex-1 flex justify-end">
-                  <button 
+                  <button
                     onClick={() => setShowJournal(!showJournal)}
                     className={`w-6 h-6 rounded-md flex items-center justify-center transition-colors ${
-                      showJournal 
-                        ? 'bg-[#89AC76]/20 text-[#89AC76] border border-[#89AC76]/30' 
+                      showJournal
+                        ? 'bg-[#89AC76]/20 text-[#89AC76] border border-[#89AC76]/30'
                         : 'bg-white/5 hover:bg-white/10 text-white/60'
                     }`}
                   >
@@ -782,264 +523,156 @@ const DigitalBrain: React.FC = () => {
                         {album.id !== 'recent' && (
                           <button
                             onClick={() => handleDeleteAlbum(album.id)}
-                            className="absolute -top-1 -right-1 w-5 h-5 bg-white/10 hover:bg-white/20 text-white/60 hover:text-white/80 rounded-full opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center border border-white/20"
-                            title="Delete Album"
+                            className="absolute -top-1 -right-1 w-5 h-5 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                           >
-                            <X size={10} />
+                            <X size={10} className="text-white/60" />
                           </button>
                         )}
                       </div>
                     ))}
-                    
-                    {/* Create New Album Button */}
-                    <button 
+                    <button
                       onClick={() => setShowCreateAlbum(true)}
-                      className="w-8 h-8 rounded-full bg-white/5 border border-white/10 hover:border-[#89AC76]/30 hover:bg-[#89AC76]/10 transition-colors flex items-center justify-center shrink-0"
-                      title="Create New Album"
+                      className="px-3 py-1 rounded-full text-xs whitespace-nowrap bg-white/5 text-white/60 border border-white/10 hover:bg-white/10 transition-colors flex items-center gap-1"
                     >
-                      <Plus size={12} className="text-white/60 hover:text-[#89AC76]" />
+                      <Plus size={12} />
+                      New Album
                     </button>
                   </div>
 
-
-                  {/* Items Grid - Apple Photos Style */}
-                  <div className="flex-1 min-h-0">
-                    <div className="grid grid-cols-2 gap-2 pb-4">
-                      {albums
-                        .find(album => album.id === selectedAlbum)
-                        ?.items.map(item => (
-                          <div key={item.id} className="group cursor-pointer">
-                            <div className="bg-white/5 rounded-lg border border-white/10 hover:border-[#89AC76]/30 transition-all overflow-hidden">
-                              {/* Thumbnail */}
-                              <div className="h-16 bg-gradient-to-br from-[#89AC76]/20 to-[#89AC76]/10 flex items-center justify-center">
-                                <span className="text-xs font-bold text-[#89AC76]">
-                                  {item.thumbnail}
-                                </span>
-                              </div>
-                              
-                              {/* Content */}
-                              <div className="p-2">
-                                <div className="flex items-center justify-between mb-1">
-                                  <span className="text-xs text-[#89AC76] font-medium">{item.type}</span>
-                                  <span className="text-xs text-white/50">{item.savedDate}</span>
-                                </div>
-                                <h5 className="text-xs font-medium text-white mb-1 line-clamp-2 leading-tight">
-                                  {item.title}
-                                </h5>
-                                <p className="text-xs text-white/60 truncate">{item.source}</p>
-                                
-                                {/* Metadata */}
-                                <div className="mt-1">
-                                  <span className="text-xs text-white/50">
-                                    {'readTime' in item ? item.readTime : 'deadline' in item ? `Due: ${item.deadline}` : ''}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      
-                      {/* Add New Item Button */}
-                      <div className="col-span-2 mt-2">
-                        <button className="w-full h-12 border-2 border-dashed border-white/20 rounded-lg text-white/40 hover:border-[#89AC76]/30 hover:text-[#89AC76]/60 transition-colors flex items-center justify-center">
-                          <Plus size={14} className="mr-2" />
-                          <span className="text-xs">Add to Journal</span>
+                  {/* Create Album Modal */}
+                  {showCreateAlbum && (
+                    <div className="mb-4 p-3 bg-white/5 rounded-lg border border-[#89AC76]/30">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={newAlbumName}
+                          onChange={(e) => setNewAlbumName(e.target.value)}
+                          placeholder="Album name..."
+                          className="flex-1 px-3 py-1 bg-white/10 rounded-md text-xs text-white placeholder-white/40 border border-white/20 focus:outline-none focus:border-[#89AC76]/50"
+                          autoFocus
+                        />
+                        <button
+                          onClick={handleCreateAlbum}
+                          className="px-3 py-1 bg-[#89AC76]/20 text-[#89AC76] text-xs rounded-md border border-[#89AC76]/30 hover:bg-[#89AC76]/30 transition-colors"
+                        >
+                          Create
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowCreateAlbum(false);
+                            setNewAlbumName('');
+                          }}
+                          className="px-3 py-1 bg-white/5 text-white/60 text-xs rounded-md hover:bg-white/10 transition-colors"
+                        >
+                          Cancel
                         </button>
                       </div>
                     </div>
+                  )}
+
+                  {/* Album Content - Grid View */}
+                  <div className="grid grid-cols-2 gap-2">
+                    {albums.find(album => album.id === selectedAlbum)?.items.map(item => (
+                      <div key={item.id} className="group relative aspect-square bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 transition-all overflow-hidden cursor-pointer">
+                        <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-[#89AC76]/20 to-[#89AC76]/10">
+                          <span className="text-lg font-bold text-white/40">{item.thumbnail}</span>
+                        </div>
+                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2">
+                          <p className="text-xs font-medium text-white truncate">{item.title}</p>
+                          <p className="text-xs text-white/60 truncate">{item.source}</p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
+
+                  {albums.find(album => album.id === selectedAlbum)?.items.length === 0 && (
+                    <div className="text-center text-white/40 text-xs mt-8">
+                      <BookOpen size={24} className="mx-auto mb-2 opacity-40" />
+                      <p>No items in this album yet</p>
+                      <p className="mt-1 text-white/30">Save opportunities from the radar to build your collection</p>
+                    </div>
+                  )}
                   </>
                 ) : (
                   /* AI Insights View */
                   <>
-                    {/* Opportunity Radar Section - 3 Small Cards */}
-                    <div className="mb-3">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Radar size={12} className="text-[#89AC76]" />
-                      <span className="text-xs font-medium text-[#89AC76]">Opportunity Radar</span>
-                    </div>
-                    
-                    {/* 3 Opportunity Cards */}
-                    <div className="flex gap-2">
-                      {opportunityRadarData[insightMode].map(opportunity => (
-                        <div key={opportunity.id} className="flex-1 p-2 bg-gradient-to-r from-[#89AC76]/15 to-[#89AC76]/10 rounded-lg border border-[#89AC76]/25">
-                          <div className="mb-2">
-                            <h4 className="text-xs font-semibold text-white mb-1 line-clamp-1">
-                              {opportunity.title}
-                            </h4>
-                            <p className="text-xs text-white/70 line-clamp-1">
-                              {opportunity.subtitle}
-                            </p>
-                            <p className="text-xs text-[#89AC76] mt-1">
-                              {insightMode === 'personal' 
-                                ? `Match: ${opportunity.match} | Growth: ${opportunity.growth}`
-                                : `Relevance: ${opportunity.relevance} | ${opportunity.urgency}`
-                              }
-                            </p>
-                          </div>
-                          <div className="flex gap-1 justify-center">
-                            <button
-                              onClick={() => sendOpportunityToChat(opportunity, 'radar')}
-                              disabled={sendingOpportunityIds.has(`radar-${opportunity.id}`)}
-                              className="w-6 h-6 bg-[#89AC76]/20 text-[#89AC76] rounded border border-[#89AC76]/30 hover:bg-[#89AC76]/30 transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-                              title="Send to Chat"
-                            >
-                              <Circle size={8} className="fill-current" />
-                            </button>
-                            <button
-                              onClick={() => handleSaveOpportunity(opportunity)}
-                              className="w-6 h-6 bg-[#89AC76]/20 text-[#89AC76] rounded border border-[#89AC76]/30 hover:bg-[#89AC76]/30 transition-colors flex items-center justify-center"
-                              title="Save to Journal"
-                            >
-                              <Plus size={10} />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Growth Insights Feed */}
-                  <div className="flex-1 overflow-hidden">
-                    <div className="flex items-center justify-between mb-3">
-                      <h4 className="text-sm font-medium text-white">
-                        {insightMode === 'personal' ? "Today's Growth Discoveries" : "Growth Opportunities"}
-                      </h4>
-                      {insightMode === 'projects' && (
-                        <select 
-                          value={selectedProject}
-                          onChange={(e) => setSelectedProject(e.target.value)}
-                          className="bg-white/5 border border-white/10 rounded text-xs text-white/80 px-2 py-1"
-                        >
-                          <option value="all">All Projects</option>
-                          <option value="growin">GrowIn</option>
-                          <option value="atmo">ATMO</option>
-                        </select>
-                      )}
-                    </div>
-                    
-                    {/* Tag filters without emojis */}
-                    <div className="flex gap-1 mb-3 overflow-x-auto scrollbar-hide">
-                      {getCurrentTags().map(tag => (
-                        <button 
-                          key={tag.id} 
-                          onClick={() => setSelectedTag(tag.id)}
-                          className={`px-2 py-1 rounded-full text-xs whitespace-nowrap transition-colors ${
-                            selectedTag === tag.id 
-                              ? 'bg-[#89AC76]/20 text-[#89AC76] border border-[#89AC76]/30'
-                              : 'bg-white/5 text-white/60 border border-white/10 hover:bg-white/10'
-                          }`}
-                        >
-                          {tag.name}
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* Horizontal scrolling insights without emojis */}
-                    <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-2 h-36">
-                      {getCurrentInsights().map(insight => (
-                        <div key={insight.id} className="flex-shrink-0 w-48 p-3 bg-white/5 rounded-lg border border-white/10 hover:border-[#89AC76]/30 transition-all">
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="text-xs text-[#89AC76] font-medium">{insight.type}</span>
-                            {insightMode === 'projects' && 'project' in insight && (
-                              <span className="text-xs text-white/50">• {insight.project}</span>
-                            )}
-                          </div>
-                          <h5 className="text-xs font-medium text-white mb-1 line-clamp-2">
-                            {insight.title}
-                          </h5>
-                          <p className="text-xs text-white/60 mb-2">
-                            {insight.metadata}
-                          </p>
-                          <div className="flex gap-1 justify-center">
-                            <button
-                              onClick={() => sendOpportunityToChat(insight, 'insight')}
-                              disabled={sendingOpportunityIds.has(`insight-${insight.id}`)}
-                              className="w-6 h-6 bg-[#89AC76]/20 text-[#89AC76] rounded border border-[#89AC76]/30 hover:bg-[#89AC76]/30 transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-                              title="Send to Chat"
-                            >
-                              <Circle size={8} className="fill-current" />
-                            </button>
-                            <button className="w-6 h-6 bg-[#89AC76]/20 text-[#89AC76] rounded border border-[#89AC76]/30 hover:bg-[#89AC76]/30 transition-colors flex items-center justify-center">
-                              <Plus size={10} />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </>
-                )}
-              </div>
-            </div>
-
-            {/* Save Opportunity Modal */}
-            {showSaveModal && (
-              <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-50">
-                <div className="bg-slate-800 rounded-lg p-4 w-64 border border-white/10">
-                  <h4 className="text-sm font-semibold text-white mb-3">Save to Album</h4>
-                  <p className="text-xs text-white/70 mb-3">Choose an album for: {opportunityToSave?.title}</p>
-                  <div className="space-y-2 max-h-32 overflow-y-auto">
-                    {albums.map(album => (
+                  {/* Tag Filter Pills */}
+                  <div className="flex gap-2 overflow-x-auto mb-3 pb-2 scrollbar-hide flex-shrink-0">
+                    {getCurrentTags().map(tag => (
                       <button
-                        key={album.id}
-                        onClick={() => handleSaveToAlbum(album.id)}
-                        className="w-full text-left px-3 py-2 bg-white/5 hover:bg-[#89AC76]/10 rounded border border-white/10 hover:border-[#89AC76]/30 transition-colors"
+                        key={tag.id}
+                        onClick={() => setSelectedTag(tag.id)}
+                        className={`px-3 py-1 rounded-full text-xs whitespace-nowrap transition-all ${
+                          selectedTag === tag.id
+                            ? 'bg-[#89AC76]/20 text-[#89AC76] border border-[#89AC76]/30'
+                            : 'bg-white/5 text-white/60 border border-white/10 hover:bg-white/10'
+                        }`}
                       >
-                        <span className="text-xs text-white">{album.name} ({album.count})</span>
+                        {tag.name}
                       </button>
                     ))}
                   </div>
-                  <button
-                    onClick={() => setShowSaveModal(false)}
-                    className="w-full mt-3 px-3 py-2 bg-white/5 text-white/70 text-xs rounded border border-white/10 hover:bg-white/10 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
 
-            {/* Create Album Modal */}
-            {showCreateAlbum && (
-              <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-50">
-                <div className="bg-slate-800 rounded-lg p-4 w-64 border border-white/10">
-                  <h4 className="text-sm font-semibold text-white mb-3">Create New Album</h4>
-                  <input
-                    type="text"
-                    value={newAlbumName}
-                    onChange={(e) => setNewAlbumName(e.target.value)}
-                    placeholder="Album name"
-                    className="w-full px-3 py-2 bg-white/5 text-white text-xs rounded border border-white/10 focus:border-[#89AC76]/30 focus:outline-none mb-3"
-                    onKeyDown={(e) => e.key === 'Enter' && handleCreateAlbum()}
-                  />
-                  <div className="flex gap-2">
-                    <button
-                      onClick={handleCreateAlbum}
-                      className="flex-1 px-3 py-2 bg-[#89AC76]/20 text-[#89AC76] text-xs rounded border border-[#89AC76]/30 hover:bg-[#89AC76]/30 transition-colors"
-                    >
-                      Create
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowCreateAlbum(false);
-                        setNewAlbumName('');
-                      }}
-                      className="flex-1 px-3 py-2 bg-white/5 text-white/70 text-xs rounded border border-white/10 hover:bg-white/10 transition-colors"
-                    >
-                      Cancel
-                    </button>
+                  {/* Insights List */}
+                  <div className="space-y-2 flex-1 overflow-y-auto">
+                    {getCurrentInsights().length > 0 ? (
+                      getCurrentInsights().map(insight => (
+                        <div
+                          key={insight.id}
+                          className="group bg-white/5 rounded-lg p-3 border border-white/10 hover:border-[#89AC76]/40 hover:bg-white/10 transition-all cursor-pointer"
+                          onClick={() => sendOpportunityToChat(insight, 'insight')}
+                        >
+                          <div className="flex items-start gap-2">
+                            {/* Icon */}
+                            <div className="w-6 h-6 rounded-md bg-[#89AC76]/20 flex items-center justify-center flex-shrink-0 group-hover:bg-[#89AC76]/30 transition-colors">
+                              <span className="text-[10px] font-semibold text-[#89AC76]">
+                                {insight.type.substring(0, 2).toUpperCase()}
+                              </span>
+                            </div>
+
+                            {/* Content */}
+                            <div className="flex-1 min-w-0">
+                              <h4 className="text-xs font-medium text-white mb-1 line-clamp-1">{insight.title}</h4>
+                              <p className="text-xs text-white/60 mb-2">{insight.metadata}</p>
+
+                              {/* Project Tag (only for project insights) */}
+                              {insight.project && (
+                                <span className="inline-block px-2 py-0.5 bg-white/10 text-white/70 text-xs rounded-full mr-2">
+                                  {insight.project}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Relevance Score */}
+                            <div className="text-right flex-shrink-0">
+                              <div className="text-xs font-semibold text-[#89AC76]">{insight.relevance}%</div>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-center text-white/40 text-xs py-8">
+                        <Lightbulb size={24} className="mx-auto mb-2 opacity-40" />
+                        <p>No insights yet</p>
+                        <p className="mt-1 text-white/30">ATMO will surface relevant insights as you work</p>
+                      </div>
+                    )}
                   </div>
-                </div>
+                  </>
+                )}
               </div>
-            )}
+            </div>
           </AtmoCard>
 
-          {/* Card 3 - Obsidian Knowledge Graph */}
-          <ObsidianKnowledgeGraph className="w-full h-full overflow-hidden" />
+          {/* Card 3 - Knowledge Graph */}
+          <ObsidianKnowledgeGraph
+            className="w-full h-full"
+            projects={projects}
+            milestones={milestones}
+          />
 
-          {/* Card 4 - Priority Stream (Mission Control - Replaces Roadmap) */}
-          <PriorityStreamEnhanced compact={true} className="w-full h-full" />
+          {/* Card 4 - Priority Stream */}
+          <PriorityStreamEnhanced className="w-full h-full" />
 
         </div>
       </div>
@@ -1055,6 +688,43 @@ const DigitalBrain: React.FC = () => {
         isCapturing={isCapturing}
         setIsCapturing={setIsCapturing}
       />
+
+      {/* Save to Album Modal */}
+      {showSaveModal && opportunityToSave && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-6">
+          <div className="bg-slate-900 rounded-2xl border border-white/10 p-6 max-w-md w-full">
+            <h3 className="text-lg font-semibold text-white mb-4">Save to Album</h3>
+            <p className="text-sm text-white/60 mb-4">Choose an album for: {opportunityToSave.title}</p>
+
+            <div className="space-y-2 mb-6">
+              {albums.map(album => (
+                <button
+                  key={album.id}
+                  onClick={() => handleSaveToAlbum(album.id)}
+                  className="w-full px-4 py-3 bg-white/5 hover:bg-white/10 rounded-lg text-left transition-colors border border-white/10 hover:border-[#89AC76]/40"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-white">{album.name}</span>
+                    <span className="text-xs text-white/60">{album.count} items</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  setShowSaveModal(false);
+                  setOpportunityToSave(null);
+                }}
+                className="flex-1 px-4 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm text-white transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

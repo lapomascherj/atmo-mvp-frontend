@@ -7,7 +7,7 @@ import { Button } from '../atoms/Button.tsx';
 import { Badge } from '../atoms/Badge.tsx';
 import { Target, Plus, BarChart3 } from 'lucide-react';
 import { usePersonasStore } from '@/stores/usePersonasStore.ts';
-import { useAuth } from '@/hooks/useMockAuth';
+import useMockAuth from '@/hooks/useMockAuth';
 import { Priority } from '@/models/Priority.ts';
 import HorizontalScrollGrid from '@/components/atoms/HorizontalScrollGrid.tsx';
 import ErrorBoundary from '@/components/atoms/ErrorBoundary.tsx';
@@ -35,7 +35,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ userName }) => {
   const getGoals = usePersonasStore(state => state.getGoals);
   
   // Get user data for dashboard
-  const { user } = useAuth();
+  const { user } = useMockAuth();
 
   // Initialize PersonasStore when user is available
   useEffect(() => {

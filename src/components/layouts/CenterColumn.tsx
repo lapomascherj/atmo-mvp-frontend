@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useAuth } from '@/hooks/useMockAuth';
+import useMockAuth from '@/hooks/useMockAuth';
 import useVoiceRecognition from '@/hooks/useVoiceRecognition.ts';
 import SphereChat from '../atoms/SphereChat.tsx';
 import { Button } from '@/components/atoms/Button';
@@ -16,7 +16,7 @@ interface CenterColumnProps {
 }
 
 const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) => {
-    const { user } = useAuth();
+    const { user } = useMockAuth();
     const { toast } = useToast();
     const { sidebarWidth } = useSidebar();
     const [isCapturing, setIsCapturing] = useState(false);

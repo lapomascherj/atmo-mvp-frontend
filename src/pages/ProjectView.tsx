@@ -46,7 +46,7 @@ import {useTasksStore} from '@/stores/useTasksStore.ts';
 import {useGoalsStore} from '@/stores/useGoalsStore.ts';
 import {useKnowledgeItemsStore} from '@/stores/useKnowledgeItemsStore.ts';
 import {usePersonasStore} from '@/stores/usePersonasStore.ts';
-import {useAuth} from '@/hooks/useMockAuth';
+import useMockAuth from '@/hooks/useMockAuth';
 import { getPocketBase } from "@/hooks/useMockPocketBase";
 import GoalForm from '@/components/molecules/GoalForm.tsx';
 import MilestoneForm from '@/components/molecules/MilestoneForm.tsx';
@@ -66,7 +66,7 @@ import { useMilestonesStore } from '@/stores/useMilestonesStore.ts';
 const ProjectView: React.FC = () => {
     const {id} = useParams<{ id: string }>();
     const navigate = useNavigate();
-    const {user, token} = useAuth();
+    const {user, token} = useMockAuth();
     const pb = getPocketBase();
     const { toast } = useToast();
 
@@ -1344,5 +1344,4 @@ const ProjectView: React.FC = () => {
 };
 
 export default ProjectView;
-
 

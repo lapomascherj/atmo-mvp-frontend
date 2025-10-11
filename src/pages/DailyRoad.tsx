@@ -13,7 +13,7 @@ import {Project} from "@/models/Project.ts";
 import {WellnessTask} from "@/models";
 import {useWellnessStore} from "@/stores/useWellnessStore.ts";
 import {useProjectsStore} from "@/stores/useProjectsStore.ts";
-import {useAuth} from "@/hooks/useMockAuth";
+import useMockAuth from "@/hooks/useMockAuth";
 import { usePocketBase } from "@/hooks/useMockPocketBase";
 import useVoiceRecognition from '@/hooks/useVoiceRecognition.ts';
 import {useToast} from '@/hooks/useToast.ts';
@@ -24,7 +24,7 @@ const DailyRoad: React.FC = () => {
     const {goals, fetchGoals} = useGoalsStore();
     const {level, addWellnessTasks, calculateWellnessFromProjects, metrics} = useWellnessStore();
     const {projects, fetchProjects} = useProjectsStore();
-    const {user} = useAuth();
+    const {user} = useMockAuth();
     const {pb} = usePocketBase();
     const dailyMapCtx = useContext(DailyMapCtx);
     const {toast} = useToast();

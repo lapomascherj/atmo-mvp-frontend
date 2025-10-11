@@ -4,7 +4,7 @@ import MorningPodcast from '../molecules/MorningPodcast.tsx';
 // import { useCalendarStore } from '@/stores/useCalendarStore.ts'; // Temporarily disabled
 import { useTasksStore } from '@/stores/useTasksStore.ts';
 import { usePocketBase } from "@/hooks/useMockPocketBase";
-import { useAuth } from '@/hooks/useMockAuth';
+import useMockAuth from '@/hooks/useMockAuth';
 
 interface DailyTabProps {
   flippedCard: string | null;
@@ -15,7 +15,7 @@ const DailyTab: React.FC<DailyTabProps> = ({ flippedCard, toggleCardFlip }) => {
   // const { events, fetchEvents } = useCalendarStore(); // Temporarily disabled
   const { tasks } = useTasksStore();
   const pb = usePocketBase();
-  const { user } = useAuth();
+  const { user } = useMockAuth();
 
   // Force fresh calendar data fetch when component mounts
   useEffect(() => {

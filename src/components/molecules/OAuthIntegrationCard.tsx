@@ -3,7 +3,7 @@ import { Button } from '@/components/atoms/Button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/atoms/Dialog';
 import { useIntegrationsStore } from '@/stores/useMockIntegrationsStore';
 import { usePocketBase } from "@/hooks/useMockPocketBase";
-import { useAuth } from '@/hooks/useMockAuth';
+import useMockAuth from '@/hooks/useMockAuth';
 import { useToast } from '@/hooks/useToast';
 import { IntegrationProvider } from '@/models/IntegrationProvider';
 import { 
@@ -56,7 +56,7 @@ const OAuthIntegrationCard: React.FC<OAuthIntegrationCardProps> = ({
   } = useIntegrationsStore();
 
   const pb = usePocketBase();
-  const { user } = useAuth();
+  const { user } = useMockAuth();
 
   const config = OAUTH_PROVIDER_CONFIGS[provider];
 

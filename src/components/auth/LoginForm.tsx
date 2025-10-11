@@ -60,7 +60,10 @@ export const LoginForm: React.FC = () => {
         </label>
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Mail size={18} className="text-white/40" />
+            <Mail
+              size={18}
+              className="text-slate-500 transition-colors dark:text-white/70"
+            />
           </div>
           <input
             id="email"
@@ -92,7 +95,10 @@ export const LoginForm: React.FC = () => {
         </label>
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Lock size={18} className="text-white/40" />
+            <Lock
+              size={18}
+              className="text-slate-500 transition-colors dark:text-white/70"
+            />
           </div>
           <input
             id="password"
@@ -114,7 +120,7 @@ export const LoginForm: React.FC = () => {
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute inset-y-0 right-0 pr-3 flex items-center text-white/40 hover:text-white/70 transition-colors"
+            className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-500 hover:text-slate-600 dark:text-white/70 dark:hover:text-white transition-colors"
             aria-label={showPassword ? 'Hide password' : 'Show password'}
           >
             {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}

@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { Brain } from 'lucide-react';
 import { Button } from '@/components/atoms/Button';
-import { useAuth } from '@/hooks/useMockAuth';
+import useMockAuth from '@/hooks/useMockAuth';
 import { usePocketBase } from '@/hooks/useMockPocketBase';
 import PageHeader from "@/components/atoms/PageHeader";
 
 const KnowledgeOrganiserSimple: React.FC = () => {
-    const { user } = useAuth();
+    const { user } = useMockAuth();
     const pb = usePocketBase();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);

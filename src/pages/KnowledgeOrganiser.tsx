@@ -1,9 +1,9 @@
 import React from 'react';
 import { Brain } from 'lucide-react';
-import { useAuth } from "@/hooks/useMockAuth";
+import useMockAuth from "@/hooks/useMockAuth";
 
 const KnowledgeOrganiser: React.FC = () => {
-    const { user } = useAuth();
+    const { user } = useMockAuth();
 
     return (
         <>

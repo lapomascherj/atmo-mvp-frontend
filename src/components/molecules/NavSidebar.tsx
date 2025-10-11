@@ -1,7 +1,7 @@
 import React from 'react';
 import {Link, useLocation} from 'react-router-dom';
 import {Brain, ChevronLeft, ChevronRight, LayoutDashboard, LogOut} from 'lucide-react';
-import {useAuth} from '@/hooks/useRealAuth';
+import useRealAuth from '@/hooks/useRealAuth';
 import {useSidebar} from '@/context/SidebarContext';
 import {cn} from '@/utils/utils.ts';
 import {Avatar, AvatarFallback, AvatarImage} from '@/components/atoms/Avatar.tsx';
@@ -15,15 +15,9 @@ interface NavItemProps {
 }
 
 const NavItem = ({icon, label, to, isActive, isCollapsed}: NavItemProps) => {
-    const handleClick = (e: React.MouseEvent) => {
-        console.log('NavItem clicked:', { label, to, isActive });
-        // Let the Link handle navigation normally
-    };
-
     return (
         <Link
             to={to}
-            onClick={handleClick}
             className={cn(
                 'flex items-center gap-2 px-2 py-2 rounded-lg transition-all duration-300 group relative cursor-pointer',
                 isCollapsed ? 'justify-center' : '',
@@ -56,25 +50,33 @@ const NavItem = ({icon, label, to, isActive, isCollapsed}: NavItemProps) => {
     )
 };
 
+const normalizePath = (value: string) => value.replace(/\/+$/, '') || '/';
+
+const isRouteActive = (pathname: string, target: string) => {
+    const current = normalizePath(pathname);
+    const destination = normalizePath(target);
+    return current === destination || (destination !== '/' && current.startsWith(`${destination}/`));
+};
+
 const NavSidebar: React.FC = () => {
     const {isCollapsed, toggleCollapse} = useSidebar();
     const location = useLocation();
-    const {user, signOut} = useAuth();
+    const {profile, signOut} = useRealAuth();
 
     // Determine if we're in demo mode
     const isDemoMode = location.pathname.startsWith('/demo');
     
     const navItems = [
-        {icon: <LayoutDashboard size={20}/>, label: 'Dashboard', to: isDemoMode ? '/demo' : '/'},
+        {icon: <LayoutDashboard size={20}/>, label: 'Dashboard', to: isDemoMode ? '/demo' : '/app'},
         {icon: <Brain size={20}/>, label: 'Digital Brain', to: isDemoMode ? '/demo/digital-brain' : '/digital-brain'},
     ];
 
-    const userInitial = user?.nickname
-        ? user.nickname.charAt(0)
-        : user?.email?.charAt(0) || 'A';
+    const userInitial = profile?.nickname
+        ? profile.nickname.charAt(0)
+        : profile?.email?.charAt(0) || 'A';
 
-    const userName = user?.nickname || user?.email?.split('@')[0] || 'User';
-    const avatarUrl = user?.avatar_url || null;
+    const userName = profile?.nickname || profile?.display_name || profile?.email?.split('@')[0] || 'User';
+    const avatarUrl = profile?.avatar_url || null;
 
     return (
         <aside
@@ -123,7 +125,7 @@ const NavSidebar: React.FC = () => {
                         icon={item.icon}
                         label={item.label}
                         to={item.to}
-                        isActive={location.pathname === item.to}
+                        isActive={isRouteActive(location.pathname, item.to)}
                         isCollapsed={isCollapsed}
                     />
                 ))}
@@ -139,7 +141,7 @@ const NavSidebar: React.FC = () => {
                     to="/profile"
                     className={cn(
                         'flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-[#010024]/40 transition-all group relative',
-                        location.pathname === '/profile' ? 'bg-[#010024]/60 shadow-inner shadow-white/5' : '',
+                        isRouteActive(location.pathname, '/profile') ? 'bg-[#010024]/60 shadow-inner shadow-white/5' : '',
                         isCollapsed ? 'justify-center w-full' : ''
                     )}
                 >

@@ -1,17 +1,24 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { AtmoCard } from '@/components/molecules/AtmoCard';
 import { CardContent, CardHeader } from '@/components/atoms/Card';
 import SphereChat from '@/components/atoms/SphereChat';
-import { User, BarChart3, Brain, Lightbulb, ChevronUp, TrendingUp, Target, Zap, Star, Radar, Settings, Filter, BookOpen, Plus, Circle, X, Edit3 } from 'lucide-react';
+import { User, BarChart3, Brain, Lightbulb, ChevronUp, TrendingUp, Target, Zap, Star, Radar, Settings, Filter, BookOpen, Plus, Circle, X, Edit3, Trash2 } from 'lucide-react';
 import { SchedulerView } from '@/components/scheduler/SchedulerView';
 import { useSchedulerSync } from '@/hooks/useSchedulerSync';
 import { ObsidianKnowledgeGraph } from '@/components/knowledge/ObsidianKnowledgeGraph';
 import { ChatOverlay } from '@/components/organisms/ChatOverlay';
 import { PriorityStreamEnhanced } from '@/components/organisms/PriorityStreamEnhanced';
+import { ProjectDetailOverlay } from '@/components/organisms/ProjectDetailOverlay';
 import { usePersonasStore } from '@/stores/usePersonasStore';
 import { useMockAuth } from '@/hooks/useMockAuth';
+import { supabase } from '@/lib/supabase';
+import { updateUserProfile, toggleGrowthTrackerDismissed, getGrowthTrackerDismissed } from '@/services/supabaseDataService';
+import type { Project } from '@/models/Project';
 
 const DigitalBrain: React.FC = () => {
+  // CRITICAL: Get user first before any other state that depends on it
+  const { user } = useMockAuth();
+
   const [isCapturing, setIsCapturing] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
 
@@ -27,8 +34,28 @@ const DigitalBrain: React.FC = () => {
   const [sendingOpportunityIds, setSendingOpportunityIds] = useState<Set<string>>(new Set());
   const [showChatOverlay, setShowChatOverlay] = useState(false);
 
+  // Project detail overlay state
+  const [selectedProjectDetail, setSelectedProjectDetail] = useState<Project | null>(null);
+
+  // Editable fields state
+  const [editingFocusAreas, setEditingFocusAreas] = useState(false);
+  // FIXED: Initialize as empty string, will be populated by useEffect
+  const [focusAreasInput, setFocusAreasInput] = useState('');
+  const [editingGrowthTracker, setEditingGrowthTracker] = useState(false);
+  const [growthTrackerInput, setGrowthTrackerInput] = useState('');
+  const [growthTrackerDismissed, setGrowthTrackerDismissed] = useState(false);
+
+  // Level state
+  const [userLevel, setUserLevel] = useState<number>(1);
+
+  // Loading state for auth initialization
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+
+  // Refs for outside-click detection
+  const growthTrackerRef = useRef<HTMLDivElement>(null);
+
   // Scheduler sync - shared with Dashboard
-  const { events, updateEvents: setEvents } = useSchedulerSync();
+  const { events, updateEvents: setEvents } = useSchedulerSync(selectedDate);
 
   // PersonasStore data
   const currentPersona = usePersonasStore(state => state.currentPersona);
@@ -36,70 +63,444 @@ const DigitalBrain: React.FC = () => {
   const fetchPersonaByIam = usePersonasStore(state => state.fetchPersonaByIam);
   const getProjects = usePersonasStore(state => state.getProjects);
   const getMilestones = usePersonasStore(state => state.getMilestones);
+  const insights = usePersonasStore(state => state.insights);
 
-  // Get user for initialization
-  const { user } = useMockAuth();
-
-  // Initialize PersonasStore when user is available
+  // Monitor auth initialization
   useEffect(() => {
-    if (user?.iam && !currentPersona && !loading) {
-      console.log("🧠 DIGITAL BRAIN: Initializing PersonasStore for user:", user.iam);
-      fetchPersonaByIam(null as any, user.iam).catch(error => {
-        console.debug("PersonasStore initialization completed or auto-cancelled");
-      });
+    if (user !== undefined) {
+      setIsAuthLoading(false);
+      console.log('✅ Auth initialized, user:', user?.id || 'not logged in');
     }
-  }, [user?.iam, currentPersona, loading, fetchPersonaByIam]);
+  }, [user]);
+
+  // Initialize PersonasStore on mount and when route changes
+  useEffect(() => {
+    if (!user?.iam) {
+      console.warn('⚠️ DIGITAL BRAIN: User IAM not available, skipping PersonasStore hydration');
+      return;
+    }
+
+    if (loading) {
+      console.log('⏳ DIGITAL BRAIN: PersonasStore already loading, skipping');
+      return;
+    }
+
+    console.log("🧠 DIGITAL BRAIN: Hydrating PersonasStore for user:", user.iam);
+
+    fetchPersonaByIam(null as any, user.iam, !currentPersona).catch(error => {
+      console.error('❌ DIGITAL BRAIN: PersonasStore hydration error:', error);
+      console.debug("PersonasStore hydration completed or auto-cancelled");
+    });
+  }, [user?.iam, loading, fetchPersonaByIam, currentPersona]);
+
+  // Rehydrate focus areas from onboarding_data on user load/change
+  useEffect(() => {
+    if (user?.id) {
+      const onboardingData = user.onboarding_data as any;
+      const focusAreas = onboardingData?.work?.focusAreas || user?.focusAreas || [];
+      setFocusAreasInput(focusAreas.join(', '));
+      console.log('🔄 Rehydrated focus areas from onboarding_data:', focusAreas);
+    }
+  }, [user?.id, user?.onboarding_data]);
+
+  // Subscribe to store projects for real-time updates
+  const storeProjects = usePersonasStore(state => state.projects);
 
   // Memoize data retrieval to prevent unnecessary recalculations
-  const { projects, milestones } = useMemo(() => {
+  const { projects, milestones, goals } = useMemo(() => {
     if (!currentPersona) {
-      return { projects: [], milestones: [] };
+      return { projects: [], milestones: [], goals: [] };
     }
 
-    const projects = getProjects();
-    const milestones = getMilestones();
+    // Get all data directly from store
+    const allProjects = storeProjects;
+    const allMilestones = storeProjects.flatMap(p => p.milestones || []);
 
-    return { projects, milestones };
-  }, [currentPersona, getProjects, getMilestones]);
+    // Extract goals from projects
+    const allGoals = allProjects.flatMap(project =>
+      (project.goals || []).map(goal => ({
+        ...goal,
+        projectId: project.id,
+        projectName: project.name
+      }))
+    );
+
+    // Filter for active items only (exclude completed/deleted)
+    const projects = allProjects.filter(p =>
+      p.active !== false &&
+      p.status !== 'deleted' &&
+      p.status !== 'completed'
+    );
+
+    const milestones = allMilestones.filter(m =>
+      m.status !== 'completed' &&
+      m.status !== 'deleted'
+    );
+
+    const goals = allGoals.filter(g =>
+      g.status !== 'Completed' &&
+      g.status !== 'deleted'
+    );
+
+    return { projects, milestones, goals };
+  }, [currentPersona, storeProjects]);
+
+  // Compute user level from database
+  useEffect(() => {
+    if (!user?.id) {
+      console.warn('⚠️ User ID not available for level computation');
+      return;
+    }
+
+    if (goals.length === 0 && milestones.length === 0) {
+      console.log('ℹ️ No goals or milestones yet, skipping level computation');
+      return;
+    }
+
+    console.log('📊 Computing user level for user:', user.id);
+
+    supabase.rpc('compute_user_level', { user_id: user.id })
+      .then(({ data, error }) => {
+        if (error) {
+          console.error('❌ Failed to compute user level:', error);
+          return;
+        }
+        if (data && data.length > 0) {
+          const computed = data[0];
+          setUserLevel(computed.computed_level);
+          console.log('✅ User level computed:', computed.computed_level);
+
+          // Update profiles with computed level
+          supabase.from('profiles')
+            .update({
+              level: computed.computed_level,
+              level_score: computed.computed_score
+            })
+            .eq('id', user.id)
+            .then(({ error: updateError }) => {
+              if (updateError) {
+                console.error('❌ Failed to update level in profile:', updateError);
+              } else {
+                console.log('✅ Level updated in profile:', computed.computed_level);
+              }
+            })
+            .catch(updateErr => {
+              console.error('❌ Exception updating level:', updateErr);
+            });
+        }
+      })
+      .catch(err => {
+        console.error('❌ Exception computing user level:', err);
+      });
+  }, [user?.id, goals.length, milestones.length]);
+
+  // Handler functions for editable fields
+  const handleSaveFocusAreas = async () => {
+    if (!user?.id) return;
+    const areas = focusAreasInput.split(',').map(a => a.trim()).filter(Boolean);
+
+    // Validation: require non-empty focus areas
+    if (areas.length === 0) {
+      console.warn('Focus areas cannot be empty');
+      return;
+    }
+
+    try {
+      await updateUserProfile(user.id, { focusAreas: areas });
+      // No refetch needed - changes persist via write-through
+      setEditingFocusAreas(false);
+    } catch (error) {
+      console.error('Failed to save focus areas:', error);
+      // On failure, could add rollback UI notification here
+    }
+  };
+
+  const handleSaveGrowthTracker = async () => {
+    if (!user?.id) return;
+    try {
+      await updateUserProfile(user.id, { growthTracker: growthTrackerInput });
+      setEditingGrowthTracker(false);
+    } catch (error) {
+      console.error('Failed to save growth tracker:', error);
+    }
+  };
+
+  const handleToggleGrowthTracker = async () => {
+    if (!user?.id) return;
+    const newDismissedState = !growthTrackerDismissed;
+    try {
+      // Optimistic update
+      setGrowthTrackerDismissed(newDismissedState);
+      await toggleGrowthTrackerDismissed(user.id, newDismissedState);
+    } catch (error) {
+      // Rollback on failure
+      setGrowthTrackerDismissed(!newDismissedState);
+      console.error('Failed to toggle growth tracker:', error);
+    }
+  };
+
+  // Load growth_tracker_text and dismissed state on mount
+  useEffect(() => {
+    if (!user?.id) {
+      console.warn('⚠️ User ID not available for growth tracker initialization');
+      return;
+    }
+
+    console.log('📝 Loading growth tracker data for user:', user.id);
+
+    supabase
+      .from('profiles')
+      .select('growth_tracker_text')
+      .eq('id', user.id)
+      .single()
+      .then(({ data, error }) => {
+        if (error) {
+          console.error('❌ Failed to load growth tracker text:', error);
+          return;
+        }
+        if (data?.growth_tracker_text) {
+          setGrowthTrackerInput(data.growth_tracker_text);
+          console.log('✅ Growth tracker text loaded');
+        }
+      })
+      .catch(err => {
+        console.error('❌ Exception loading growth tracker:', err);
+      });
+
+    // Load dismissed state
+    getGrowthTrackerDismissed(user.id)
+      .then(dismissed => {
+        setGrowthTrackerDismissed(dismissed);
+        console.log('✅ Growth tracker dismissed state loaded:', dismissed);
+      })
+      .catch(err => {
+        console.error('❌ Exception loading dismissed state:', err);
+      });
+  }, [user?.id]);
+
+  // Growth Tracker: Close on Esc and outside-click
+  useEffect(() => {
+    if (!editingGrowthTracker) return;
+
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleSaveGrowthTracker();
+      }
+    };
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (growthTrackerRef.current && !growthTrackerRef.current.contains(e.target as Node)) {
+        handleSaveGrowthTracker();
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    document.addEventListener('mousedown', handleClickOutside);
+
+    return () => {
+      document.removeEventListener('keydown', handleEscape);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [editingGrowthTracker]);
+
+  // Growth Tracker: Debounced auto-save while typing
+  useEffect(() => {
+    if (!editingGrowthTracker || !user?.id) return;
+
+    const debounceTimer = setTimeout(async () => {
+      if (growthTrackerInput.trim()) {
+        try {
+          await updateUserProfile(user.id, { growthTracker: growthTrackerInput });
+          console.log(`💾 [${new Date().toLocaleTimeString()}] Growth Tracker auto-saved`);
+        } catch (error) {
+          console.error('Failed to auto-save growth tracker:', error);
+        }
+      }
+    }, 500); // 500ms debounce
+
+    return () => clearTimeout(debounceTimer);
+  }, [growthTrackerInput, editingGrowthTracker, user?.id]);
+
+  // Focus Areas: Debounced auto-save while typing
+  useEffect(() => {
+    if (!editingFocusAreas || !user?.id) return;
+
+    const debounceTimer = setTimeout(async () => {
+      const areas = focusAreasInput.split(',').map(a => a.trim()).filter(Boolean);
+
+      // Deduplicate areas
+      const uniqueAreas = Array.from(new Set(areas));
+
+      if (uniqueAreas.length > 0) {
+        try {
+          await updateUserProfile(user.id, { focusAreas: uniqueAreas });
+          console.log(`💾 [${new Date().toLocaleTimeString()}] Focus Areas auto-saved:`, uniqueAreas);
+        } catch (error) {
+          console.error('Failed to auto-save focus areas:', error);
+        }
+      }
+    }, 300); // 300ms debounce (faster for better UX)
+
+    return () => clearTimeout(debounceTimer);
+  }, [focusAreasInput, editingFocusAreas, user?.id]);
 
   // Knowledge Graph is now data-driven from Zustand stores
 
-  // AI Insights tags
-  const personalTags = [
-    { id: 'all', name: 'All' },
-    { id: 'partnership', name: 'Partnership' },
-    { id: 'learning', name: 'Learning' },
-    { id: 'opportunity', name: 'Opportunity' },
-    { id: 'trend', name: 'Trend' },
-    { id: 'skill', name: 'Skill' },
-    { id: 'network', name: 'Network' },
-    { id: 'task', name: 'Task' },
-  ];
+  const projectNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    projects.forEach((project) => map.set(project.id, project.name));
+    return map;
+  }, [projects]);
 
-  const projectTags = [
-    { id: 'all', name: 'All' },
-    { id: 'partnership', name: 'Partnership' },
-    { id: 'funding', name: 'Funding' },
-    { id: 'talent', name: 'Talent' },
-    { id: 'market', name: 'Market' },
-    { id: 'tool', name: 'Tool' },
-    { id: 'customer', name: 'Customer' },
-    { id: 'task', name: 'Task' },
-  ];
+  const normaliseKey = (value: string | null | undefined, fallback: string) =>
+    (value?.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-') || fallback);
 
-  // Real insights will be populated from backend/AI
-  const personalInsights: any[] = [];
-  const projectInsights: any[] = [];
-
-  const getCurrentInsights = () => {
-    const insights = insightMode === 'personal' ? personalInsights : projectInsights;
-    if (selectedTag === 'all') return insights;
-    return insights.filter(insight => insight.type.toLowerCase() === selectedTag);
+  type FormattedInsight = {
+    id: string;
+    title: string;
+    metadata: string;
+    type: string;
+    category: 'personal' | 'project';
+    project?: string;
+    relevance: number;
+    sourceUrl?: string;
+    typeIcon: string;
   };
 
-  const getCurrentTags = () => {
-    return insightMode === 'personal' ? personalTags : projectTags;
-  };
+  const formattedInsights = useMemo<FormattedInsight[]>(() => {
+    if (!insights.length) {
+      return [];
+    }
+
+    // Map insight types to icons
+    const typeIconMap: Record<string, string> = {
+      article: '📄',
+      opportunity: '💡',
+      trend: '📈',
+      note: '📝',
+    };
+
+    return insights.map((insight) => {
+      const type = normaliseKey(insight.insightType, 'note');
+      const category = normaliseKey(insight.category, 'personal') === 'project' ? 'project' : 'personal';
+      const typeIcon = typeIconMap[type] || '📝';
+
+      const metadataText = (() => {
+        if (insight.summary) {
+          return insight.summary;
+        }
+        if (insight.metadata && typeof insight.metadata === 'object') {
+          const values = Object.values(insight.metadata)
+            .filter((entry) => typeof entry === 'string')
+            .map((entry) => entry.trim())
+            .filter(Boolean);
+          if (values.length) {
+            return values.join(' • ');
+          }
+        }
+        return 'Tap to explore this insight.';
+      })();
+
+      return {
+        id: insight.id,
+        title: insight.title,
+        metadata: metadataText,
+        type,
+        category,
+        project: insight.projectId ? projectNameById.get(insight.projectId) : undefined,
+        relevance: insight.relevance ?? 0,
+        sourceUrl: insight.sourceUrl,
+        typeIcon,
+      };
+    });
+  }, [insights, projectNameById]);
+
+  const personalInsights = useMemo(
+    () => formattedInsights.filter((insight) => insight.category === 'personal'),
+    [formattedInsights],
+  );
+  const projectInsights = useMemo(
+    () => formattedInsights.filter((insight) => insight.category === 'project'),
+    [formattedInsights],
+  );
+
+  type InsightTag = { id: string; name: string };
+
+  const basePersonalTags = useMemo<InsightTag[]>(
+    () => [
+      { id: 'all', name: 'All' },
+      { id: 'partnership', name: 'Partnership' },
+      { id: 'learning', name: 'Learning' },
+      { id: 'opportunity', name: 'Opportunity' },
+      { id: 'trend', name: 'Trend' },
+      { id: 'skill', name: 'Skill' },
+      { id: 'network', name: 'Network' },
+      { id: 'task', name: 'Task' },
+    ],
+    [],
+  );
+
+  const baseProjectTags = useMemo<InsightTag[]>(
+    () => [
+      { id: 'all', name: 'All' },
+      { id: 'partnership', name: 'Partnership' },
+      { id: 'funding', name: 'Funding' },
+      { id: 'talent', name: 'Talent' },
+      { id: 'market', name: 'Market' },
+      { id: 'tool', name: 'Tool' },
+      { id: 'customer', name: 'Customer' },
+      { id: 'task', name: 'Task' },
+    ],
+    [],
+  );
+
+  const formatTagLabel = useCallback((value: string) => {
+    return value
+      .split(/[-_]/)
+      .filter(Boolean)
+      .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+      .join(' ');
+  }, []);
+
+  const buildTags = useCallback(
+    (fallback: InsightTag[], dataset: FormattedInsight[]) => {
+      const seen = new Set(fallback.map((tag) => tag.id));
+      const dynamic: InsightTag[] = [];
+
+      dataset.forEach((item) => {
+        if (!item.type || seen.has(item.type)) {
+          return;
+        }
+        seen.add(item.type);
+        dynamic.push({ id: item.type, name: formatTagLabel(item.type) });
+      });
+
+      return [...fallback, ...dynamic];
+    },
+    [formatTagLabel],
+  );
+
+  const personalTags = useMemo(
+    () => buildTags(basePersonalTags, personalInsights),
+    [basePersonalTags, personalInsights, buildTags],
+  );
+  const projectTags = useMemo(
+    () => buildTags(baseProjectTags, projectInsights),
+    [baseProjectTags, projectInsights, buildTags],
+  );
+
+  const getCurrentInsights = useCallback(() => {
+    const active = insightMode === 'personal' ? personalInsights : projectInsights;
+    if (selectedTag === 'all') {
+      return active;
+    }
+    return active.filter((insight) => insight.type === selectedTag);
+  }, [insightMode, personalInsights, projectInsights, selectedTag]);
+
+  const getCurrentTags = useCallback(
+    () => (insightMode === 'personal' ? personalTags : projectTags),
+    [insightMode, personalTags, projectTags],
+  );
 
   // Journal albums and items (Apple Photos style)
   const defaultAlbums = [
@@ -112,9 +513,6 @@ const DigitalBrain: React.FC = () => {
   const [opportunityToSave, setOpportunityToSave] = useState(null);
   const [showCreateAlbum, setShowCreateAlbum] = useState(false);
   const [newAlbumName, setNewAlbumName] = useState('');
-
-  // Opportunity Radar data - 3 opportunities
-  const opportunityRadarData = { personal: [], projects: [] };
 
   // Send opportunity to chat
   const sendOpportunityToChat = (opportunity: any, type: 'radar' | 'insight') => {
@@ -232,6 +630,39 @@ const DigitalBrain: React.FC = () => {
     }
   };
 
+  // Loading state while auth initializes
+  if (isAuthLoading) {
+    return (
+      <div className="h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-[#CC5500]/20 border-t-[#CC5500] rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-white/60 text-sm">Initializing Digital Brain...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state if user is not authenticated
+  if (!user) {
+    return (
+      <div className="h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+            <User className="w-8 h-8 text-red-400" />
+          </div>
+          <h2 className="text-xl font-semibold text-white mb-2">Authentication Required</h2>
+          <p className="text-white/60 text-sm mb-4">Please sign in to access your Digital Brain.</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-[#CC5500] hover:bg-[#CC5500]/80 text-white rounded-lg transition-colors"
+          >
+            Reload Page
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 relative overflow-hidden">
       {/* Background effects */}
@@ -268,7 +699,13 @@ const DigitalBrain: React.FC = () => {
         <div className="grid grid-cols-2 grid-rows-2 gap-6 flex-1 min-h-0">
 
           {/* Card 1 - User Profile */}
-          <AtmoCard variant="purple" className="w-full h-full p-4" hover={true}>
+          <AtmoCard variant="purple" className="w-full h-full p-4 relative" hover={true}>
+            {selectedProjectDetail && (
+              <ProjectDetailOverlay
+                project={selectedProjectDetail}
+                onClose={() => setSelectedProjectDetail(null)}
+              />
+            )}
             <div className="h-full flex flex-col">
 
               {/* Header Section */}
@@ -281,156 +718,193 @@ const DigitalBrain: React.FC = () => {
                   <div className="flex-1 min-w-0">
                     <h3 className="text-sm font-semibold text-white">{user?.nickname || user?.preferredName || user?.email?.split('@')[0] || 'User'}</h3>
                     <p className="text-xs text-white/70 leading-relaxed mt-1 pr-2">
-                      {user?.bio || user?.mainPriority || 'Building something great. Define your mission in onboarding to see it here.'}
+                      {user?.bio || user?.mainPriority || 'Finish setting up in Avatar.'}
                     </p>
                   </div>
                 </div>
 
-                {/* Top Right Controls */}
-                <div className="flex items-center gap-2 shrink-0">
-                  {/* Growth Portfolio Badge */}
-                  <button className="px-2 py-1 bg-purple-500/20 text-purple-400 text-xs rounded-md border border-purple-500/30 hover:bg-purple-500/30 transition-colors">
-                    Growth Portfolio
-                  </button>
-                  {/* Expand Arrow */}
-                  <button className="w-6 h-6 rounded-md bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors">
-                    <ChevronUp size={12} className="text-white/60" />
-                  </button>
-                </div>
               </div>
 
               {/* Skills & USP Section */}
               <div className="mb-4 px-3 py-2 bg-white/5 rounded-lg border border-purple-500/20">
-                <div className="flex items-center gap-2 mb-2">
-                  <Star size={12} className="text-purple-400" />
-                  <span className="text-xs font-medium text-purple-400">Focus Areas</span>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Star size={12} className="text-purple-400" />
+                    <span className="text-xs font-medium text-purple-400">Focus Areas</span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (editingFocusAreas) {
+                        handleSaveFocusAreas();
+                      } else {
+                        setFocusAreasInput(user?.focusAreas?.join(', ') || '');
+                        setEditingFocusAreas(true);
+                      }
+                    }}
+                    className="text-xs text-white/60 hover:text-white transition-colors"
+                  >
+                    {editingFocusAreas ? 'Save' : 'Edit'}
+                  </button>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {user?.focusAreas && user.focusAreas.length > 0 ? (
-                    user.focusAreas.slice(0, 3).map((area, index) => (
-                      <span key={index} className="px-2 py-1 bg-purple-500/10 text-purple-300 text-xs rounded-full border border-purple-500/20">
-                        {area}
-                      </span>
-                    ))
+                  {editingFocusAreas ? (
+                    <input
+                      type="text"
+                      value={focusAreasInput}
+                      onChange={(e) => setFocusAreasInput(e.target.value)}
+                      onBlur={handleSaveFocusAreas}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSaveFocusAreas()}
+                      className="w-full bg-white/10 text-white text-xs rounded px-2 py-1 border border-purple-500/20 focus:outline-none focus:border-purple-500/40"
+                      placeholder="Enter focus areas (comma separated)"
+                      autoFocus
+                    />
                   ) : (
-                    <span className="text-xs text-white/40">
-                      Define focus areas in onboarding
-                    </span>
+                    <>
+                      {(() => {
+                        const onboardingData = user?.onboarding_data as any;
+                        const focusAreas = onboardingData?.work?.focusAreas || user?.focusAreas || [];
+                        return focusAreas.length > 0 ? (
+                          focusAreas.slice(0, 3).map((area: string, index: number) => (
+                            <span key={index} className="px-2 py-1 bg-purple-500/10 text-purple-300 text-xs rounded-full border border-purple-500/20">
+                              {area}
+                            </span>
+                        ))
+                      ) : (
+                        <span className="text-xs text-white/40">
+                          Finish setting up in Avatar.
+                        </span>
+                      );
+                      })()}
+                    </>
                   )}
                 </div>
               </div>
 
-              {/* Middle Section - Three Columns Layout */}
-              <div className="grid grid-cols-3 gap-4 items-start mb-4">
-                {/* Left: Milestones */}
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Target size={12} className="text-purple-400" />
-                    <span className="text-xs font-medium text-purple-400">Milestones</span>
-                  </div>
-                  <div className="space-y-2">
-                    {milestones.slice(0, 2).map((milestone) => (
-                      <div key={milestone.id} className="bg-white/5 rounded-md p-2 border border-purple-500/20">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs font-medium text-white truncate">{milestone.name}</span>
-                          <div className={`w-2 h-2 rounded-full ${milestone.completed ? 'bg-green-400' : 'bg-purple-400'}`}></div>
-                        </div>
-                        <div className="w-full bg-white/10 rounded-full h-1">
-                          <div
-                            className="bg-purple-400 h-1 rounded-full transition-all duration-300"
-                            style={{ width: `${milestone.progress || 0}%` }}
-                          ></div>
-                        </div>
-                      </div>
-                    ))}
-                    {milestones.length === 0 && (
-                      <div className="text-xs text-white/40 text-center py-2">
-                        No milestones yet
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Center: Growth Mountain */}
-                <div className="flex flex-col items-center justify-center">
-                  <div className="w-full h-16 relative mb-2">
-                    {/* Enhanced Mountain Line Visual */}
-                    <svg viewBox="0 0 200 60" className="w-full h-full">
-                      <defs>
-                        <linearGradient id="mountainGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                          <stop offset="0%" stopColor="rgb(168 85 247 / 0.3)" />
-                          <stop offset="50%" stopColor="rgb(168 85 247 / 0.4)" />
-                          <stop offset="100%" stopColor="rgb(168 85 247 / 0.2)" />
-                        </linearGradient>
-                      </defs>
-                      {/* Mountain path with better progression */}
-                      <path
-                        d="M10,50 L30,40 L50,32 L80,22 L120,18 L160,28 L190,25"
-                        stroke="rgb(168 85 247 / 0.9)"
-                        strokeWidth="2.5"
-                        fill="none"
-                        className="drop-shadow-sm"
-                      />
-                      {/* Fill area under mountain */}
-                      <path
-                        d="M10,50 L30,40 L50,32 L80,22 L120,18 L160,28 L190,25 L190,50 Z"
-                        fill="url(#mountainGradient)"
-                      />
-                      {/* Current position dot - positioned at peak */}
-                      <circle cx="120" cy="18" r="3" fill="rgb(168 85 247)" className="animate-pulse" />
-                      {/* Small figure at current position */}
-                      <circle cx="120" cy="15" r="1.5" fill="rgb(255 255 255 / 0.8)" />
-                    </svg>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs font-medium text-white">Level 8</p>
-                    <p className="text-xs text-white/50">Peak Performance</p>
-                  </div>
-                </div>
-
-                {/* Right: Active Projects */}
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 mb-3">
+              {/* Middle Section - Projects Left, Level Chart Right (Same Height) */}
+              <div className="flex-1 grid grid-cols-[2fr_1fr] gap-4 mb-3">
+                {/* Left: Projects Section - Two Scrollable Columns */}
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-2 mb-2">
                     <Zap size={12} className="text-purple-400" />
                     <span className="text-xs font-medium text-purple-400">Projects</span>
                   </div>
-                  <div className="space-y-2">
-                    {projects.slice(0, 2).map((project) => (
-                      <div key={project.id} className="bg-white/5 rounded-md p-2 border border-purple-500/20">
+                  <div className="grid grid-cols-2 gap-2 flex-1 overflow-y-auto pr-1">
+                    {projects.map((project) => (
+                      <div
+                        key={project.id}
+                        className="bg-white/5 rounded-md p-2 border border-purple-500/20 cursor-pointer hover:bg-white/10 hover:border-purple-500/30 transition-all h-fit"
+                        onClick={() => setSelectedProjectDetail(project)}
+                      >
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-xs font-medium text-white truncate">{project.name}</span>
-                          <div className={`w-2 h-2 rounded-full ${
-                            project.priority === 'high' ? 'bg-red-400' :
-                            project.priority === 'medium' ? 'bg-yellow-400' : 'bg-green-400'
-                          }`}></div>
+                          <div
+                            className="w-2 h-2 rounded-full"
+                            style={{ backgroundColor: project.color || '#a855f7' }}
+                          ></div>
+                        </div>
+                        <div className="text-xs text-white/50 truncate mb-1">
+                          {(project.goals || []).filter(g => g.status !== 'deleted' && g.status !== 'Completed').length} goals
                         </div>
                         <div className="w-full bg-white/10 rounded-full h-1">
                           <div
-                            className="bg-purple-400 h-1 rounded-full transition-all duration-300"
-                            style={{ width: `${project.progress || 0}%` }}
+                            className="h-1 rounded-full transition-all duration-300"
+                            style={{
+                              width: `${project.progress || 0}%`,
+                              backgroundColor: project.color || '#a855f7'
+                            }}
                           ></div>
                         </div>
                       </div>
                     ))}
                     {projects.length === 0 && (
-                      <div className="text-xs text-white/40 text-center py-2">
-                        No projects yet
+                      <div className="col-span-2 text-xs text-white/40 text-center py-4">
+                        Finish setting up in Avatar.
                       </div>
                     )}
                   </div>
                 </div>
-              </div>
 
-              {/* Bottom Section - KPI Data */}
-              <div className="flex justify-between items-end">
-                {/* Left: Progress Tracker */}
-                <div className="flex items-center gap-2">
-                  <TrendingUp size={14} className="text-purple-400" />
-                  <div>
-                    <p className="text-xs font-medium text-white">Growth Tracker</p>
-                    <p className="text-xs text-white/50">Climbing higher</p>
+                {/* Right: Level Chart - Same Height as Projects */}
+                <div className="flex items-center justify-center">
+                  <div className="flex flex-col items-center">
+                    <div className="w-full h-24 relative mb-2">
+                      {/* Enhanced Mountain Line Visual */}
+                      <svg viewBox="0 0 200 60" className="w-full h-full">
+                        <defs>
+                          <linearGradient id="mountainGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" stopColor="rgb(168 85 247 / 0.3)" />
+                            <stop offset="50%" stopColor="rgb(168 85 247 / 0.4)" />
+                            <stop offset="100%" stopColor="rgb(168 85 247 / 0.2)" />
+                          </linearGradient>
+                        </defs>
+                        {/* Mountain path with better progression */}
+                        <path
+                          d="M10,50 L30,40 L50,32 L80,22 L120,18 L160,28 L190,25"
+                          stroke="rgb(168 85 247 / 0.9)"
+                          strokeWidth="2.5"
+                          fill="none"
+                          className="drop-shadow-sm"
+                        />
+                        {/* Fill area under mountain */}
+                        <path
+                          d="M10,50 L30,40 L50,32 L80,22 L120,18 L160,28 L190,25 L190,50 Z"
+                          fill="url(#mountainGradient)"
+                        />
+                        {/* Current position dot - positioned at peak */}
+                        <circle cx="120" cy="18" r="3" fill="rgb(168 85 247)" className="animate-pulse" />
+                        {/* Small figure at current position */}
+                        <circle cx="120" cy="15" r="1.5" fill="rgb(255 255 255 / 0.8)" />
+                      </svg>
+                    </div>
+                    <p className="text-xs font-medium text-white">Level {userLevel}</p>
                   </div>
                 </div>
+              </div>
+
+              {/* Bottom Section - Growth Tracker & Metrics */}
+              <div className="flex justify-between items-end">
+                {/* Left: Growth Tracker (editable, closes on Esc/outside-click) */}
+                {!growthTrackerDismissed && (
+                  <div ref={growthTrackerRef} className="flex-1">
+                    {editingGrowthTracker ? (
+                      <input
+                        type="text"
+                        value={growthTrackerInput}
+                        onChange={(e) => setGrowthTrackerInput(e.target.value)}
+                        onBlur={handleSaveGrowthTracker}
+                        onKeyDown={(e) => e.key === 'Enter' && handleSaveGrowthTracker()}
+                        className="w-full bg-white/10 text-white text-xs rounded px-2 py-1 border border-purple-500/20 focus:outline-none focus:border-purple-500/40"
+                        placeholder="Set your growth tracker message"
+                        autoFocus
+                      />
+                    ) : (
+                      <div
+                        className="flex items-center gap-2 cursor-pointer hover:bg-white/5 rounded px-1 py-0.5 transition-colors"
+                        onClick={() => {
+                          setEditingGrowthTracker(true);
+                        }}
+                      >
+                        <TrendingUp size={14} className="text-purple-400" />
+                        <div>
+                          <p className="text-xs font-medium text-white">Growth Tracker</p>
+                          <p className="text-xs text-white/50">
+                            {growthTrackerInput || 'Click to edit'}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {growthTrackerDismissed && (
+                  <div className="flex-1">
+                    <button
+                      onClick={handleToggleGrowthTracker}
+                      className="text-xs text-white/40 hover:text-white/60 transition-colors"
+                    >
+                      Show Growth Tracker
+                    </button>
+                  </div>
+                )}
 
                 {/* Right: Key Metrics */}
                 <div className="text-right space-y-1">
@@ -625,14 +1099,26 @@ const DigitalBrain: React.FC = () => {
                           <div className="flex items-start gap-2">
                             {/* Icon */}
                             <div className="w-6 h-6 rounded-md bg-[#89AC76]/20 flex items-center justify-center flex-shrink-0 group-hover:bg-[#89AC76]/30 transition-colors">
-                              <span className="text-[10px] font-semibold text-[#89AC76]">
-                                {insight.type.substring(0, 2).toUpperCase()}
+                              <span className="text-sm">
+                                {insight.typeIcon}
                               </span>
                             </div>
 
                             {/* Content */}
                             <div className="flex-1 min-w-0">
-                              <h4 className="text-xs font-medium text-white mb-1 line-clamp-1">{insight.title}</h4>
+                              {insight.sourceUrl ? (
+                                <a
+                                  href={insight.sourceUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs font-medium text-[#89AC76] hover:text-[#89AC76]/80 mb-1 line-clamp-1 block underline"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {insight.title}
+                                </a>
+                              ) : (
+                                <h4 className="text-xs font-medium text-white mb-1 line-clamp-1">{insight.title}</h4>
+                              )}
                               <p className="text-xs text-white/60 mb-2">{insight.metadata}</p>
 
                               {/* Project Tag (only for project insights) */}
@@ -653,8 +1139,7 @@ const DigitalBrain: React.FC = () => {
                     ) : (
                       <div className="text-center text-white/40 text-xs py-8">
                         <Lightbulb size={24} className="mx-auto mb-2 opacity-40" />
-                        <p>No insights yet</p>
-                        <p className="mt-1 text-white/30">ATMO will surface relevant insights as you work</p>
+                        <p>Finish setting up in Avatar.</p>
                       </div>
                     )}
                   </div>
@@ -665,14 +1150,10 @@ const DigitalBrain: React.FC = () => {
           </AtmoCard>
 
           {/* Card 3 - Knowledge Graph */}
-          <ObsidianKnowledgeGraph
-            className="w-full h-full"
-            projects={projects}
-            milestones={milestones}
-          />
+          <ObsidianKnowledgeGraph className="w-full h-full" />
 
           {/* Card 4 - Priority Stream */}
-          <PriorityStreamEnhanced className="w-full h-full" />
+          <PriorityStreamEnhanced context="digital-brain" className="w-full h-full" />
 
         </div>
       </div>

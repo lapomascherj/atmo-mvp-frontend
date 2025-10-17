@@ -1,30 +1,52 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables');
+const throwMissingConfigError = (): never => {
+  throw new Error(
+    'Supabase environment variables are missing. Configure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to enable workspace features.',
+  );
+};
+
+const createFailingProxy = (): SupabaseClient<any, 'public', any> => {
+  const proxyFactory = () =>
+    new Proxy(() => throwMissingConfigError(), {
+      apply: () => throwMissingConfigError(),
+      get: () => proxyFactory(),
+    });
+
+  return proxyFactory() as unknown as SupabaseClient<any, 'public', any>;
+};
+
+export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
+
+if (!isSupabaseConfigured && import.meta.env.DEV) {
+  console.warn(
+    '[Supabase] Environment variables not set. Features depending on Supabase will remain disabled until configuration is provided.',
+  );
 }
 
-const supabaseHostname = new URL(supabaseUrl).hostname.split('.')[0];
+const supabaseHostname = supabaseUrl ? new URL(supabaseUrl).hostname.split('.')[0] : 'local';
 
 export const SUPABASE_STORAGE_KEY = `sb-${supabaseHostname}-auth-token`;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: true,
-    flowType: 'pkce',
-    debug: import.meta.env.DEV,
-  },
-  global: {
-    headers: {
-      'X-Client-Info': 'atmo-frontend',
-    },
-  },
-});
+export const supabase = isSupabaseConfigured
+  ? createClient(supabaseUrl!, supabaseAnonKey!, {
+      auth: {
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: true,
+        flowType: 'pkce',
+        debug: import.meta.env.DEV,
+      },
+      global: {
+        headers: {
+          'X-Client-Info': 'atmo-frontend',
+        },
+      },
+    })
+  : createFailingProxy();
 
 export interface UserProfile {
   id: string;

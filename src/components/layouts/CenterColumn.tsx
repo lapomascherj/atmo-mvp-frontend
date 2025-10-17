@@ -1,15 +1,17 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import useMockAuth from '@/hooks/useMockAuth';
 import useVoiceRecognition from '@/hooks/useVoiceRecognition.ts';
 import SphereChat from '../atoms/SphereChat.tsx';
 import { Button } from '@/components/atoms/Button';
-import { Input } from '@/components/atoms/Input';
-import { Paperclip, Send } from 'lucide-react';
+import { TextArea } from '@/components/atoms/TextArea';
+import { Paperclip, Send, Archive, Plus } from 'lucide-react';
 import { cn } from '@/utils/utils';
 import { promptStore } from "@/stores/promptStore.ts";
 import { useToast } from '@/hooks/useToast.ts';
-import { digitalBrainAPI } from '@/api/mockDigitalBrainApi';
 import { useSidebar } from '@/context/SidebarContext';
+import { usePersonasStore } from '@/stores/usePersonasStore';
+import { ChatArchiveModal } from '@/components/organisms/ChatArchiveModal';
+import { useChatSessionsStore } from '@/stores/chatSessionsStore';
 
 interface CenterColumnProps {
     maxWidthPercent?: number;
@@ -22,7 +24,7 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
     const [isCapturing, setIsCapturing] = useState(false);
     const [isTranscribing, setIsTranscribing] = useState(false);
     const transcriptTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const inputRef = useRef<HTMLInputElement>(null);
+    const inputRef = useRef<HTMLTextAreaElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     
@@ -57,9 +59,10 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
     });
 
     // Reset conversation state on component mount to ensure clean start
-    useEffect(() => {
-        resetConversationState();
-    }, [resetConversationState]);
+    // Don't reset conversation state - we want to preserve chat history
+    // useEffect(() => {
+    //     resetConversationState();
+    // }, [resetConversationState]);
 
     // Clean up transcription timeout on unmount
     useEffect(() => {
@@ -118,29 +121,92 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
         setIsCapturing(!isCapturing);
     };
 
+    const sendChatMessage = usePersonasStore(state => state.sendChatMessage);
+    const [showArchiveModal, setShowArchiveModal] = useState(false);
+    const avatarClickTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    const initializeChatSessions = useChatSessionsStore((state) => state.initialize);
+    const startNewChatSession = useChatSessionsStore((state) => state.startNewChatSession);
+    const refreshActiveSession = useChatSessionsStore((state) => state.refreshActiveSession);
+
+    useEffect(() => {
+        void initializeChatSessions();
+    }, [initializeChatSessions]);
+
     const handleAIResponse = async (userMessage: string) => {
+        // Set responding state to true at start
+        promptStore.getState().setRespondingState?.(true);
+
         try {
-            toggleRespondingState();
-            
-            const response = await digitalBrainAPI.ask({
-                message: userMessage,
-                conversationHistory: history,
-                currentTask: currentTask || undefined,
-                userName: user?.nickname || 'User'
-            });
+            // Use real Claude AI via Supabase edge function
+            const response = await sendChatMessage(userMessage);
 
             // Add AI response to history using addAIResponse function
             const { addAIResponse } = promptStore.getState();
-            addAIResponse(response.data.response);
+
+            // Debug log the response
+            console.log('📊 Chat Response:', {
+                response: response.response,
+                entitiesExtracted: response.entitiesExtracted,
+                entitiesCreated: response.entitiesCreated
+            });
+
+            // If entities were created, add a note about it
+            const createdEntities = (response.entitiesCreated || []).filter(entity => entity.mode !== 'deleted');
+            if (createdEntities.length > 0) {
+                const createdList = createdEntities
+                    .map(e => `✓ ${e.type}: "${e.name}"`)
+                    .join('\n');
+                addAIResponse(`${response.response}\n\n**Created:**\n${createdList}`);
+            } else {
+                addAIResponse(response.response);
+            }
 
         } catch (error) {
             console.error('Error getting AI response:', error);
             const { addAIResponse } = promptStore.getState();
-            addAIResponse("I'm having trouble processing your request right now. Please try again.");
+            const errorMsg = error instanceof Error ? error.message : "I'm having trouble processing your request right now. Please try again.";
+            addAIResponse(errorMsg);
         } finally {
-            toggleRespondingState();
+            // Ensure responding state is false after response
+            promptStore.getState().setRespondingState?.(false);
+
+            // Refresh chat session to ensure it's synced (but don't force persona reload)
+            await refreshActiveSession({ force: true }).catch((err) => {
+                console.error('Failed to synchronize chat session after AI response:', err);
+            });
         }
     };
+
+    const resetInputHeight = useCallback(() => {
+        const textarea = inputRef.current;
+        if (!textarea) {
+            return;
+        }
+        textarea.style.height = 'auto';
+        textarea.style.overflowY = 'hidden';
+    }, []);
+
+    const adjustInputHeight = useCallback(() => {
+        const textarea = inputRef.current;
+        if (!textarea) {
+            return;
+        }
+
+        textarea.style.height = 'auto';
+        const maxHeight = 220;
+        const nextHeight = Math.min(textarea.scrollHeight, maxHeight);
+        textarea.style.height = `${nextHeight}px`;
+        textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
+    }, []);
+
+    useEffect(() => {
+        if (!input.message) {
+            resetInputHeight();
+            return;
+        }
+        adjustInputHeight();
+    }, [input.message, adjustInputHeight, resetInputHeight]);
 
     const handleSendMessage = async () => {
         const messageText = input.message?.trim();
@@ -153,22 +219,16 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
         // Message is already in input from user typing, just add to history
         addToHistory();
         clearInput(); // Clear input immediately after adding to history
+        resetInputHeight();
 
         await handleAIResponse(messageText);
     };
 
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             handleSendMessage();
         }
-    };
-
-    const formatTime = (date: Date) => {
-        return date.toLocaleTimeString('en-US', { 
-            hour: 'numeric', 
-            minute: '2-digit'
-        });
     };
 
     const handleFileUpload = () => {
@@ -180,11 +240,65 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
         if (files && files.length > 0) {
             // Handle file upload logic here
             console.log('Files selected:', Array.from(files).map(f => f.name));
-            
+
             // Reset file input
             if (fileInputRef.current) {
                 fileInputRef.current.value = '';
             }
+        }
+    };
+
+    const handleNewChat = async () => {
+        try {
+            await startNewChatSession();
+
+            toast({
+                title: 'New chat started',
+                description: 'Previous chat has been archived',
+            });
+        } catch (error) {
+            console.error('Failed to create new chat:', error);
+            toast({
+                title: 'Error',
+                description: 'Failed to start new chat',
+                variant: 'destructive',
+            });
+        }
+    };
+
+    const handleLoadArchivedChat = async (sessionId: string) => {
+        try {
+            await refreshActiveSession({ force: true }).catch((err) => {
+                console.error('Failed to refresh active session after archive load:', err);
+            });
+            toast({
+                title: 'Chat loaded',
+                description: 'Previous conversation restored',
+            });
+        } catch (error) {
+            console.error('Failed post-load handling for archived chat:', error);
+            toast({
+                title: 'Error',
+                description: 'Could not load the archived chat. Please try again.',
+                variant: 'destructive',
+            });
+        }
+    };
+
+    const handleAvatarClick = () => {
+        // Detect double-click
+        if (avatarClickTimeoutRef.current) {
+            // This is a double-click
+            clearTimeout(avatarClickTimeoutRef.current);
+            avatarClickTimeoutRef.current = null;
+            setShowArchiveModal(true);
+        } else {
+            // This is first click - wait to see if there's a second
+            avatarClickTimeoutRef.current = setTimeout(() => {
+                // Single click - toggle capture
+                handleQuickCapture();
+                avatarClickTimeoutRef.current = null;
+            }, 300);
         }
     };
 
@@ -206,7 +320,7 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
                             size={history.length > 0 ? 160 : 220}
                             isActive={isCapturing}
                             isListening={isCapturing}
-                            onClick={handleQuickCapture}
+                            onClick={handleAvatarClick}
                             voiceSupported={true}
                         />
 
@@ -277,7 +391,9 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
                             Click the orange sphere to start a voice conversation
                         </div>
                     ) : (
-                        history.map((message, index) => (
+                        history
+                            .filter(message => message.message && message.message.trim() && message.message.trim() !== '...')
+                            .map((message, index) => (
                             <div
                                 key={index}
                                 className={cn(
@@ -299,7 +415,7 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
                                             letterSpacing: '0.005em'
                                         }}
                                     >
-                                        <div 
+                                        <div
                                             className="whitespace-pre-wrap break-words font-normal"
                                             style={{
                                                 fontSize: '14px',
@@ -310,12 +426,6 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
                                             {message.message}
                                         </div>
                                     </div>
-                                    <div className={cn(
-                                        "text-xs text-white/30 mt-1.5",
-                                        message.sender === 'user' ? "text-right" : "text-left"
-                                    )}>
-                                        {formatTime(new Date())}
-                                    </div>
                                 </div>
                             </div>
                         ))
@@ -325,11 +435,14 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
                     {isResponding && (
                         <div className="flex justify-start">
                             <div className="max-w-[90%] md:max-w-[80%]">
-                                <div className="bg-slate-800/70 border border-slate-600/40 text-white rounded-2xl rounded-bl-md px-4 py-3 backdrop-blur-sm">
-                                    <div className="flex space-x-1">
-                                        <div className="w-2 h-2 bg-white/40 rounded-full animate-pulse"></div>
-                                        <div className="w-2 h-2 bg-white/40 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
-                                        <div className="w-2 h-2 bg-white/40 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+                                <div className="bg-slate-800/50 border border-slate-600/30 rounded-2xl rounded-bl-md px-3 py-2 backdrop-blur-sm">
+                                    <div className="flex items-center gap-1.5">
+                                        <div className="flex space-x-0.5">
+                                            <div className="w-1.5 h-1.5 bg-orange-500/40 rounded-full animate-bounce"></div>
+                                            <div className="w-1.5 h-1.5 bg-orange-500/40 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                                            <div className="w-1.5 h-1.5 bg-orange-500/40 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                                        </div>
+                                        <span className="text-orange-500/60 text-xs ml-1">ATMO is thinking...</span>
                                     </div>
                                 </div>
                             </div>
@@ -345,22 +458,44 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
             <div className="flex-shrink-0 border-t border-slate-700/40 pt-3 pb-3 px-4 bg-gradient-to-t from-slate-950/95 via-slate-950/90 to-transparent">
                 <div className="flex items-center gap-3 mx-2">
                     <Button
+                        onClick={() => setShowArchiveModal(true)}
+                        variant="ghost"
+                        size="sm"
+                        className="flex-shrink-0 p-3 text-white/60 hover:text-white/85 hover:bg-slate-700/50 rounded-xl transition-all duration-300 border border-transparent hover:border-slate-600/30"
+                        title="View archived chats"
+                    >
+                        <Archive className="w-5 h-5" />
+                    </Button>
+
+                    <Button
+                        onClick={handleNewChat}
+                        variant="ghost"
+                        size="sm"
+                        className="flex-shrink-0 p-3 text-white/60 hover:text-white/85 hover:bg-slate-700/50 rounded-xl transition-all duration-300 border border-transparent hover:border-slate-600/30"
+                        title="Start new chat"
+                    >
+                        <Plus className="w-5 h-5" />
+                    </Button>
+
+                    <Button
                         onClick={handleFileUpload}
                         variant="ghost"
                         size="sm"
                         className="flex-shrink-0 p-3 text-white/60 hover:text-white/85 hover:bg-slate-700/50 rounded-xl transition-all duration-300 border border-transparent hover:border-slate-600/30"
+                        title="Upload file"
                     >
                         <Paperclip className="w-5 h-5" />
                     </Button>
 
-                    <Input
+                    <TextArea
                         ref={inputRef}
-                        type="text"
                         placeholder="Type your message..."
                         value={input.message || ''}
                         onChange={(e) => addMessageToPrompt(e.target.value, 'user')}
+                        onInput={adjustInputHeight}
                         onKeyDown={handleKeyDown}
-                        className="flex-1 bg-slate-800/70 border border-slate-600/50 rounded-xl px-5 py-3 text-white/95 placeholder-white/45 focus:outline-none focus:border-orange-500/60 focus:bg-slate-800/85 transition-all duration-300 font-light"
+                        rows={1}
+                        className="flex-1 !min-h-[52px] max-h-56 bg-slate-800/70 border border-slate-600/50 rounded-xl px-5 py-3 text-white/95 placeholder-white/45 focus:outline-none focus:border-orange-500/60 focus:bg-slate-800/85 transition-all duration-300 font-light resize-none"
                     />
 
                     <Button
@@ -382,6 +517,13 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
                     />
                 </div>
             </div>
+
+            {/* Chat Archive Modal */}
+            <ChatArchiveModal
+                isOpen={showArchiveModal}
+                onClose={() => setShowArchiveModal(false)}
+                onLoadSession={handleLoadArchivedChat}
+            />
         </div>
     );
 };

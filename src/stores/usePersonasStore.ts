@@ -10,6 +10,8 @@ import { Focus } from '@/models/Focus';
 import { JobTitle } from '@/models/JobTitle';
 import { AvatarStyle } from '@/models/AvatarStyle';
 import { CommunicationStyle } from '@/models/CommunicationStyle';
+import { Priority } from '@/models/Priority';
+import { Status } from '@/models/Status';
 import type { LegacyUserProfile } from '@/hooks/useMockAuth';
 import {
   fetchWorkspaceGraph,
@@ -31,6 +33,7 @@ import {
   linkKnowledgeItemToProject,
   unlinkKnowledgeItemFromProject,
   fetchUserInsights,
+  updateUserProfile,
   UserInsight,
 } from '@/services/supabaseDataService';
 import {
@@ -51,6 +54,34 @@ const buildTasks = (projects: Project[]): Task[] =>
 
 const buildMilestones = (projects: Project[]): Milestone[] =>
   projects.flatMap((project) => project.milestones ?? []);
+
+type GoalAutomationPayload = {
+  id: string;
+  name: string;
+  description?: string | null;
+  status?: string | null;
+  priority?: string | null;
+  targetDate?: string | null;
+  projectId: string;
+  mode?: 'created' | 'updated' | 'deleted';
+};
+
+const normaliseGoalStatusForStore = (value?: string | null): Status => {
+  if (!value) return Status.InProgress;
+  const normalized = value.toLowerCase();
+  if (normalized.includes('plan')) return Status.Planned;
+  if (normalized.includes('progress') || normalized.includes('active') || normalized.includes('doing')) return Status.InProgress;
+  if (normalized.includes('complete') || normalized.includes('done') || normalized.includes('finish')) return Status.Completed;
+  return Status.InProgress;
+};
+
+const normaliseGoalPriorityForStore = (value?: string | null): Priority => {
+  if (!value) return Priority.Medium;
+  const normalized = value.toLowerCase();
+  if (normalized.includes('high') || normalized.includes('urgent')) return Priority.High;
+  if (normalized.includes('low')) return Priority.Low;
+  return Priority.Medium;
+};
 
 const mapProfileToPersona = (
   profile: LegacyUserProfile | null,
@@ -124,17 +155,48 @@ interface PersonasStoreState {
   removeKnowledgeItemFromProject: (_pb: unknown, projectId: string, knowledgeItemId: string) => Promise<boolean>;
   getIntegrations: () => Integration[];
   refreshInsights: () => Promise<void>;
+  applyGoalAutomation: (payload: GoalAutomationPayload) => void;
   sendChatMessage: (message: string) => Promise<ChatResponse>;
   getChatHistory: (limit?: number) => Promise<ChatMessage[]>;
 }
 
+// Fetch debouncing and deduplication state
+let lastFetchTimestamp = 0;
+let fetchInProgress: Promise<Persona | null> | null = null;
+let debounceTimer: NodeJS.Timeout | null = null;
+let lastDataHash = '';
+
+// Simple hash function for data deduplication
+const hashData = (data: any): string => {
+  try {
+    return JSON.stringify(data);
+  } catch {
+    return Date.now().toString();
+  }
+};
+
 export const usePersonasStore = create<PersonasStoreState>((set, get) => {
   const synchronizeWorkspace = async (ownerId: string) => {
+    const timestamp = new Date().toLocaleTimeString();
+    console.log(`🔄 [${timestamp}] Fetching workspace for user:`, ownerId);
+
     const profile = get().profileSnapshot;
     const integrations = get().integrations;
     const { projects, knowledgeItems, insights } = await fetchWorkspaceGraph(ownerId);
+
+    // Deduplicate: check if data has actually changed
+    const newDataHash = hashData({ projects, knowledgeItems, insights });
+    if (newDataHash === lastDataHash) {
+      console.log(`⏭️ [${timestamp}] Data unchanged, skipping store update`);
+      set({ loading: false });
+      return;
+    }
+
     const persona = mapProfileToPersona(profile, projects, knowledgeItems, integrations);
 
+    console.log(`💾 [${timestamp}] Rehydrated ${projects.length} projects, ${knowledgeItems.length} knowledge items from database`);
+
+    lastDataHash = newDataHash;
     set({
       projects,
       knowledgeItems,
@@ -151,6 +213,54 @@ export const usePersonasStore = create<PersonasStoreState>((set, get) => {
       throw new Error('No profile available for the current user');
     }
     return profile;
+  };
+
+  /**
+   * Calculate task priority based on deadline proximity rules:
+   * - High: Goal/milestone due within 3 days OR project priority is High
+   * - Medium: Default for all other cases
+   */
+  const calculateTaskPriority = (
+    task: Partial<Task>,
+    goalId: string,
+    projectId: string,
+    projects: Project[]
+  ): Priority => {
+    const project = projects.find((p) => p.id === projectId);
+    if (!project) return Priority.Medium;
+
+    const goal = project.goals?.find((g) => g.id === goalId);
+
+    // Rule 1: Check if goal has a target date within 3 days
+    if (goal?.targetDate) {
+      const goalDate = new Date(goal.targetDate);
+      const now = new Date();
+      const daysUntil = Math.ceil((goalDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+      if (daysUntil <= 3 && daysUntil >= 0) {
+        return Priority.High;
+      }
+    }
+
+    // Rule 2: Check if project has milestones due within 3 days
+    const upcomingMilestones = project.milestones?.filter((m) => {
+      if (!m.due_date || m.status === 'Completed') return false;
+      const milestoneDate = new Date(m.due_date);
+      const now = new Date();
+      const daysUntil = Math.ceil((milestoneDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      return daysUntil <= 3 && daysUntil >= 0;
+    });
+
+    if (upcomingMilestones && upcomingMilestones.length > 0) {
+      return Priority.High;
+    }
+
+    // Rule 3: Check if project priority is High
+    if (project.priority === Priority.High) {
+      return Priority.High;
+    }
+
+    return Priority.Medium;
   };
 
   return {
@@ -173,16 +283,36 @@ export const usePersonasStore = create<PersonasStoreState>((set, get) => {
     fetchPersonaByIam: async (_pb, _iam, forceRefresh = false) => {
       try {
         const profile = ensureProfile();
+
+        // Return existing data if not forcing refresh and persona exists
         if (!forceRefresh && get().currentPersona) {
           return get().currentPersona;
         }
 
+        // Deduplication: if fetch in progress, return existing promise
+        if (fetchInProgress) {
+          console.log(`⏳ [${new Date().toLocaleTimeString()}] Fetch already in progress, returning existing promise`);
+          return fetchInProgress;
+        }
+
+        // Start new fetch
         set({ loading: true, error: null });
-        await synchronizeWorkspace(profile.id);
-        return get().currentPersona;
+        lastFetchTimestamp = Date.now();
+
+        fetchInProgress = (async () => {
+          try {
+            await synchronizeWorkspace(profile.id);
+            return get().currentPersona;
+          } finally {
+            fetchInProgress = null;
+          }
+        })();
+
+        return await fetchInProgress;
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to load workspace';
         set({ loading: false, error: message });
+        fetchInProgress = null;
         return null;
       }
     },
@@ -193,10 +323,43 @@ export const usePersonasStore = create<PersonasStoreState>((set, get) => {
     },
 
     updatePersona: async (_pb, _id, data) => {
-      set((state) => ({
-        currentPersona: state.currentPersona ? { ...state.currentPersona, ...data } : null,
-      }));
-      return true;
+      try {
+        const profile = get().profileSnapshot;
+        if (!profile) {
+          throw new Error('No profile available for updating persona');
+        }
+
+        // Extract fields that need to be persisted to database
+        const profileUpdates: {
+          nickname?: string;
+          bio?: string;
+          job_title?: string;
+          mainPriority?: string;
+        } = {};
+
+        if (data.nickname !== undefined) profileUpdates.nickname = data.nickname;
+        if (data.bio !== undefined) profileUpdates.bio = data.bio;
+        if (data.job_title !== undefined) profileUpdates.job_title = data.job_title;
+        if (data.biggest_challenge !== undefined) profileUpdates.mainPriority = data.biggest_challenge;
+
+        // Write through to database if any profile fields are being updated
+        if (Object.keys(profileUpdates).length > 0) {
+          await updateUserProfile(profile.id, profileUpdates);
+          console.log(`💾 [${new Date().toLocaleTimeString()}] Profile fields persisted to database:`, profileUpdates);
+        }
+
+        // Update local state
+        set((state) => ({
+          currentPersona: state.currentPersona ? { ...state.currentPersona, ...data } : null,
+        }));
+
+        return true;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to update persona';
+        console.error(`❌ [${new Date().toLocaleTimeString()}] Persona update failed:`, message);
+        set({ error: message });
+        return false;
+      }
     },
 
     clearPersona: () => {
@@ -236,13 +399,25 @@ export const usePersonasStore = create<PersonasStoreState>((set, get) => {
     removeProject: async (_pb, projectId) => {
       try {
         const profile = ensureProfile();
-        set({ loading: true, error: null });
+
+        // Optimistic delete: filter project from state immediately
+        const previousProjects = get().projects;
+        const filteredProjects = previousProjects.filter(p => p.id !== projectId);
+
+        set({ projects: filteredProjects, error: null });
+        console.log(`⚡ [${new Date().toLocaleTimeString()}] Optimistic delete applied for project:`, projectId);
+
+        // API call
         await deleteProjectInSupabase(profile.id, projectId);
-        await synchronizeWorkspace(profile.id);
+
+        // Success: no need to refetch, optimistic update is already applied
+        set({ loading: false });
         return true;
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to remove project';
-        set({ loading: false, error: message });
+        // Rollback: restore previous state on failure
+        const previousProjects = get().projects;
+        set({ projects: previousProjects, loading: false, error: error instanceof Error ? error.message : 'Failed to remove project' });
+        console.error('Failed to delete project, rolled back:', error);
         return false;
       }
     },
@@ -363,13 +538,28 @@ export const usePersonasStore = create<PersonasStoreState>((set, get) => {
     removeGoal: async (_pb, goalId) => {
       try {
         const profile = ensureProfile();
-        set({ loading: true, error: null });
+
+        // Optimistic delete: filter goal from nested project structure immediately
+        const previousProjects = get().projects;
+        const filteredProjects = previousProjects.map(project => ({
+          ...project,
+          goals: (project.goals || []).filter(g => g.id !== goalId)
+        }));
+
+        set({ projects: filteredProjects, error: null });
+        console.log(`⚡ [${new Date().toLocaleTimeString()}] Optimistic delete applied for goal:`, goalId);
+
+        // API call
         await deleteGoalInSupabase(profile.id, goalId);
-        await synchronizeWorkspace(profile.id);
+
+        // Success: no need to refetch, optimistic update is already applied
+        set({ loading: false });
         return true;
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to remove goal';
-        set({ loading: false, error: message });
+        // Rollback: restore previous state on failure
+        const previousProjects = get().projects;
+        set({ projects: previousProjects, loading: false, error: error instanceof Error ? error.message : 'Failed to remove goal' });
+        console.error('Failed to delete goal, rolled back:', error);
         return false;
       }
     },
@@ -379,10 +569,20 @@ export const usePersonasStore = create<PersonasStoreState>((set, get) => {
     addTask: async (_pb, goalId, task) => {
       try {
         const profile = ensureProfile();
-        const project = get().projects.find((proj) => (proj.goals ?? []).some((goal) => goal.id === goalId));
+        const { projects } = get();
+        const project = projects.find((proj) => (proj.goals ?? []).some((goal) => goal.id === goalId));
         const projectId = project?.id;
+
+        if (!projectId) {
+          throw new Error('Goal not found in any project');
+        }
+
+        // Calculate priority based on deadline rules
+        const calculatedPriority = calculateTaskPriority(task, goalId, projectId, projects);
+        const taskWithPriority = { ...task, priority: calculatedPriority };
+
         set({ loading: true, error: null });
-        await createTaskInSupabase(profile.id, { ...task, goalId, projectId });
+        await createTaskInSupabase(profile.id, { ...taskWithPriority, goalId, projectId });
         await synchronizeWorkspace(profile.id);
         return true;
       } catch (error) {
@@ -395,12 +595,41 @@ export const usePersonasStore = create<PersonasStoreState>((set, get) => {
     updateTask: async (_pb, taskId, updates) => {
       try {
         const profile = ensureProfile();
-        set({ loading: true, error: null });
+
+        // Optimistic update: update UI immediately
+        const previousState = get().projects;
+        const updatedProjects = previousState.map(project => ({
+          ...project,
+          goals: (project.goals ?? []).map(goal => ({
+            ...goal,
+            tasks: (goal.tasks ?? []).map(task =>
+              task.id === taskId ? { ...task, ...updates } : task
+            )
+          }))
+        }));
+
+        set({ projects: updatedProjects });
+        console.log(`⚡ [${new Date().toLocaleTimeString()}] Optimistic update applied for task:`, taskId);
+
+        // API call
         await updateTaskInSupabase(profile.id, taskId, updates);
+
+        // Rehydrate from database to ensure consistency
         await synchronizeWorkspace(profile.id);
+        console.log(`✅ [${new Date().toLocaleTimeString()}] Task update confirmed from database:`, taskId);
+
         return true;
       } catch (error) {
+        // Rollback: revert to previous state
         const message = error instanceof Error ? error.message : 'Failed to update task';
+        console.error(`❌ [${new Date().toLocaleTimeString()}] Task update failed, rolling back:`, taskId, message);
+
+        // Fetch fresh data from database to restore correct state
+        const profile = get().profileSnapshot;
+        if (profile) {
+          await synchronizeWorkspace(profile.id);
+        }
+
         set({ loading: false, error: message });
         return false;
       }
@@ -409,12 +638,39 @@ export const usePersonasStore = create<PersonasStoreState>((set, get) => {
     removeTask: async (_pb, taskId) => {
       try {
         const profile = ensureProfile();
-        set({ loading: true, error: null });
+
+        // Optimistic update: remove from UI immediately
+        const previousState = get().projects;
+        const updatedProjects = previousState.map(project => ({
+          ...project,
+          goals: (project.goals ?? []).map(goal => ({
+            ...goal,
+            tasks: (goal.tasks ?? []).filter(task => task.id !== taskId)
+          }))
+        }));
+
+        set({ projects: updatedProjects });
+        console.log(`⚡ [${new Date().toLocaleTimeString()}] Optimistic deletion applied for task:`, taskId);
+
+        // API call
         await deleteTaskInSupabase(profile.id, taskId);
+
+        // Rehydrate from database to ensure consistency
         await synchronizeWorkspace(profile.id);
+        console.log(`✅ [${new Date().toLocaleTimeString()}] Task deletion confirmed from database:`, taskId);
+
         return true;
       } catch (error) {
+        // Rollback: revert to previous state
         const message = error instanceof Error ? error.message : 'Failed to remove task';
+        console.error(`❌ [${new Date().toLocaleTimeString()}] Task deletion failed, rolling back:`, taskId, message);
+
+        // Fetch fresh data from database to restore correct state
+        const profile = get().profileSnapshot;
+        if (profile) {
+          await synchronizeWorkspace(profile.id);
+        }
+
         set({ loading: false, error: message });
         return false;
       }
@@ -519,12 +775,115 @@ export const usePersonasStore = create<PersonasStoreState>((set, get) => {
       }
     },
 
+    applyGoalAutomation: (payload) => {
+      if (!payload.projectId || !payload.id) {
+        return;
+      }
+
+      set((state) => {
+        const projects = state.projects ?? [];
+        const projectIndex = projects.findIndex((project) => project.id === payload.projectId);
+        if (projectIndex === -1) {
+          return state;
+        }
+
+        const project = projects[projectIndex];
+        const existingGoals = project.goals ?? [];
+        const statusValue = normaliseGoalStatusForStore(payload.status);
+        const priorityValue = normaliseGoalPriorityForStore(payload.priority);
+        const shouldHide = statusValue === Status.Completed || payload.status?.toLowerCase() === 'deleted' || payload.mode === 'deleted';
+
+        const existingIndex = existingGoals.findIndex((goal) => goal.id === payload.id);
+        const baseGoal = existingIndex > -1 ? existingGoals[existingIndex] : undefined;
+
+        let nextGoals = existingGoals;
+        let changed = false;
+
+        if (shouldHide) {
+          if (existingIndex === -1) {
+            return state;
+          }
+          nextGoals = existingGoals.filter((goal) => goal.id !== payload.id);
+          changed = true;
+        } else {
+          const nextGoal: Goal = {
+            id: payload.id,
+            name: payload.name || baseGoal?.name || 'Untitled Goal',
+            description: (payload.description ?? baseGoal?.description) || undefined,
+            status: statusValue,
+            priority: priorityValue,
+            targetDate: payload.targetDate ?? baseGoal?.targetDate ?? '',
+            completedDate: statusValue === Status.Completed ? baseGoal?.completedDate ?? new Date().toISOString() : undefined,
+            order: baseGoal?.order ?? existingGoals.length + 1,
+            tasks: baseGoal?.tasks ?? [],
+          };
+
+          if (existingIndex === -1) {
+            nextGoals = [...existingGoals, nextGoal];
+            changed = true;
+          } else {
+            const currentGoal = existingGoals[existingIndex];
+            if (
+              currentGoal.name === nextGoal.name &&
+              currentGoal.status === nextGoal.status &&
+              currentGoal.priority === nextGoal.priority &&
+              currentGoal.description === nextGoal.description &&
+              currentGoal.targetDate === nextGoal.targetDate
+            ) {
+              return state;
+            }
+
+            nextGoals = [...existingGoals];
+            nextGoals[existingIndex] = nextGoal;
+            changed = true;
+          }
+        }
+
+        if (!changed) {
+          return state;
+        }
+
+        const updatedProjects = [...projects];
+        updatedProjects[projectIndex] = {
+          ...project,
+          goals: nextGoals,
+        };
+
+        const updatedPersona = state.currentPersona
+          ? { ...state.currentPersona, projects: updatedProjects }
+          : state.currentPersona;
+
+        return {
+          projects: updatedProjects,
+          currentPersona: updatedPersona,
+        };
+      });
+    },
+
     sendChatMessage: async (message: string) => {
       try {
         const profile = ensureProfile();
         set({ loading: true, error: null });
 
         const response = await sendChatMessage(message);
+
+        const { applyGoalAutomation } = get();
+        if (Array.isArray(response.entitiesCreated)) {
+          response.entitiesCreated.forEach((entity) => {
+            if (entity.type === 'goal' && entity.projectId && entity.id) {
+              applyGoalAutomation({
+                id: entity.id,
+                name: entity.name,
+                description: entity.description ?? undefined,
+                status: entity.status ?? undefined,
+                priority: entity.priority ?? undefined,
+                targetDate: entity.targetDate ?? null,
+                projectId: entity.projectId,
+                mode: entity.mode,
+              });
+            }
+          });
+        }
 
         // Auto-refresh workspace to pull in any new entities created by chat
         await synchronizeWorkspace(profile.id);

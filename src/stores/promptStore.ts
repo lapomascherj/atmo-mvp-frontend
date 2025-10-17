@@ -29,12 +29,15 @@ interface PromptState {
   setGoalContext: (goal: Goal | undefined) => void;
   clearGoalContext: () => void;
   toggleConversationStarted: () => void;
+  setConversationStarted: (value: boolean) => void;
   toggleRespondingState: () => void;
   toggleVoiceMessage: () => void;
+  setRespondingState: (value: boolean) => void;
   processTaskWithAI: (task: Task) => Promise<void>;
   addAIResponse: (response: string) => void;
   addAvatarMessage: (message: string) => void;
   resetConversationState: () => void;
+  setHistory: (entries: PromptInput[]) => void;
 }
 
 export const promptStore = create<PromptState>((set) => ({
@@ -126,6 +129,10 @@ export const promptStore = create<PromptState>((set) => ({
       currentGoal: undefined,
       context: [],
     })),
+  setHistory: (entries: PromptInput[]) =>
+    set(() => ({
+      history: entries,
+    })),
   clearInput: () =>
     set((_state) => ({
       input: {
@@ -137,9 +144,17 @@ export const promptStore = create<PromptState>((set) => ({
     set((state) => ({
       isConversationStarted: !state.isConversationStarted,
     })),
+  setConversationStarted: (value: boolean) =>
+    set(() => ({
+      isConversationStarted: value,
+    })),
   toggleRespondingState: () =>
     set((state) => ({
       isResponding: !state.isResponding,
+    })),
+  setRespondingState: (value: boolean) =>
+    set(() => ({
+      isResponding: value,
     })),
   toggleVoiceMessage: () =>
     set((state) => ({

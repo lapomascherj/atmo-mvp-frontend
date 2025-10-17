@@ -115,3 +115,4 @@ pocketbase/CHANGELOG.md
 pocketbase/LICENSE.md
 pocketbase/*.zip
 
+.api-keys.md

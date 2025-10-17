@@ -37,15 +37,15 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ userName }) => {
   // Get user data for dashboard
   const { user } = useMockAuth();
 
-  // Initialize PersonasStore when user is available
+  // Initialize PersonasStore on mount and when route changes
   useEffect(() => {
-    if (user?.iam && !currentPersona && !loading) {
-      console.log("📊 DASHBOARD: Initializing PersonasStore for user:", user.iam);
-      fetchPersonaByIam(null as any, user.iam).catch(error => {
-        console.debug("PersonasStore initialization completed or auto-cancelled");
+    if (user?.iam && !loading) {
+      console.log("📊 DASHBOARD: Hydrating PersonasStore for user:", user.iam);
+      fetchPersonaByIam(null as any, user.iam, !currentPersona).catch(error => {
+        console.debug("PersonasStore hydration completed or auto-cancelled");
       });
     }
-  }, [user?.iam, currentPersona, loading, fetchPersonaByIam]);
+  }, [user?.iam, loading, fetchPersonaByIam]);
 
   // Add modal state for project creation
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
@@ -59,8 +59,8 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ userName }) => {
   const [dividerPosition, setDividerPosition] = useState(50);
 
   // Scheduler state - synced across dashboard and Digital Brain
-  const { events: schedulerEvents, updateEvents: setSchedulerEvents } = useSchedulerSync();
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const { events: schedulerEvents, updateEvents: setSchedulerEvents } = useSchedulerSync(selectedDate);
 
   // Check for new mantra content (6am daily)
   React.useEffect(() => {
@@ -91,23 +91,22 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ userName }) => {
       console.debug("📊 DASHBOARD: No currentPersona loaded yet");
       return { projects: [], tasks: [], goals: [] };
     }
-    
+
     const projects = getProjects();
     const tasks = getTasks();
     const goals = getGoals();
-    
-    console.log("📊 DASHBOARD: Data loaded from PersonasStore:", {
+
+    console.log("📊 DASHBOARD: Data loaded from PersonasStore (single invocation):", {
       personaId: currentPersona.id,
       projects: projects.length,
       tasks: tasks.length,
       goals: goals.length,
-      hasExpand: !!currentPersona.expand,
-      hasProjects: !!currentPersona.expand?.projects,
-      hasItems: !!currentPersona.expand?.items
     });
-    
+
     return { projects, tasks, goals };
-  }, [currentPersona, getProjects, getTasks, getGoals]);
+  // Only depend on currentPersona to prevent triple loading
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPersona]);
 
   // Memoize dashboard calculations to prevent re-computation on every render
   const dashboardStats = useMemo(() => {
@@ -220,7 +219,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ userName }) => {
                     <div className="flex flex-col justify-center gap-4">
                   {/* Card 1 - Priority Stream (Mission Control) */}
                   <div className="w-72 h-[420px]">
-                    <PriorityStreamEnhanced compact={false} priorityOnly={true} className="w-full h-full" />
+                    <PriorityStreamEnhanced compact={false} priorityOnly={true} context="dashboard" className="w-full h-full" />
                   </div>
 
                   {/* Card 2 */}

@@ -408,3 +408,52 @@ CREATE TRIGGER on_user_insight_updated
 
 CREATE INDEX IF NOT EXISTS idx_user_insights_owner ON public.user_insights(owner_id);
 CREATE INDEX IF NOT EXISTS idx_user_insights_project ON public.user_insights(project_id);
+
+-- Scheduler events -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.scheduler_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  owner_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+  scheduled_for DATE NOT NULL,
+  title TEXT NOT NULL,
+  start_time TIME WITHOUT TIME ZONE NOT NULL,
+  duration_minutes INTEGER NOT NULL CHECK (duration_minutes > 0),
+  description TEXT,
+  category TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+
+ALTER TABLE public.scheduler_events ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can view own scheduler events" ON public.scheduler_events;
+CREATE POLICY "Users can view own scheduler events"
+  ON public.scheduler_events
+  FOR SELECT
+  USING (auth.uid() = owner_id);
+
+DROP POLICY IF EXISTS "Users can insert own scheduler events" ON public.scheduler_events;
+CREATE POLICY "Users can insert own scheduler events"
+  ON public.scheduler_events
+  FOR INSERT
+  WITH CHECK (auth.uid() = owner_id);
+
+DROP POLICY IF EXISTS "Users can update own scheduler events" ON public.scheduler_events;
+CREATE POLICY "Users can update own scheduler events"
+  ON public.scheduler_events
+  FOR UPDATE
+  USING (auth.uid() = owner_id);
+
+DROP POLICY IF EXISTS "Users can delete own scheduler events" ON public.scheduler_events;
+CREATE POLICY "Users can delete own scheduler events"
+  ON public.scheduler_events
+  FOR DELETE
+  USING (auth.uid() = owner_id);
+
+DROP TRIGGER IF EXISTS on_scheduler_event_updated ON public.scheduler_events;
+CREATE TRIGGER on_scheduler_event_updated
+  BEFORE UPDATE ON public.scheduler_events
+  FOR EACH ROW
+  EXECUTE FUNCTION public.handle_updated_at();
+
+CREATE INDEX IF NOT EXISTS idx_scheduler_events_owner ON public.scheduler_events(owner_id);
+CREATE INDEX IF NOT EXISTS idx_scheduler_events_day ON public.scheduler_events(owner_id, scheduled_for);

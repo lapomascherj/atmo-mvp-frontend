@@ -1,108 +1,133 @@
-import { useState, useEffect } from 'react';
-import { type SchedulerEvent } from '@/types/scheduler';
+import { useAuth } from '@/hooks/useAuth';
+import { fetchSchedulerEventsForDate, replaceSchedulerEventsForDate } from '@/services/schedulerService';
+import type { SchedulerEvent } from '@/types/scheduler';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-const STORAGE_KEY = 'atmo_roadmap_tasks';
 const SYNC_EVENT = 'scheduler-sync';
 
-// Default tasks if nothing in storage
-const getDefaultTasks = (): SchedulerEvent[] => [
-  {
-    id: 'task-1',
-    title: 'Morning Routine',
-    startTime: '07:00',
-    duration: 60,
-  },
-  {
-    id: 'task-2',
-    title: 'Morning Meeting',
-    startTime: '09:00',
-    duration: 30,
-  },
-  {
-    id: 'task-3',
-    title: 'Deep Work',
-    startTime: '10:00',
-    duration: 120,
-  },
-  {
-    id: 'task-4',
-    title: 'Lunch Break',
-    startTime: '12:30',
-    duration: 60,
-  },
-  {
-    id: 'task-5',
-    title: 'Afternoon Session',
-    startTime: '14:00',
-    duration: 90,
-  },
-  {
-    id: 'task-6',
-    title: 'Wrap Up & Planning',
-    startTime: '17:00',
-    duration: 60,
-  },
-];
+interface UseSchedulerSyncResult {
+  events: SchedulerEvent[];
+  updateEvents: (events: SchedulerEvent[]) => void;
+  refreshEvents: () => Promise<void>;
+  loading: boolean;
+  saving: boolean;
+}
 
-const loadTasksFromStorage = (): SchedulerEvent[] => {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      return JSON.parse(stored);
-    }
-  } catch (error) {
-    console.error('Failed to load tasks from localStorage:', error);
-  }
-  return getDefaultTasks();
-};
+const formatDateKey = (value: Date): string => value.toISOString().split('T')[0];
 
-/**
- * Hook to sync scheduler events across dashboard and digital brain
- * Uses localStorage and custom events for real-time sync
- */
-export const useSchedulerSync = () => {
-  const [events, setEvents] = useState<SchedulerEvent[]>(loadTasksFromStorage());
+export const useSchedulerSync = (selectedDate: Date): UseSchedulerSyncResult => {
+  const { user } = useAuth();
+  const [events, setEvents] = useState<SchedulerEvent[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  // Save to localStorage and dispatch sync event
-  const updateEvents = (newEvents: SchedulerEvent[]) => {
-    setEvents(newEvents);
+  const pendingRef = useRef<{ dateKey: string; events: SchedulerEvent[] } | null>(null);
+  const timerRef = useRef<number | null>(null);
+  const activeDateKey = useMemo(() => formatDateKey(selectedDate), [selectedDate]);
+
+  const flushPendingUpdates = useCallback(async () => {
+    if (!user || !pendingRef.current) return;
+
+    const payload = pendingRef.current;
+    pendingRef.current = null;
+
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(newEvents));
-      // Dispatch custom event to notify other components
-      window.dispatchEvent(new CustomEvent(SYNC_EVENT, { detail: newEvents }));
+      setSaving(true);
+      await replaceSchedulerEventsForDate(user.id, payload.dateKey, payload.events);
     } catch (error) {
-      console.error('Failed to save tasks to localStorage:', error);
+      console.error('Failed to persist scheduler events', error);
+      pendingRef.current = payload;
+    } finally {
+      setSaving(false);
     }
-  };
+  }, [user]);
 
-  // Listen for sync events from other components
+  const loadEvents = useCallback(async () => {
+    if (!user) {
+      setEvents([]);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const nextEvents = await fetchSchedulerEventsForDate(user.id, activeDateKey);
+      setEvents(nextEvents);
+    } catch (error) {
+      console.error('Failed to load scheduler events', error);
+      setEvents([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [activeDateKey, user]);
+
+  const scheduleFlush = useCallback(() => {
+    if (timerRef.current) {
+      window.clearTimeout(timerRef.current);
+    }
+
+    timerRef.current = window.setTimeout(() => {
+      void flushPendingUpdates();
+    }, 400);
+  }, [flushPendingUpdates]);
+
   useEffect(() => {
     const handleSync = (event: Event) => {
-      const customEvent = event as CustomEvent<SchedulerEvent[]>;
-      setEvents(customEvent.detail);
+      const customEvent = event as CustomEvent<{ dateKey: string; events: SchedulerEvent[] }>;
+      if (customEvent.detail?.dateKey !== activeDateKey) {
+        return;
+      }
+      setEvents(customEvent.detail.events);
     };
 
     window.addEventListener(SYNC_EVENT, handleSync);
-
-    // Also listen for storage events (for cross-tab sync)
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === STORAGE_KEY && e.newValue) {
-        try {
-          const newEvents = JSON.parse(e.newValue);
-          setEvents(newEvents);
-        } catch (error) {
-          console.error('Failed to parse storage event:', error);
-        }
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-
     return () => {
       window.removeEventListener(SYNC_EVENT, handleSync);
-      window.removeEventListener('storage', handleStorageChange);
     };
-  }, []);
+  }, [activeDateKey]);
 
-  return { events, updateEvents };
+  useEffect(() => {
+    void loadEvents();
+  }, [loadEvents]);
+
+  useEffect(() => {
+    if (!pendingRef.current) {
+      return;
+    }
+
+    void flushPendingUpdates();
+  }, [activeDateKey, flushPendingUpdates]);
+
+  useEffect(() => () => {
+    if (timerRef.current) {
+      window.clearTimeout(timerRef.current);
+    }
+    void flushPendingUpdates();
+  }, [flushPendingUpdates]);
+
+  const updateEvents = useCallback(
+    (nextEvents: SchedulerEvent[]) => {
+      setEvents(nextEvents);
+      pendingRef.current = { dateKey: activeDateKey, events: nextEvents };
+      window.dispatchEvent(
+        new CustomEvent(SYNC_EVENT, {
+          detail: { dateKey: activeDateKey, events: nextEvents },
+        }),
+      );
+      scheduleFlush();
+    },
+    [activeDateKey, scheduleFlush],
+  );
+
+  const refreshEvents = useCallback(async () => {
+    await flushPendingUpdates();
+    await loadEvents();
+  }, [flushPendingUpdates, loadEvents]);
+
+  return {
+    events,
+    updateEvents,
+    refreshEvents,
+    loading,
+    saving,
+  };
 };

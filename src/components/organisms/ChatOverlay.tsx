@@ -2,6 +2,8 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import SphereChat from '@/components/atoms/SphereChat';
 import { X } from 'lucide-react';
 import { usePersonasStore } from '@/stores/usePersonasStore';
+import { useChatSessionsStore } from '@/stores/chatSessionsStore';
+import { updateUserProfile } from '@/services/supabaseDataService';
 
 interface ChatMessage {
   id: string;
@@ -259,6 +261,330 @@ export const ChatOverlay: React.FC<ChatOverlayProps> = ({
 
   const sendChatMessage = usePersonasStore(state => state.sendChatMessage);
   const [isLoading, setIsLoading] = useState(false);
+  const initializeChatSessions = useChatSessionsStore((state) => state.initialize);
+  const refreshActiveSession = useChatSessionsStore((state) => state.refreshActiveSession);
+  const activeSessionMessages = useChatSessionsStore((state) => state.messages);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const hydrateSession = async () => {
+      try {
+        await initializeChatSessions();
+        await refreshActiveSession({ force: false });
+      } catch (error) {
+        console.error('ChatOverlay: Failed to hydrate active session', error);
+      }
+    };
+
+    void hydrateSession();
+  }, [isOpen, initializeChatSessions, refreshActiveSession]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const normalizedMessages: ChatMessage[] = activeSessionMessages.map((msg) => ({
+      id: msg.id,
+      text: msg.content,
+      sender: msg.role === 'user' ? 'user' : 'ai',
+      timestamp: new Date(msg.createdAt),
+    }));
+
+    setChatMessages(normalizedMessages);
+  }, [isOpen, activeSessionMessages, setChatMessages]);
+
+  // Helper: Normalize status strings to enum values
+  const normalizeStatus = (status: string): string => {
+    const normalized = status.toLowerCase().replace(/[_-]/g, ' ');
+    if (normalized.includes('complete') || normalized === 'done') return 'Completed';
+    if (normalized.includes('progress') || normalized === 'active' || normalized === 'ongoing') return 'In Progress';
+    return 'Planned';
+  };
+
+  // Helper: Normalize flexible date formats
+  const normalizeDate = (dateStr: string): string => {
+    const today = new Date();
+
+    if (/tomorrow/i.test(dateStr)) {
+      const tomorrow = new Date(today);
+      tomorrow.setDate(today.getDate() + 1);
+      return tomorrow.toISOString().split('T')[0];
+    }
+
+    if (/next\s+week/i.test(dateStr)) {
+      const nextWeek = new Date(today);
+      nextWeek.setDate(today.getDate() + 7);
+      return nextWeek.toISOString().split('T')[0];
+    }
+
+    // Try parsing as ISO or natural date
+    try {
+      const parsed = new Date(dateStr);
+      if (!isNaN(parsed.getTime())) {
+        return parsed.toISOString().split('T')[0];
+      }
+    } catch {}
+
+    return ''; // Invalid date
+  };
+
+  // Helper: Check if string is a status keyword
+  const isStatus = (str: string): boolean => {
+    return /^(planned|in.?progress|complete|completed|done|active|ongoing)$/i.test(str);
+  };
+
+  // Helper: Resolve project by name with fallback to most recently updated
+  const resolveProject = (projectName: string, projects: any[]) => {
+    // Filter active projects
+    const activeProjects = projects.filter(p =>
+      p.status !== 'deleted' && p.status !== 'completed'
+    );
+
+    // Exact match (case-insensitive)
+    const exactMatches = activeProjects.filter(p =>
+      p.name.toLowerCase() === projectName.toLowerCase()
+    );
+
+    if (exactMatches.length === 0) {
+      return { project: null, error: 'not_found' as const };
+    }
+
+    if (exactMatches.length === 1) {
+      return { project: exactMatches[0], error: null };
+    }
+
+    // Multiple matches: pick most recently updated
+    const mostRecent = exactMatches.sort((a, b) => {
+      const dateA = new Date(a.updated_at || a.created_at || 0);
+      const dateB = new Date(b.updated_at || b.created_at || 0);
+      return dateB.getTime() - dateA.getTime();
+    })[0];
+
+    return {
+      project: mostRecent,
+      error: null,
+      ambiguous: true,
+      matchCount: exactMatches.length
+    };
+  };
+
+  // Proactive Intelligence: Helper functions for contextual analysis
+
+  // Analyze project health and completeness
+  const analyzeProjectHealth = (project: any) => ({
+    hasGoals: (project.goals?.length || 0) > 0,
+    hasMilestones: (project.milestones?.length || 0) > 0,
+    hasTasks: project.goals?.some((g: any) => (g.tasks?.length || 0) > 0) || false,
+    goalsCount: project.goals?.length || 0,
+    milestonesCount: project.milestones?.length || 0,
+    tasksCount: project.goals?.flatMap((g: any) => g.tasks || []).length || 0,
+    isActive: project.status !== 'completed' && project.status !== 'deleted',
+  });
+
+  // Analyze deadline proximity for tasks/goals/milestones
+  const analyzeDeadlines = (entity: any) => {
+    const targetDate = entity.targetDate || entity.target_date || entity.due_date || entity.dueDate;
+    if (!targetDate) return null;
+
+    const deadline = new Date(targetDate);
+    const now = new Date();
+    const daysUntil = Math.floor((deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+    return {
+      isOverdue: daysUntil < 0,
+      isUrgent: daysUntil >= 0 && daysUntil <= 3,
+      isApproaching: daysUntil > 3 && daysUntil <= 7,
+      daysUntil,
+      formattedDate: targetDate
+    };
+  };
+
+  // Analyze workload across all projects
+  const analyzeWorkload = (allProjects: any[]) => {
+    const activeProjects = allProjects.filter(p =>
+      p.status === 'In Progress' || p.status === 'Planned'
+    );
+    const allTasks = allProjects.flatMap(p =>
+      (p.goals || []).flatMap((g: any) => g.tasks || [])
+    ).filter((t: any) => !t.completed && !t.archived_at);
+
+    return {
+      activeProjectCount: activeProjects.length,
+      totalActiveTasks: allTasks.length,
+      tasksPerProject: activeProjects.length > 0 ? Math.round(allTasks.length / activeProjects.length) : 0,
+      isOverloaded: activeProjects.length > 5 || allTasks.length > 20,
+    };
+  };
+
+  // Generate proactive suggestions based on entity type and action
+  const generateProactiveSuggestions = (
+    entityType: 'project' | 'goal' | 'task' | 'milestone',
+    action: 'created' | 'updated' | 'deleted' | 'completed',
+    entityData: {
+      name: string;
+      entity?: any;
+      project?: any;
+      goal?: any;
+      allProjects?: any[];
+      focusAreas?: string[];
+      mainPriority?: string;
+      oldStatus?: string;
+      newStatus?: string;
+    }
+  ): string[] => {
+    const suggestions: string[] = [];
+
+    // PROJECT CREATED
+    if (entityType === 'project' && action === 'created' && entityData.entity) {
+      const health = analyzeProjectHealth(entityData.entity);
+      if (!health.hasGoals) {
+        suggestions.push(`Add initial goals to track "${entityData.name}" progress?`);
+      }
+      if (!health.hasMilestones) {
+        suggestions.push(`Create milestones with deadlines to structure this project?`);
+      }
+      if (entityData.focusAreas && entityData.focusAreas.length > 0) {
+        suggestions.push(`Align this with your Focus Areas: ${entityData.focusAreas.slice(0, 2).join(', ')}?`);
+      }
+    }
+
+    // PROJECT UPDATED
+    if (entityType === 'project' && action === 'updated' && entityData.project) {
+      const health = analyzeProjectHealth(entityData.project);
+      if (entityData.newStatus === 'In Progress' && !health.hasMilestones) {
+        suggestions.push(`Add milestones to track progress on "${entityData.name}"?`);
+      }
+      if (entityData.newStatus === 'In Progress' && !health.hasTasks) {
+        suggestions.push(`Break down goals into actionable tasks to get started?`);
+      }
+      if (entityData.newStatus === 'Completed') {
+        suggestions.push(`🎉 Celebrate this win! Archive completed tasks and review learnings?`);
+      }
+      if (entityData.allProjects) {
+        const workload = analyzeWorkload(entityData.allProjects);
+        if (workload.isOverloaded) {
+          suggestions.push(`You have ${workload.activeProjectCount} active projects—want to prioritize or archive some?`);
+        }
+      }
+    }
+
+    // PROJECT DELETED
+    if (entityType === 'project' && action === 'deleted') {
+      if (entityData.allProjects) {
+        const workload = analyzeWorkload(entityData.allProjects);
+        suggestions.push(`You now have ${workload.activeProjectCount} active projects. Want to review priorities?`);
+      }
+    }
+
+    // GOAL CREATED
+    if (entityType === 'goal' && action === 'created' && entityData.goal && entityData.project) {
+      const goalTaskCount = entityData.goal.tasks?.length || 0;
+      if (goalTaskCount === 0) {
+        suggestions.push(`Break "${entityData.name}" into specific tasks to make it actionable?`);
+      }
+
+      const deadline = analyzeDeadlines(entityData.goal);
+      if (!deadline) {
+        suggestions.push(`Set a target completion date for "${entityData.name}"?`);
+      } else if (deadline.daysUntil > 30) {
+        suggestions.push(`"${entityData.name}" is ${deadline.daysUntil} days away—create milestone checkpoints?`);
+      } else if (deadline.isUrgent) {
+        suggestions.push(`"${entityData.name}" is due in ${deadline.daysUntil} days—prioritize tasks as High?`);
+      }
+
+      const projectGoals = entityData.project.goals?.length || 0;
+      if (projectGoals > 3) {
+        suggestions.push(`${projectGoals} goals in this project—want to prioritize focus areas?`);
+      }
+    }
+
+    // GOAL UPDATED
+    if (entityType === 'goal' && action === 'updated' && entityData.goal) {
+      if (entityData.newStatus === 'In Progress') {
+        const taskCount = entityData.goal.tasks?.length || 0;
+        if (taskCount === 0) {
+          suggestions.push(`Started "${entityData.name}"—create tasks to track execution?`);
+        }
+      }
+      if (entityData.newStatus === 'Completed') {
+        suggestions.push(`🎉 Goal "${entityData.name}" achieved! Create a new goal to maintain momentum?`);
+      }
+    }
+
+    // TASK CREATED
+    if (entityType === 'task' && action === 'created' && entityData.entity && entityData.goal) {
+      const task = entityData.entity;
+      if (!task.priority || task.priority === 'Medium') {
+        if (entityData.focusAreas && entityData.focusAreas.length > 0) {
+          suggestions.push(`Prioritize "${entityData.name}" based on Focus: ${entityData.focusAreas[0]}?`);
+        } else {
+          suggestions.push(`Set priority for "${entityData.name}" (High/Medium/Low)?`);
+        }
+      }
+
+      const deadline = analyzeDeadlines(task);
+      if (!deadline) {
+        const goalDeadline = analyzeDeadlines(entityData.goal);
+        if (goalDeadline && goalDeadline.daysUntil > 0) {
+          suggestions.push(`"${entityData.goal.name}" is due in ${goalDeadline.daysUntil} days—set task deadline?`);
+        } else {
+          suggestions.push(`Set a due date to stay on track?`);
+        }
+      }
+
+      const goalTasks = entityData.goal.tasks?.length || 0;
+      if (goalTasks > 5) {
+        suggestions.push(`${goalTasks} tasks in "${entityData.goal.name}"—break into smaller sub-goals?`);
+      }
+    }
+
+    // TASK PRIORITIZED
+    if (entityType === 'task' && action === 'updated' && entityData.entity) {
+      const deadline = analyzeDeadlines(entityData.entity);
+      if (!deadline) {
+        suggestions.push(`Task is now ${entityData.entity.priority}—set a due date to match urgency?`);
+      }
+      if (entityData.entity.priority === 'High') {
+        suggestions.push(`High priority task—want to create subtasks or checkpoints?`);
+      }
+    }
+
+    // MILESTONE CREATED
+    if (entityType === 'milestone' && action === 'created' && entityData.entity && entityData.project) {
+      const milestone = entityData.entity;
+      const deadline = analyzeDeadlines(milestone);
+      if (!deadline) {
+        suggestions.push(`Set a deadline for "${entityData.name}" milestone?`);
+      }
+
+      const projectTasks = entityData.project.goals?.flatMap((g: any) => g.tasks || []) || [];
+      const relevantTasks = projectTasks.filter((t: any) => !t.completed && !t.archived_at).length;
+      if (relevantTasks === 0) {
+        suggestions.push(`Create tasks to achieve "${entityData.name}" milestone?`);
+      }
+
+      const milestoneCount = entityData.project.milestones?.length || 0;
+      if (deadline && deadline.daysUntil > 14 && milestoneCount < 3) {
+        suggestions.push(`"${entityData.name}" is ${deadline.daysUntil} days away—add intermediate milestones?`);
+      }
+    }
+
+    // MILESTONE COMPLETED
+    if (entityType === 'milestone' && action === 'completed' && entityData.project) {
+      suggestions.push(`🎉 Milestone achieved! Review progress and plan next steps?`);
+
+      const remainingMilestones = entityData.project.milestones?.filter(
+        (m: any) => m.status !== 'Completed' && m.status !== 'deleted'
+      ).length || 0;
+      if (remainingMilestones > 0) {
+        suggestions.push(`${remainingMilestones} milestones remaining—want to prioritize the next one?`);
+      } else {
+        suggestions.push(`All milestones complete! Update project status or create new goals?`);
+      }
+    }
+
+    return suggestions.slice(0, 3); // Max 3 suggestions
+  };
 
   const handleSendMessage = async () => {
     if (chatInput.trim() && !isLoading) {
@@ -276,17 +602,1106 @@ export const ChatOverlay: React.FC<ChatOverlayProps> = ({
       setIsLoading(true);
 
       try {
+        // Local command parsing - handle delete project commands
+        const deleteProjectMatch = userMessageText.match(/^(delete|remove)\s+project\s+(.+)$/i);
+        if (deleteProjectMatch) {
+          const projectIdentifier = deleteProjectMatch[2].trim();
+          const { getProjects, removeProject } = usePersonasStore.getState();
+          const projects = getProjects();
+
+          // Match by ID or exact name (case-insensitive)
+          const projectToDelete = projects.find(p =>
+            p.id === projectIdentifier ||
+            p.name.toLowerCase() === projectIdentifier.toLowerCase()
+          );
+
+          if (projectToDelete) {
+            // Idempotent check - ensure project isn't already deleted
+            if (projectToDelete.status === 'deleted') {
+              const alreadyDeletedMessage = {
+                id: (Date.now() + 1).toString(),
+                text: `⚠️ Project "${projectToDelete.name}" is already deleted.`,
+                sender: 'ai' as const,
+                timestamp: new Date()
+              };
+              setChatMessages(prev => [...prev, alreadyDeletedMessage]);
+              setIsLoading(false);
+              return;
+            }
+
+            // Delete project
+            const projectName = projectToDelete.name;
+            await removeProject(null, projectToDelete.id);
+            const successMessage = {
+              id: (Date.now() + 1).toString(),
+              text: `✅ Deleted project: **${projectName}**`,
+              sender: 'ai' as const,
+              timestamp: new Date()
+            };
+            setChatMessages(prev => [...prev, successMessage]);
+
+            // Proactive suggestions after project deletion
+            const { getProjects: getProjectsFresh } = usePersonasStore.getState();
+            const remainingProjects = getProjectsFresh();
+            const suggestions = generateProactiveSuggestions('project', 'deleted', {
+              name: projectName,
+              allProjects: remainingProjects
+            });
+
+            if (suggestions.length > 0) {
+              setChatMessages(prev => [...prev, {
+                id: (Date.now() + 2).toString(),
+                text: `**Next steps you might want:**\n${suggestions.map(s => `• ${s}`).join('\n')}`,
+                sender: 'ai' as const,
+                timestamp: new Date()
+              }]);
+            }
+
+            setIsLoading(false);
+            return;
+          } else {
+            const notFoundMessage = {
+              id: (Date.now() + 1).toString(),
+              text: `❌ Project "${projectIdentifier}" not found.`,
+              sender: 'ai' as const,
+              timestamp: new Date()
+            };
+            setChatMessages(prev => [...prev, notFoundMessage]);
+            setIsLoading(false);
+            return;
+          }
+        }
+
+        // Local command parsing - handle project creation/update/delete commands
+        const projectPatterns = [
+          // create project '{name}' for {purpose/description}
+          { regex: /(?:create|add|start)\s+(?:a\s+)?project\s+['"](.+?)['"]\s+for\s+(.+)$/i, action: 'create' as const },
+          // create project '{name}' with priority {priority}
+          { regex: /(?:create|add|start)\s+(?:a\s+)?project\s+['"](.+?)['"]\s+(?:with\s+)?(?:priority\s+)?(\w+)$/i, action: 'create' as const, hasPriority: true },
+          // create project '{name}' (simple)
+          { regex: /(?:create|add|start)\s+(?:a\s+)?project\s+['"](.+?)['"]$/i, action: 'create' as const, simple: true },
+          // update project '{name}' status to {status}
+          { regex: /(?:update|change)\s+project\s+['"](.+?)['"]\s+status\s+(?:to\s+)?(\w+[-\s\w]*)$/i, action: 'update' as const, field: 'status' },
+          // update project '{name}' priority to {priority}
+          { regex: /(?:update|change)\s+project\s+['"](.+?)['"]\s+priority\s+(?:to\s+)?(\w+)$/i, action: 'update' as const, field: 'priority' },
+        ];
+
+        let parsedProjectCommand: {
+          action: 'create' | 'update';
+          projectName: string;
+          description?: string;
+          priority?: string;
+          status?: string;
+          field?: string;
+        } | null = null;
+
+        for (const pattern of projectPatterns) {
+          const match = userMessageText.match(pattern.regex);
+          if (match) {
+            if (pattern.simple) {
+              parsedProjectCommand = {
+                action: 'create',
+                projectName: match[1].trim(),
+              };
+            } else if (pattern.hasPriority) {
+              parsedProjectCommand = {
+                action: 'create',
+                projectName: match[1].trim(),
+                priority: normalizeStatus(match[2].trim()),
+              };
+            } else if (pattern.field === 'status') {
+              parsedProjectCommand = {
+                action: 'update',
+                projectName: match[1].trim(),
+                status: normalizeStatus(match[2].trim()),
+                field: 'status',
+              };
+            } else if (pattern.field === 'priority') {
+              parsedProjectCommand = {
+                action: 'update',
+                projectName: match[1].trim(),
+                priority: match[2].trim(),
+                field: 'priority',
+              };
+            } else {
+              // Full form with description
+              parsedProjectCommand = {
+                action: 'create',
+                projectName: match[1].trim(),
+                description: match[2].trim(),
+              };
+            }
+            break;
+          }
+        }
+
+        if (parsedProjectCommand) {
+          console.log(`📊 [${new Date().toLocaleTimeString()}] Parsed project command:`, parsedProjectCommand);
+
+          const { getProjects, addProject, updateProject } = usePersonasStore.getState();
+          const projects = getProjects();
+
+          try {
+            if (parsedProjectCommand.action === 'create') {
+              // Idempotent check: verify project doesn't already exist
+              const existingProject = projects.find(p =>
+                p.name.toLowerCase() === parsedProjectCommand!.projectName.toLowerCase() &&
+                p.status !== 'deleted'
+              );
+
+              if (existingProject) {
+                setChatMessages(prev => [...prev, {
+                  id: (Date.now() + 1).toString(),
+                  text: `ℹ️ Project **"${parsedProjectCommand.projectName}"** already exists. Use 'update project' to modify it.`,
+                  sender: 'ai' as const,
+                  timestamp: new Date()
+                }]);
+                setIsLoading(false);
+                return;
+              }
+
+              // Create new project with stable UUID
+              const projectId = crypto.randomUUID();
+              const newProject: any = {
+                id: projectId,
+                name: parsedProjectCommand.projectName,
+                description: parsedProjectCommand.description || '',
+                status: 'Planned',
+                priority: parsedProjectCommand.priority || 'Medium',
+                active: true,
+                color: '#3b82f6',
+                goals: [],
+                milestones: [],
+                items: [],
+              };
+
+              await addProject(null, newProject);
+
+              console.log(`✅ [${new Date().toLocaleTimeString()}] Project created:`, { projectId, projectName: newProject.name });
+
+              setChatMessages(prev => [...prev, {
+                id: (Date.now() + 1).toString(),
+                text: `✅ Created project **"${parsedProjectCommand.projectName}"**${parsedProjectCommand.description ? ` for ${parsedProjectCommand.description}` : ''}`,
+                sender: 'ai' as const,
+                timestamp: new Date()
+              }]);
+
+              // Proactive suggestions after project creation
+              const { profileSnapshot } = usePersonasStore.getState();
+              const suggestions = generateProactiveSuggestions('project', 'created', {
+                name: newProject.name,
+                entity: newProject,
+                allProjects: projects,
+                focusAreas: profileSnapshot?.focusAreas || [],
+                mainPriority: profileSnapshot?.mainPriority
+              });
+
+              if (suggestions.length > 0) {
+                setChatMessages(prev => [...prev, {
+                  id: (Date.now() + 2).toString(),
+                  text: `**Next steps you might want:**\n${suggestions.map(s => `• ${s}`).join('\n')}`,
+                  sender: 'ai' as const,
+                  timestamp: new Date()
+                }]);
+              }
+
+              setIsLoading(false);
+              return;
+            }
+
+            if (parsedProjectCommand.action === 'update') {
+              // Find project by name
+              const projectToUpdate = projects.find(p =>
+                p.name.toLowerCase() === parsedProjectCommand!.projectName.toLowerCase() &&
+                p.status !== 'deleted'
+              );
+
+              if (!projectToUpdate) {
+                setChatMessages(prev => [...prev, {
+                  id: (Date.now() + 1).toString(),
+                  text: `❌ Project **"${parsedProjectCommand.projectName}"** not found.`,
+                  sender: 'ai' as const,
+                  timestamp: new Date()
+                }]);
+                setIsLoading(false);
+                return;
+              }
+
+              // Update project
+              const oldStatus = projectToUpdate.status;
+              const updates: any = {};
+              if (parsedProjectCommand.status) updates.status = parsedProjectCommand.status;
+              if (parsedProjectCommand.priority) updates.priority = parsedProjectCommand.priority;
+
+              await updateProject(null, projectToUpdate.id, updates);
+
+              setChatMessages(prev => [...prev, {
+                id: (Date.now() + 1).toString(),
+                text: `✅ Updated project **"${parsedProjectCommand.projectName}"** ${parsedProjectCommand.field}`,
+                sender: 'ai' as const,
+                timestamp: new Date()
+              }]);
+
+              // Proactive suggestions after project update
+              const { profileSnapshot: profileSnap } = usePersonasStore.getState();
+              const updatedProjects = getProjects(); // Get fresh data
+              const updatedProject = updatedProjects.find(p => p.id === projectToUpdate.id);
+              if (updatedProject) {
+                const suggestions = generateProactiveSuggestions('project', 'updated', {
+                  name: updatedProject.name,
+                  project: updatedProject,
+                  allProjects: updatedProjects,
+                  oldStatus,
+                  newStatus: updates.status,
+                  focusAreas: profileSnap?.focusAreas || []
+                });
+
+                if (suggestions.length > 0) {
+                  setChatMessages(prev => [...prev, {
+                    id: (Date.now() + 2).toString(),
+                    text: `**Next steps you might want:**\n${suggestions.map(s => `• ${s}`).join('\n')}`,
+                    sender: 'ai' as const,
+                    timestamp: new Date()
+                  }]);
+                }
+              }
+
+              setIsLoading(false);
+              return;
+            }
+          } catch (error) {
+            const errorMessage = {
+              id: (Date.now() + 1).toString(),
+              text: `❌ Failed to ${parsedProjectCommand.action} project: ${error instanceof Error ? error.message : 'Unknown error'}`,
+              sender: 'ai' as const,
+              timestamp: new Date()
+            };
+            setChatMessages(prev => [...prev, errorMessage]);
+            setIsLoading(false);
+            return;
+          }
+        }
+
+        // Local command parsing - handle growth tracker update commands
+        const growthTrackerMatch = userMessageText.match(/^(update|set)\s+growth\s+tracker:?\s+(.+)$/i);
+        if (growthTrackerMatch) {
+          const growthTrackerText = growthTrackerMatch[2].trim();
+          const { profileSnapshot } = usePersonasStore.getState();
+
+          if (profileSnapshot?.id) {
+            try {
+              await updateUserProfile(profileSnapshot.id, { growthTracker: growthTrackerText });
+              const successMessage = {
+                id: (Date.now() + 1).toString(),
+                text: `✅ Growth Tracker updated to: **${growthTrackerText}**`,
+                sender: 'ai' as const,
+                timestamp: new Date()
+              };
+              setChatMessages(prev => [...prev, successMessage]);
+              setIsLoading(false);
+              return;
+            } catch (error) {
+              const errorMessage = {
+                id: (Date.now() + 1).toString(),
+                text: `❌ Failed to update Growth Tracker: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                sender: 'ai' as const,
+                timestamp: new Date()
+              };
+              setChatMessages(prev => [...prev, errorMessage]);
+              setIsLoading(false);
+              return;
+            }
+          }
+        }
+
+        // Local command parsing - handle goal creation/update commands with entity extraction
+        // Pattern 1: add a goal '{title}' to {projectName} [with] [status {status}] [due/by/target {date}]
+        // Pattern 2: add a goal to {projectName} named '{title}' [due/by {date}]
+        // Pattern 3: edit/update goal '{title}' in {projectName} [status {status}]
+        // Pattern 4: edit/update goal '{title}' in {projectName} [due/by/target {date}]
+
+        const goalPatterns = [
+          // add a goal '{title}' to {project} with status {status} due {date}
+          { regex: /add\s+a\s+goal\s+['"](.+?)['"]\s+to\s+(.+?)(?:\s+with)?(?:\s+status\s+(\w+[-\s\w]*?))?(?:\s+(?:due|by|target)\s+(.+?))?$/i, action: 'create' as const },
+          // add a goal to {project} named '{title}' due {date}
+          { regex: /add\s+a\s+goal\s+to\s+(.+?)\s+named\s+['"](.+?)['"'](?:\s+(?:due|by|target)\s+(.+?))?$/i, action: 'create' as const, swap: true },
+          // edit/update goal '{title}' in {project} status {status}
+          { regex: /(?:edit|update)\s+goal\s+['"](.+?)['"]\s+in\s+(.+?)\s+status\s+(\w+[-\s\w]*)$/i, action: 'update' as const },
+          // edit/update goal '{title}' in {project} due/by/target {date}
+          { regex: /(?:edit|update)\s+goal\s+['"](.+?)['"]\s+in\s+(.+?)\s+(?:due|by|target)\s+(.+?)$/i, action: 'update' as const, isDate: true },
+          // Fallback: add a goal to {project} (simple form)
+          { regex: /add\s+a\s+goal\s+to\s+(.+?)$/i, action: 'create' as const, simple: true },
+        ];
+
+        let parsedGoalCommand: {
+          action: 'create' | 'update';
+          goalTitle: string;
+          projectName: string;
+          status?: string;
+          targetDate?: string;
+        } | null = null;
+
+        for (const pattern of goalPatterns) {
+          const match = userMessageText.match(pattern.regex);
+          if (match) {
+            if (pattern.simple) {
+              // Simple form: add a goal to {project}
+              parsedGoalCommand = {
+                action: 'create',
+                goalTitle: 'New Goal',
+                projectName: match[1].trim(),
+              };
+            } else if (pattern.swap) {
+              // Swapped order: project before title
+              parsedGoalCommand = {
+                action: pattern.action,
+                goalTitle: match[2]?.trim() || 'New Goal',
+                projectName: match[1]?.trim(),
+                targetDate: match[3] ? normalizeDate(match[3].trim()) : undefined,
+              };
+            } else if (pattern.isDate) {
+              // Update with date
+              parsedGoalCommand = {
+                action: pattern.action,
+                goalTitle: match[1]?.trim(),
+                projectName: match[2]?.trim(),
+                targetDate: match[3] ? normalizeDate(match[3].trim()) : undefined,
+              };
+            } else {
+              // Full form with title, project, optional status and date
+              const goalTitle = match[1]?.trim() || 'New Goal';
+              const projectName = match[2]?.trim();
+              const statusRaw = match[3]?.trim();
+              const dateRaw = match[4]?.trim();
+
+              parsedGoalCommand = {
+                action: pattern.action,
+                goalTitle,
+                projectName,
+                status: statusRaw ? normalizeStatus(statusRaw) : undefined,
+                targetDate: dateRaw ? normalizeDate(dateRaw) : undefined,
+              };
+            }
+            break;
+          }
+        }
+
+        if (parsedGoalCommand) {
+          console.log(`🎯 [${new Date().toLocaleTimeString()}] Parsed goal command:`, parsedGoalCommand);
+
+          const { getProjects, addGoal, updateGoal } = usePersonasStore.getState();
+          const projects = getProjects();
+
+          console.log(`📊 [${new Date().toLocaleTimeString()}] Available projects:`, projects.map(p => ({ id: p.id, name: p.name, status: p.status })));
+
+          // Resolve project by name with fallback
+          const { project: matchedProject, error, ambiguous, matchCount } = resolveProject(
+            parsedGoalCommand.projectName,
+            projects
+          );
+
+          console.log(`🔍 [${new Date().toLocaleTimeString()}] Project resolution:`, { matchedProject: matchedProject?.name, error, ambiguous, matchCount });
+
+          if (error === 'not_found') {
+            setChatMessages(prev => [...prev, {
+              id: (Date.now() + 1).toString(),
+              text: `❌ Project **"${parsedGoalCommand.projectName}"** not found. Please check the project name and try again.`,
+              sender: 'ai' as const,
+              timestamp: new Date()
+            }]);
+            setIsLoading(false);
+            return;
+          }
+
+          if (ambiguous) {
+            setChatMessages(prev => [...prev, {
+              id: (Date.now() + 1).toString(),
+              text: `⚠️ Found ${matchCount} projects named **"${parsedGoalCommand.projectName}"**. Using the most recently updated one.`,
+              sender: 'ai' as const,
+              timestamp: new Date()
+            }]);
+          }
+
+          try {
+            if (parsedGoalCommand.action === 'create') {
+              // Check if goal with same name already exists (idempotent upsert)
+              const existingGoal = matchedProject.goals?.find((g: any) =>
+                g.name.toLowerCase() === parsedGoalCommand!.goalTitle.toLowerCase() &&
+                g.status !== 'deleted'
+              );
+
+              if (existingGoal) {
+                // Update existing goal instead of creating duplicate
+                const updates: any = {};
+                if (parsedGoalCommand.status) updates.status = parsedGoalCommand.status;
+                if (parsedGoalCommand.targetDate) updates.targetDate = parsedGoalCommand.targetDate;
+
+                if (Object.keys(updates).length > 0) {
+                  await updateGoal(null, existingGoal.id, updates);
+                  setChatMessages(prev => [...prev, {
+                    id: (Date.now() + 1).toString(),
+                    text: `✅ Updated existing goal **"${parsedGoalCommand.goalTitle}"** in project **${matchedProject.name}**`,
+                    sender: 'ai' as const,
+                    timestamp: new Date()
+                  }]);
+                } else {
+                  setChatMessages(prev => [...prev, {
+                    id: (Date.now() + 1).toString(),
+                    text: `ℹ️ Goal **"${parsedGoalCommand.goalTitle}"** already exists in project **${matchedProject.name}**`,
+                    sender: 'ai' as const,
+                    timestamp: new Date()
+                  }]);
+                }
+                setIsLoading(false);
+                return;
+              }
+
+              // Create new goal
+              const goalId = crypto.randomUUID();
+              const newGoal: any = {
+                id: goalId,
+                name: parsedGoalCommand.goalTitle,
+                description: '',
+                targetDate: parsedGoalCommand.targetDate || '',
+                status: parsedGoalCommand.status || 'Planned',
+                priority: 'Medium',
+                order: (matchedProject.goals?.length || 0) + 1,
+                tasks: []
+              };
+
+              await addGoal(null, matchedProject.id, newGoal);
+
+              console.log(`✅ [${new Date().toLocaleTimeString()}] Goal created successfully:`, {
+                goalId: newGoal.id,
+                goalName: newGoal.name,
+                projectId: matchedProject.id,
+                projectName: matchedProject.name
+              });
+
+              const dateInfo = parsedGoalCommand.targetDate ? ` (due ${parsedGoalCommand.targetDate})` : '';
+              setChatMessages(prev => [...prev, {
+                id: (Date.now() + 1).toString(),
+                text: `✅ Added goal **"${parsedGoalCommand.goalTitle}"** to project **${matchedProject.name}**${dateInfo}`,
+                sender: 'ai' as const,
+                timestamp: new Date()
+              }]);
+
+              // Proactive suggestions after goal creation
+              const { profileSnapshot: profSnap } = usePersonasStore.getState();
+              const suggestions = generateProactiveSuggestions('goal', 'created', {
+                name: newGoal.name,
+                goal: newGoal,
+                project: matchedProject,
+                focusAreas: profSnap?.focusAreas || []
+              });
+
+              if (suggestions.length > 0) {
+                setChatMessages(prev => [...prev, {
+                  id: (Date.now() + 2).toString(),
+                  text: `**Next steps you might want:**\n${suggestions.map(s => `• ${s}`).join('\n')}`,
+                  sender: 'ai' as const,
+                  timestamp: new Date()
+                }]);
+              }
+
+              setIsLoading(false);
+              return;
+            }
+
+            if (parsedGoalCommand.action === 'update') {
+              // Find existing goal by name
+              const existingGoal = matchedProject.goals?.find((g: any) =>
+                g.name.toLowerCase() === parsedGoalCommand!.goalTitle.toLowerCase() &&
+                g.status !== 'deleted'
+              );
+
+              if (!existingGoal) {
+                setChatMessages(prev => [...prev, {
+                  id: (Date.now() + 1).toString(),
+                  text: `❌ Goal **"${parsedGoalCommand.goalTitle}"** not found in project **${matchedProject.name}**`,
+                  sender: 'ai' as const,
+                  timestamp: new Date()
+                }]);
+                setIsLoading(false);
+                return;
+              }
+
+              // Update existing goal
+              const oldGoalStatus = existingGoal.status;
+              const updates: any = {};
+              if (parsedGoalCommand.status) updates.status = parsedGoalCommand.status;
+              if (parsedGoalCommand.targetDate) updates.targetDate = parsedGoalCommand.targetDate;
+
+              await updateGoal(null, existingGoal.id, updates);
+
+              setChatMessages(prev => [...prev, {
+                id: (Date.now() + 1).toString(),
+                text: `✅ Updated goal **"${parsedGoalCommand.goalTitle}"** in project **${matchedProject.name}**`,
+                sender: 'ai' as const,
+                timestamp: new Date()
+              }]);
+
+              // Proactive suggestions after goal update
+              const updatedGoal = { ...existingGoal, ...updates };
+              const suggestions = generateProactiveSuggestions('goal', 'updated', {
+                name: updatedGoal.name,
+                goal: updatedGoal,
+                oldStatus: oldGoalStatus,
+                newStatus: updates.status
+              });
+
+              if (suggestions.length > 0) {
+                setChatMessages(prev => [...prev, {
+                  id: (Date.now() + 2).toString(),
+                  text: `**Next steps you might want:**\n${suggestions.map(s => `• ${s}`).join('\n')}`,
+                  sender: 'ai' as const,
+                  timestamp: new Date()
+                }]);
+              }
+
+              setIsLoading(false);
+              return;
+            }
+          } catch (error) {
+            const errorMessage = {
+              id: (Date.now() + 1).toString(),
+              text: `❌ Failed to ${parsedGoalCommand.action} goal: ${error instanceof Error ? error.message : 'Unknown error'}`,
+              sender: 'ai' as const,
+              timestamp: new Date()
+            };
+            setChatMessages(prev => [...prev, errorMessage]);
+            setIsLoading(false);
+            return;
+          }
+        }
+
+        // Local command parsing - handle focus areas update commands
+        // Enhanced regex to match multiple natural language patterns
+        const focusAreasMatch =
+          // Pattern 1: "change/update/set [my] focus areas to X, Y, Z"
+          userMessageText.match(/(?:change|update|set)\s+(?:my\s+)?focus\s+areas?\s+(?:to|:)?\s+(.+?)$/i) ||
+          // Pattern 2: "my focus [areas] should be X, Y, Z"
+          userMessageText.match(/my\s+focus(?:\s+areas?)?\s+should\s+be\s+(.+?)$/i) ||
+          // Pattern 3: "I want to focus on X, Y, Z" or "focus on X, Y, Z" (only if comma-separated list)
+          userMessageText.match(/(?:I\s+(?:want|need)\s+to\s+)?focus\s+on\s+(.+,.+)$/i) ||
+          // Pattern 4: Original pattern for backwards compatibility
+          userMessageText.match(/^(update|set)\s+focus\s+areas?:?\s+(.+)$/i);
+
+        if (focusAreasMatch) {
+          // Pattern 4 has capture group 2, others have capture group 1
+          const focusAreasText = (focusAreasMatch[2] || focusAreasMatch[1]).trim();
+          const { profileSnapshot } = usePersonasStore.getState();
+
+          if (profileSnapshot?.id) {
+            // Parse comma-separated focus areas, trim, deduplicate
+            const areas = focusAreasText
+              .split(',')
+              .map(a => a.trim())
+              .filter(Boolean);
+            const uniqueAreas = Array.from(new Set(areas));
+
+            if (uniqueAreas.length === 0) {
+              const errorMessage = {
+                id: (Date.now() + 1).toString(),
+                text: `❌ Focus areas cannot be empty. Please provide at least one area.`,
+                sender: 'ai' as const,
+                timestamp: new Date()
+              };
+              setChatMessages(prev => [...prev, errorMessage]);
+              setIsLoading(false);
+              return;
+            }
+
+            try {
+              await updateUserProfile(profileSnapshot.id, { focusAreas: uniqueAreas });
+              const areaChips = uniqueAreas.map(a => `\`${a}\``).join(' ');
+              const successMessage = {
+                id: (Date.now() + 1).toString(),
+                text: `✅ Focus areas updated to: ${areaChips}`,
+                sender: 'ai' as const,
+                timestamp: new Date()
+              };
+              setChatMessages(prev => [...prev, successMessage]);
+              setIsLoading(false);
+              return;
+            } catch (error) {
+              const errorMessage = {
+                id: (Date.now() + 1).toString(),
+                text: `❌ Failed to update Focus areas: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                sender: 'ai' as const,
+                timestamp: new Date()
+              };
+              setChatMessages(prev => [...prev, errorMessage]);
+              setIsLoading(false);
+              return;
+            }
+          }
+        }
+
+        // Local command parsing - handle task-to-goal linking commands
+        const taskPatterns = [
+          // add task '{name}' to goal '{goalName}' in {project}
+          { regex: /(?:add|create)\s+(?:a\s+)?task\s+['"](.+?)['"]\s+to\s+goal\s+['"](.+?)['"]\s+in\s+(.+)$/i, action: 'create' as const, withGoal: true },
+          // add task '{name}' to goal '{goalName}' (without project)
+          { regex: /(?:add|create)\s+(?:a\s+)?task\s+['"](.+?)['"]\s+to\s+goal\s+['"](.+?)['"]$/i, action: 'create' as const, simpleGoal: true },
+          // add task '{name}' with priority {priority} to goal '{goalName}'
+          { regex: /(?:add|create)\s+(?:a\s+)?task\s+['"](.+?)['"]\s+(?:with\s+)?(?:priority\s+)?(\w+)\s+to\s+goal\s+['"](.+?)['"]$/i, action: 'create' as const, withPriority: true },
+          // prioritize task '{name}' as {priority}
+          { regex: /(?:prioritize|set\s+priority)\s+task\s+['"](.+?)['"]\s+(?:as|to)\s+(\w+)$/i, action: 'prioritize' as const },
+        ];
+
+        let parsedTaskCommand: {
+          action: 'create' | 'prioritize';
+          taskName: string;
+          goalName?: string;
+          projectName?: string;
+          priority?: string;
+        } | null = null;
+
+        for (const pattern of taskPatterns) {
+          const match = userMessageText.match(pattern.regex);
+          if (match) {
+            if (pattern.withGoal) {
+              parsedTaskCommand = {
+                action: 'create',
+                taskName: match[1].trim(),
+                goalName: match[2].trim(),
+                projectName: match[3].trim(),
+              };
+            } else if (pattern.simpleGoal) {
+              parsedTaskCommand = {
+                action: 'create',
+                taskName: match[1].trim(),
+                goalName: match[2].trim(),
+              };
+            } else if (pattern.withPriority) {
+              parsedTaskCommand = {
+                action: 'create',
+                taskName: match[1].trim(),
+                priority: match[2].trim(),
+                goalName: match[3].trim(),
+              };
+            } else if (pattern.action === 'prioritize') {
+              parsedTaskCommand = {
+                action: 'prioritize',
+                taskName: match[1].trim(),
+                priority: match[2].trim(),
+              };
+            }
+            break;
+          }
+        }
+
+        if (parsedTaskCommand) {
+          console.log(`📝 [${new Date().toLocaleTimeString()}] Parsed task command:`, parsedTaskCommand);
+
+          const { getProjects, getTasks, addTask, updateTask } = usePersonasStore.getState();
+          const projects = getProjects();
+          const allTasks = getTasks();
+
+          try {
+            if (parsedTaskCommand.action === 'create') {
+              // Find goal by name (across all projects if project not specified)
+              let targetGoal: any = null;
+              let targetProject: any = null;
+
+              if (parsedTaskCommand.projectName) {
+                // Search within specific project
+                const { project: matchedProject, error: projectError } = resolveProject(
+                  parsedTaskCommand.projectName,
+                  projects
+                );
+
+                if (projectError === 'not_found') {
+                  setChatMessages(prev => [...prev, {
+                    id: (Date.now() + 1).toString(),
+                    text: `❌ Project **"${parsedTaskCommand.projectName}"** not found.`,
+                    sender: 'ai' as const,
+                    timestamp: new Date()
+                  }]);
+                  setIsLoading(false);
+                  return;
+                }
+
+                targetProject = matchedProject;
+                targetGoal = matchedProject.goals?.find((g: any) =>
+                  g.name.toLowerCase() === parsedTaskCommand!.goalName!.toLowerCase() &&
+                  g.status !== 'deleted'
+                );
+              } else {
+                // Search across all projects
+                for (const project of projects) {
+                  const foundGoal = project.goals?.find((g: any) =>
+                    g.name.toLowerCase() === parsedTaskCommand!.goalName!.toLowerCase() &&
+                    g.status !== 'deleted'
+                  );
+                  if (foundGoal) {
+                    targetGoal = foundGoal;
+                    targetProject = project;
+                    break;
+                  }
+                }
+              }
+
+              if (!targetGoal) {
+                setChatMessages(prev => [...prev, {
+                  id: (Date.now() + 1).toString(),
+                  text: `❌ Goal **"${parsedTaskCommand.goalName}"** not found${parsedTaskCommand.projectName ? ` in project **${parsedTaskCommand.projectName}**` : ''}.`,
+                  sender: 'ai' as const,
+                  timestamp: new Date()
+                }]);
+                setIsLoading(false);
+                return;
+              }
+
+              // Idempotent check: verify task doesn't exist in this goal
+              const existingTask = targetGoal.tasks?.find((t: any) =>
+                t.name.toLowerCase() === parsedTaskCommand!.taskName.toLowerCase() &&
+                !t.completed &&
+                !t.archived_at
+              );
+
+              if (existingTask) {
+                setChatMessages(prev => [...prev, {
+                  id: (Date.now() + 1).toString(),
+                  text: `ℹ️ Task **"${parsedTaskCommand.taskName}"** already exists in goal **${targetGoal.name}**.`,
+                  sender: 'ai' as const,
+                  timestamp: new Date()
+                }]);
+                setIsLoading(false);
+                return;
+              }
+
+              // Create new task
+              const taskId = crypto.randomUUID();
+              const newTask: any = {
+                id: taskId,
+                name: parsedTaskCommand.taskName,
+                description: '',
+                priority: parsedTaskCommand.priority ? normalizeStatus(parsedTaskCommand.priority) : 'Medium',
+                completed: false,
+                archived_at: null,
+                order: (targetGoal.tasks?.length || 0) + 1,
+              };
+
+              await addTask(null, targetGoal.id, newTask);
+
+              console.log(`✅ [${new Date().toLocaleTimeString()}] Task created:`, { taskId, taskName: newTask.name, goalId: targetGoal.id });
+
+              setChatMessages(prev => [...prev, {
+                id: (Date.now() + 1).toString(),
+                text: `✅ Added task **"${parsedTaskCommand.taskName}"** to goal **${targetGoal.name}**${targetProject ? ` in **${targetProject.name}**` : ''}`,
+                sender: 'ai' as const,
+                timestamp: new Date()
+              }]);
+
+              // Proactive suggestions after task creation
+              const { profileSnapshot: ps } = usePersonasStore.getState();
+              const suggestions = generateProactiveSuggestions('task', 'created', {
+                name: newTask.name,
+                entity: newTask,
+                goal: targetGoal,
+                focusAreas: ps?.focusAreas || []
+              });
+
+              if (suggestions.length > 0) {
+                setChatMessages(prev => [...prev, {
+                  id: (Date.now() + 2).toString(),
+                  text: `**Next steps you might want:**\n${suggestions.map(s => `• ${s}`).join('\n')}`,
+                  sender: 'ai' as const,
+                  timestamp: new Date()
+                }]);
+              }
+
+              setIsLoading(false);
+              return;
+            }
+
+            if (parsedTaskCommand.action === 'prioritize') {
+              // Find task by name across all tasks
+              const taskToPrioritize = allTasks.find((t: any) =>
+                t.name.toLowerCase() === parsedTaskCommand!.taskName.toLowerCase() &&
+                !t.completed &&
+                !t.archived_at
+              );
+
+              if (!taskToPrioritize) {
+                setChatMessages(prev => [...prev, {
+                  id: (Date.now() + 1).toString(),
+                  text: `❌ Task **"${parsedTaskCommand.taskName}"** not found.`,
+                  sender: 'ai' as const,
+                  timestamp: new Date()
+                }]);
+                setIsLoading(false);
+                return;
+              }
+
+              const normalizedPriority = normalizeStatus(parsedTaskCommand.priority!);
+              await updateTask(null, taskToPrioritize.id, { priority: normalizedPriority });
+
+              setChatMessages(prev => [...prev, {
+                id: (Date.now() + 1).toString(),
+                text: `✅ Updated task **"${parsedTaskCommand.taskName}"** priority to **${parsedTaskCommand.priority}**`,
+                sender: 'ai' as const,
+                timestamp: new Date()
+              }]);
+
+              // Proactive suggestions after task prioritization
+              const updatedTask = { ...taskToPrioritize, priority: normalizedPriority };
+              const suggestions = generateProactiveSuggestions('task', 'updated', {
+                name: updatedTask.name,
+                entity: updatedTask
+              });
+
+              if (suggestions.length > 0) {
+                setChatMessages(prev => [...prev, {
+                  id: (Date.now() + 2).toString(),
+                  text: `**Next steps you might want:**\n${suggestions.map(s => `• ${s}`).join('\n')}`,
+                  sender: 'ai' as const,
+                  timestamp: new Date()
+                }]);
+              }
+
+              setIsLoading(false);
+              return;
+            }
+          } catch (error) {
+            const errorMessage = {
+              id: (Date.now() + 1).toString(),
+              text: `❌ Failed to ${parsedTaskCommand.action} task: ${error instanceof Error ? error.message : 'Unknown error'}`,
+              sender: 'ai' as const,
+              timestamp: new Date()
+            };
+            setChatMessages(prev => [...prev, errorMessage]);
+            setIsLoading(false);
+            return;
+          }
+        }
+
+        // Local command parsing - handle milestone creation/update commands
+        const milestonePatterns = [
+          // add milestone '{name}' to {project} due {date}
+          { regex: /(?:add|create)\s+(?:a\s+)?milestone\s+['"](.+?)['"]\s+to\s+(.+?)\s+(?:due|by)\s+(.+)$/i, action: 'create' as const },
+          // add milestone '{name}' to {project} (no date)
+          { regex: /(?:add|create)\s+(?:a\s+)?milestone\s+['"](.+?)['"]\s+to\s+(.+)$/i, action: 'create' as const, simple: true },
+          // complete milestone '{name}' in {project}
+          { regex: /(?:complete|finish)\s+milestone\s+['"](.+?)['"]\s+(?:in|for)\s+(.+)$/i, action: 'complete' as const },
+        ];
+
+        let parsedMilestoneCommand: {
+          action: 'create' | 'complete';
+          milestoneName: string;
+          projectName: string;
+          dueDate?: string;
+        } | null = null;
+
+        for (const pattern of milestonePatterns) {
+          const match = userMessageText.match(pattern.regex);
+          if (match) {
+            if (pattern.simple) {
+              parsedMilestoneCommand = {
+                action: 'create',
+                milestoneName: match[1].trim(),
+                projectName: match[2].trim(),
+              };
+            } else if (pattern.action === 'complete') {
+              parsedMilestoneCommand = {
+                action: 'complete',
+                milestoneName: match[1].trim(),
+                projectName: match[2].trim(),
+              };
+            } else {
+              // With due date
+              parsedMilestoneCommand = {
+                action: 'create',
+                milestoneName: match[1].trim(),
+                projectName: match[2].trim(),
+                dueDate: normalizeDate(match[3].trim()),
+              };
+            }
+            break;
+          }
+        }
+
+        if (parsedMilestoneCommand) {
+          console.log(`🎯 [${new Date().toLocaleTimeString()}] Parsed milestone command:`, parsedMilestoneCommand);
+
+          const { getProjects, addMilestone, updateMilestone } = usePersonasStore.getState();
+          const projects = getProjects();
+
+          // Resolve project by name
+          const { project: matchedProject, error: projectError } = resolveProject(
+            parsedMilestoneCommand.projectName,
+            projects
+          );
+
+          if (projectError === 'not_found') {
+            setChatMessages(prev => [...prev, {
+              id: (Date.now() + 1).toString(),
+              text: `❌ Project **"${parsedMilestoneCommand.projectName}"** not found.`,
+              sender: 'ai' as const,
+              timestamp: new Date()
+            }]);
+            setIsLoading(false);
+            return;
+          }
+
+          try {
+            if (parsedMilestoneCommand.action === 'create') {
+              // Idempotent check: verify milestone doesn't exist
+              const existingMilestone = matchedProject.milestones?.find((m: any) =>
+                m.name.toLowerCase() === parsedMilestoneCommand!.milestoneName.toLowerCase() &&
+                m.status !== 'deleted'
+              );
+
+              if (existingMilestone) {
+                setChatMessages(prev => [...prev, {
+                  id: (Date.now() + 1).toString(),
+                  text: `ℹ️ Milestone **"${parsedMilestoneCommand.milestoneName}"** already exists in **${matchedProject.name}**.`,
+                  sender: 'ai' as const,
+                  timestamp: new Date()
+                }]);
+                setIsLoading(false);
+                return;
+              }
+
+              // Create new milestone
+              const milestoneId = crypto.randomUUID();
+              const newMilestone: any = {
+                id: milestoneId,
+                name: parsedMilestoneCommand.milestoneName,
+                description: '',
+                due_date: parsedMilestoneCommand.dueDate || null,
+                status: 'Planned',
+                order: (matchedProject.milestones?.length || 0) + 1,
+              };
+
+              await addMilestone(null, matchedProject.id, newMilestone);
+
+              console.log(`✅ [${new Date().toLocaleTimeString()}] Milestone created:`, { milestoneId, milestoneName: newMilestone.name });
+
+              const dateInfo = parsedMilestoneCommand.dueDate ? ` due ${parsedMilestoneCommand.dueDate}` : '';
+              setChatMessages(prev => [...prev, {
+                id: (Date.now() + 1).toString(),
+                text: `✅ Added milestone **"${parsedMilestoneCommand.milestoneName}"** to **${matchedProject.name}**${dateInfo}`,
+                sender: 'ai' as const,
+                timestamp: new Date()
+              }]);
+
+              // Proactive suggestions after milestone creation
+              const suggestions = generateProactiveSuggestions('milestone', 'created', {
+                name: newMilestone.name,
+                entity: newMilestone,
+                project: matchedProject
+              });
+
+              if (suggestions.length > 0) {
+                setChatMessages(prev => [...prev, {
+                  id: (Date.now() + 2).toString(),
+                  text: `**Next steps you might want:**\n${suggestions.map(s => `• ${s}`).join('\n')}`,
+                  sender: 'ai' as const,
+                  timestamp: new Date()
+                }]);
+              }
+
+              setIsLoading(false);
+              return;
+            }
+
+            if (parsedMilestoneCommand.action === 'complete') {
+              // Find existing milestone
+              const milestoneToComplete = matchedProject.milestones?.find((m: any) =>
+                m.name.toLowerCase() === parsedMilestoneCommand!.milestoneName.toLowerCase() &&
+                m.status !== 'deleted'
+              );
+
+              if (!milestoneToComplete) {
+                setChatMessages(prev => [...prev, {
+                  id: (Date.now() + 1).toString(),
+                  text: `❌ Milestone **"${parsedMilestoneCommand.milestoneName}"** not found in **${matchedProject.name}**.`,
+                  sender: 'ai' as const,
+                  timestamp: new Date()
+                }]);
+                setIsLoading(false);
+                return;
+              }
+
+              await updateMilestone(null, milestoneToComplete.id, { status: 'Completed' });
+
+              setChatMessages(prev => [...prev, {
+                id: (Date.now() + 1).toString(),
+                text: `✅ Completed milestone **"${parsedMilestoneCommand.milestoneName}"** in **${matchedProject.name}**`,
+                sender: 'ai' as const,
+                timestamp: new Date()
+              }]);
+
+              // Proactive suggestions after milestone completion
+              const suggestions = generateProactiveSuggestions('milestone', 'completed', {
+                name: parsedMilestoneCommand.milestoneName,
+                project: matchedProject
+              });
+
+              if (suggestions.length > 0) {
+                setChatMessages(prev => [...prev, {
+                  id: (Date.now() + 2).toString(),
+                  text: `**Next steps you might want:**\n${suggestions.map(s => `• ${s}`).join('\n')}`,
+                  sender: 'ai' as const,
+                  timestamp: new Date()
+                }]);
+              }
+
+              setIsLoading(false);
+              return;
+            }
+          } catch (error) {
+            const errorMessage = {
+              id: (Date.now() + 1).toString(),
+              text: `❌ Failed to ${parsedMilestoneCommand.action} milestone: ${error instanceof Error ? error.message : 'Unknown error'}`,
+              sender: 'ai' as const,
+              timestamp: new Date()
+            };
+            setChatMessages(prev => [...prev, errorMessage]);
+            setIsLoading(false);
+            return;
+          }
+        }
+
         // Call Claude AI via Supabase edge function
         const response = await sendChatMessage(userMessageText);
+
+        // Build AI response text with created entities
+        let responseText = response.response;
+        const createdEntities = (response.entitiesCreated || []).filter(entity => entity.mode !== 'deleted');
+        if (createdEntities.length > 0) {
+          const createdList = createdEntities
+            .map(e => `✓ ${e.type}: "${e.name}"`)
+            .join('\n');
+          responseText = `${response.response}\n\n**Created:**\n${createdList}`;
+        }
 
         // Add AI response
         const aiMessage = {
           id: (Date.now() + 1).toString(),
-          text: response.response,
+          text: responseText,
           sender: 'ai' as const,
           timestamp: new Date()
         };
         setChatMessages(prev => [...prev, aiMessage]);
+
+        // CRITICAL FIX: Wait 2.5 seconds for edge function to complete entity creation in database
+        // This prevents race condition where UI refresh happens before DB write completes
+        if (createdEntities.length > 0) {
+          console.log(`⏳ [${new Date().toLocaleTimeString()}] Waiting 2.5s for entity creation to complete...`);
+          await new Promise(resolve => setTimeout(resolve, 2500));
+        }
+
+        // Trigger workspace synchronization with force=true to ensure new entities appear immediately
+        const { fetchPersonaByIam, profileSnapshot } = usePersonasStore.getState();
+        if (profileSnapshot?.id) {
+          console.log(`🔄 [${new Date().toLocaleTimeString()}] Force refreshing workspace after entity creation...`);
+          await fetchPersonaByIam(null, profileSnapshot.id, true);
+          console.log(`✅ [${new Date().toLocaleTimeString()}] Workspace synchronized, entities should be visible in UI`);
+        }
       } catch (error) {
         console.error('Failed to send message:', error);
 
@@ -310,6 +1725,10 @@ export const ChatOverlay: React.FC<ChatOverlayProps> = ({
       } finally {
         setIsLoading(false);
       }
+
+      await refreshActiveSession({ force: true }).catch((err) => {
+        console.error('ChatOverlay: Failed to sync active session after sending message', err);
+      });
     }
   };
 

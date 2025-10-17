@@ -15,6 +15,12 @@ export interface Task {
   estimated_time?: number;
   events?: CalendarEvent[];
   goal_id?: string;
+  projectId?: string;
+  created_at?: string;
+  updated_at?: string;
+  rollover_count?: number;
+  rolled_over_from_date?: string | null;
+  archived_at?: string | null;
 }
 
 export const TaskSchema = z.object({
@@ -34,4 +40,10 @@ export const TaskSchema = z.object({
   agency: z.enum([TaskAgency.Human, TaskAgency.AI]).default(TaskAgency.Human),
   color: z.number().default(30),
   estimated_time: z.string().optional(),
+  projectId: z.string().optional(),
+  created_at: z.string().optional(),
+  rollover_count: z.number().optional(),
+  rolled_over_from_date: z.string().nullable().optional(),
+  archived_at: z.string().nullable().optional(),
+  updated_at: z.string().optional(),
 });

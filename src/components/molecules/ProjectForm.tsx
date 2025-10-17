@@ -8,7 +8,6 @@ import { TextArea } from '@/components/atoms/TextArea.tsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/atoms/Select.tsx';
 import { Button } from "@/components/atoms/Button.tsx";
 import { useToast } from "@/hooks/useToast.ts";
-import { usePocketBase } from "@/hooks/useMockPocketBase";
 import { Project } from "@/models/Project.ts";
 import { Status } from "@/models/Status.ts";
 import useMockAuth from "@/hooks/useMockAuth";
@@ -66,7 +65,6 @@ const ProjectForm: React.FC<ProjectFormProps> = ({
 }) => {
   const { toast } = useToast();
   const { user } = useMockAuth();
-  const pb = usePocketBase();
   const { createProject, updateProject, loading } = useProjectsStore();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -94,7 +92,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({
     });
 
     const handleFormSubmit = async (data: ProjectFormData) => {
-        if (!pb || !user) {
+        if (!user) {
             toast({
                 title: 'Authentication required',
                 description: 'Please log in to save projects',
@@ -108,9 +106,6 @@ const ProjectForm: React.FC<ProjectFormProps> = ({
             projectName: data.name,
             userId: user.id,
             userIam: user.iam,
-            pbAuthValid: pb.authStore.isValid,
-            pbToken: pb.authStore.token ? "present" : "missing",
-            pbModel: pb.authStore.model ? "present" : "missing"
         });
 
         setIsSubmitting(true);

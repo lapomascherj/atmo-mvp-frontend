@@ -28,7 +28,7 @@ const DigitalBrain: React.FC = () => {
   const [showChatOverlay, setShowChatOverlay] = useState(false);
 
   // Scheduler sync - shared with Dashboard
-  const { events, updateEvents: setEvents } = useSchedulerSync();
+  const { events, updateEvents: setEvents } = useSchedulerSync(selectedDate);
 
   // PersonasStore data
   const currentPersona = usePersonasStore(state => state.currentPersona);

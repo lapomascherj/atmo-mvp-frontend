@@ -352,3 +352,15 @@ export const useProjectsStore = create<ProjectsStoreState>((set, get) => ({
     }
   },
 }));
+
+// Keep ProjectsStore data synchronized with the canonical PersonasStore graph
+usePersonasStore.subscribe(
+  (state) => state.projects,
+  (projects) => {
+    if (useProjectsStore.getState().projects === projects) {
+      return;
+    }
+
+    useProjectsStore.setState({ projects });
+  }
+);

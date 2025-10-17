@@ -57,6 +57,9 @@ interface TaskRow {
   color: string | null;
   estimated_time: number | null;
   due_date: string | null;
+  rolled_over_from_date: string | null;
+  rollover_count: number | null;
+  archived_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -100,7 +103,8 @@ interface UserInsightRow {
   id: string;
   owner_id: string;
   category: string | null;
-  insight_type: string | null;
+  insight_type: 'article' | 'opportunity' | 'trend' | 'note' | null;
+  source_url: string | null;
   title: string;
   summary: string | null;
   action_label: string | null;
@@ -117,7 +121,8 @@ export interface UserInsight {
   title: string;
   summary?: string;
   category?: string;
-  insightType?: string;
+  insightType?: 'article' | 'opportunity' | 'trend' | 'note';
+  sourceUrl?: string;
   actionLabel?: string;
   actionUrl?: string;
   relevance?: number;
@@ -126,6 +131,223 @@ export interface UserInsight {
   createdAt: string;
   updatedAt: string;
 }
+
+/**
+ * Update user profile fields with write-through persistence
+ * Maps persona fields to onboarding_data structure
+ */
+export const updateUserProfile = async (
+  userId: string,
+  updates: {
+    nickname?: string;
+    bio?: string;
+    job_title?: string;
+    mainPriority?: string;
+    focusAreas?: string[];
+    growthTracker?: string;
+  }
+): Promise<void> => {
+  // Fetch current profile to merge with updates
+  const { data: currentProfile, error: fetchError } = await supabase
+    .from('profiles')
+    .select('onboarding_data')
+    .eq('id', userId)
+    .single();
+
+  if (fetchError) {
+    throw normaliseError(fetchError) ?? new Error('Failed to fetch current profile');
+  }
+
+  const currentData = (currentProfile?.onboarding_data ?? {}) as Record<string, any>;
+  const personal = currentData.personal ?? {};
+  const work = currentData.work ?? {};
+  const performance = currentData.performance ?? {};
+
+  // Map persona fields to onboarding_data structure
+  const updatedData = {
+    ...currentData,
+    personal: {
+      ...personal,
+      ...(updates.nickname !== undefined && { nickname: updates.nickname }),
+      ...(updates.bio !== undefined && { bio: updates.bio }),
+    },
+    work: {
+      ...work,
+      ...(updates.job_title !== undefined && { role: updates.job_title }),
+      ...(updates.focusAreas !== undefined && { focusAreas: updates.focusAreas }),
+    },
+    performance: {
+      ...performance,
+      ...(updates.mainPriority !== undefined && { northStar: updates.mainPriority }),
+    },
+  };
+
+  const profileUpdates: any = { onboarding_data: updatedData };
+  if (updates.growthTracker !== undefined) {
+    profileUpdates.growth_tracker_text = updates.growthTracker;
+  }
+
+  const { error: updateError } = await supabase
+    .from('profiles')
+    .update(profileUpdates)
+    .eq('id', userId);
+
+  if (updateError) {
+    throw normaliseError(updateError) ?? new Error('Failed to update user profile');
+  }
+};
+
+/**
+ * Update active streak for user
+ * Tracks consecutive days of activity
+ */
+export const updateActiveStreak = async (userId: string): Promise<void> => {
+  const { data: profile, error: fetchError } = await supabase
+    .from('profiles')
+    .select('last_activity_date, active_streak_days')
+    .eq('id', userId)
+    .single();
+
+  if (fetchError) {
+    console.error('Failed to fetch streak data:', fetchError);
+    return;
+  }
+
+  const today = new Date().toISOString().split('T')[0];
+  const lastActivityDate = profile?.last_activity_date;
+  const currentStreak = profile?.active_streak_days ?? 0;
+
+  let newStreak = currentStreak;
+
+  if (!lastActivityDate) {
+    // First activity ever
+    newStreak = 1;
+  } else {
+    const lastDate = new Date(lastActivityDate).toISOString().split('T')[0];
+    if (lastDate === today) {
+      // Already counted today, no update needed
+      return;
+    }
+
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+    if (lastDate === yesterdayStr) {
+      // Consecutive day
+      newStreak = currentStreak + 1;
+    } else {
+      // Streak broken, restart
+      newStreak = 1;
+    }
+  }
+
+  const { error: updateError } = await supabase
+    .from('profiles')
+    .update({
+      last_activity_date: today,
+      active_streak_days: newStreak
+    })
+    .eq('id', userId);
+
+  if (updateError) {
+    console.error('Failed to update streak:', updateError);
+  }
+};
+
+/**
+ * Toggle Growth Tracker dismissed state
+ * Persists UI preference for dismissing the growth tracker message
+ */
+export const toggleGrowthTrackerDismissed = async (userId: string, dismissed: boolean): Promise<void> => {
+  const { error } = await supabase
+    .from('user_ui_preferences')
+    .upsert({
+      user_id: userId,
+      growth_tracker_dismissed: dismissed,
+      updated_at: new Date().toISOString()
+    }, {
+      onConflict: 'user_id'
+    });
+
+  if (error) {
+    console.error('Failed to toggle growth tracker:', error);
+    throw normaliseError(error) ?? new Error('Failed to update UI preferences');
+  }
+};
+
+/**
+ * Get Growth Tracker dismissed state
+ */
+export const getGrowthTrackerDismissed = async (userId: string): Promise<boolean> => {
+  const { data, error } = await supabase
+    .from('user_ui_preferences')
+    .select('growth_tracker_dismissed')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (error) {
+    console.error('Failed to fetch growth tracker state:', error);
+    return false;
+  }
+
+  return data?.growth_tracker_dismissed ?? false;
+};
+
+/**
+ * Detect Focus Area misalignment based on chat history and onboarding data
+ * Returns suggested focus areas if misalignment detected
+ */
+export const detectFocusAreaMisalignment = async (
+  userId: string,
+  recentMessages: string[],
+  currentFocusAreas: string[]
+): Promise<{ misaligned: boolean; suggestedAreas: string[] }> => {
+  // Extract keywords from recent chat messages
+  const messageText = recentMessages.join(' ').toLowerCase();
+
+  // Common focus area keywords
+  const keywords = [
+    'productivity', 'efficiency', 'automation', 'optimization',
+    'health', 'wellness', 'fitness', 'exercise',
+    'learning', 'education', 'skill', 'development',
+    'career', 'growth', 'promotion', 'leadership',
+    'finance', 'budget', 'investment', 'savings',
+    'relationships', 'networking', 'communication',
+    'creativity', 'design', 'writing', 'content',
+    'project', 'planning', 'organization', 'management'
+  ];
+
+  // Count keyword frequency
+  const keywordCounts: Record<string, number> = {};
+  keywords.forEach(keyword => {
+    const regex = new RegExp(`\\b${keyword}\\w*\\b`, 'gi');
+    const matches = messageText.match(regex);
+    if (matches) {
+      keywordCounts[keyword] = matches.length;
+    }
+  });
+
+  // Get top 3 keywords
+  const topKeywords = Object.entries(keywordCounts)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 3)
+    .map(([keyword]) => keyword);
+
+  // Check if current focus areas align with top keywords
+  const currentAreasLower = currentFocusAreas.map(a => a.toLowerCase());
+  const alignedCount = topKeywords.filter(keyword =>
+    currentAreasLower.some(area => area.includes(keyword) || keyword.includes(area))
+  ).length;
+
+  // Misalignment if less than 50% overlap and we have enough data
+  const misaligned = topKeywords.length >= 2 && alignedCount < (topKeywords.length / 2);
+
+  return {
+    misaligned,
+    suggestedAreas: misaligned ? topKeywords.map(k => k.charAt(0).toUpperCase() + k.slice(1)) : []
+  };
+};
 
 interface WorkspaceGraph {
   projects: Project[];
@@ -182,6 +404,12 @@ const mapTaskRow = (row: TaskRow): Task => ({
   color: row.color ?? '#2563eb',
   estimated_time: row.estimated_time ?? undefined,
   goal_id: row.goal_id ?? undefined,
+  projectId: row.project_id ?? undefined,
+  created_at: row.created_at ?? undefined,
+  updated_at: row.updated_at ?? undefined,
+  rollover_count: row.rollover_count ?? undefined,
+  rolled_over_from_date: row.rolled_over_from_date ?? undefined,
+  archived_at: row.archived_at ?? undefined,
 });
 
 const mapGoalRow = (row: GoalRow, tasks: Task[]): Goal => ({
@@ -226,41 +454,71 @@ const mapProjectRow = (
   row: ProjectRow,
   goals: Goal[],
   milestones: Milestone[],
-  knowledgeItems: KnowledgeItem[]
-): Project => ({
-  id: row.id,
-  name: row.name,
-  description: row.description ?? undefined,
-  status: row.status as Status | undefined,
-  priority: row.priority ?? undefined,
-  color: row.color ?? undefined,
-  progress: row.progress ?? undefined,
-  active: row.active ?? undefined,
-  startDate: row.start_date ?? undefined,
-  targetDate: row.target_date ?? undefined,
-  timeInvested: row.time_invested ?? undefined,
-  lastUpdate: row.last_update ?? undefined,
-  tags: row.tags ?? undefined,
-  notes: row.notes ?? undefined,
-  goals,
-  items: knowledgeItems,
-  milestones,
-});
+  knowledgeItems: KnowledgeItem[],
+  standaloneTasks: Task[]
+): Project => {
+  const combinedGoals = [...goals];
 
-const mapInsightRow = (row: UserInsightRow): UserInsight => ({
-  id: row.id,
-  title: row.title,
-  summary: row.summary ?? undefined,
-  category: row.category ?? undefined,
-  insightType: row.insight_type ?? undefined,
-  actionLabel: row.action_label ?? undefined,
-  actionUrl: row.action_url ?? undefined,
-  relevance: row.relevance ?? undefined,
-  projectId: row.project_id ?? undefined,
-  metadata: row.metadata ?? undefined,
-  createdAt: row.created_at,
-  updatedAt: row.updated_at,
-});
+  // CRITICAL: Add standalone tasks (tasks without goal_id) to a virtual "Tasks" goal
+  // This ensures they appear in Priority Stream without auto-creating real goals
+  if (standaloneTasks.length > 0) {
+    combinedGoals.push({
+      id: `${row.id}-standalone-tasks`,
+      name: 'Tasks',
+      status: Status.Active,
+      priority: Priority.Medium,
+      targetDate: row.target_date ?? new Date().toISOString(),
+      completedDate: undefined,
+      description: 'Standalone tasks',
+      order: 999, // Show last
+      tasks: standaloneTasks,
+    });
+  }
+
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description ?? undefined,
+    status: row.status as Status | undefined,
+    priority: row.priority ?? undefined,
+    color: row.color ?? undefined,
+    progress: row.progress ?? undefined,
+    active: row.active ?? undefined,
+    startDate: row.start_date ?? undefined,
+    targetDate: row.target_date ?? undefined,
+    timeInvested: row.time_invested ?? undefined,
+    lastUpdate: row.last_update ?? undefined,
+    tags: row.tags ?? undefined,
+    notes: row.notes ?? undefined,
+    goals: combinedGoals,
+    items: knowledgeItems,
+    milestones,
+  };
+};
+
+const mapInsightRow = (row: UserInsightRow): UserInsight => {
+  // Validate and normalize insight type
+  const validTypes: Array<'article' | 'opportunity' | 'trend' | 'note'> = ['article', 'opportunity', 'trend', 'note'];
+  const insightType = row.insight_type && validTypes.includes(row.insight_type as any)
+    ? row.insight_type
+    : 'note';
+
+  return {
+    id: row.id,
+    title: row.title,
+    summary: row.summary ?? undefined,
+    category: row.category ?? undefined,
+    insightType,
+    sourceUrl: row.source_url ?? undefined,
+    actionLabel: row.action_label ?? undefined,
+    actionUrl: row.action_url ?? undefined,
+    relevance: row.relevance ?? undefined,
+    projectId: row.project_id ?? undefined,
+    metadata: row.metadata ?? undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+};
 
 const normaliseError = (error: PostgrestError | Error | null | undefined): Error | null => {
   if (!error) return null;
@@ -273,7 +531,13 @@ export const fetchWorkspaceGraph = async (ownerId: string): Promise<WorkspaceGra
     await Promise.all([
       supabase.from<ProjectRow>('projects').select('*').eq('owner_id', ownerId).order('created_at', { ascending: true }),
       supabase.from<GoalRow>('project_goals').select('*').eq('owner_id', ownerId),
-      supabase.from<TaskRow>('project_tasks').select('*').eq('owner_id', ownerId),
+      supabase
+        .from<TaskRow>('project_tasks')
+        .select('*')
+        .eq('owner_id', ownerId)
+        .is('archived_at', null)
+        .or('completed.is.null,completed.is.false')
+        .order('updated_at', { ascending: false }),
       supabase.from<MilestoneRow>('project_milestones').select('*').eq('owner_id', ownerId),
       supabase.from<KnowledgeItemRow>('knowledge_items').select('*').eq('owner_id', ownerId),
       supabase.from<ProjectKnowledgeLinkRow>('project_knowledge_items').select('*').eq('owner_id', ownerId),
@@ -294,17 +558,37 @@ export const fetchWorkspaceGraph = async (ownerId: string): Promise<WorkspaceGra
   }
 
   const tasksByGoal = new Map<string, Task[]>();
+  const inboxTasksByProject = new Map<string, Task[]>();
+  const orphanTasks: Task[] = [];
   tasksRes.data?.forEach((row) => {
-    const goalId = row.goal_id;
-    if (!goalId) return;
+    if (row.archived_at) {
+      return;
+    }
     const mapped = mapTaskRow(row);
-    const existing = tasksByGoal.get(goalId) ?? [];
-    existing.push(mapped);
-    tasksByGoal.set(goalId, existing);
+    const goalId = row.goal_id;
+
+    if (goalId) {
+      const existing = tasksByGoal.get(goalId) ?? [];
+      existing.push(mapped);
+      tasksByGoal.set(goalId, existing);
+      return;
+    }
+
+    if (mapped.projectId) {
+      const existing = inboxTasksByProject.get(mapped.projectId) ?? [];
+      existing.push(mapped);
+      inboxTasksByProject.set(mapped.projectId, existing);
+      return;
+    }
+
+    orphanTasks.push(mapped);
   });
 
   const goalsByProject = new Map<string, Goal[]>();
   goalsRes.data?.forEach((row) => {
+    if (row.status && ['completed', 'deleted'].includes(row.status.toLowerCase())) {
+      return;
+    }
     const mapped = mapGoalRow(row, tasksByGoal.get(row.id) ?? []);
     const existing = goalsByProject.get(row.project_id) ?? [];
     existing.push(mapped);
@@ -344,9 +628,14 @@ export const fetchWorkspaceGraph = async (ownerId: string): Promise<WorkspaceGra
       row,
       goalsByProject.get(row.id) ?? [],
       milestonesByProject.get(row.id) ?? [],
-      knowledgeLinksByProject.get(row.id) ?? []
+      knowledgeLinksByProject.get(row.id) ?? [],
+      inboxTasksByProject.get(row.id) ?? []
     )
   );
+
+  // Note: Removed automatic "Workspace Inbox" project creation
+  // Orphaned tasks (if any) should be handled at the goal/project level
+  // No more synthetic inbox projects
 
   const knowledgeItems = Array.from(knowledgeById.values());
   const insights = (insightsRes.data ?? []).map(mapInsightRow);
@@ -386,7 +675,7 @@ export const createProject = async (ownerId: string, payload: Partial<Project>):
     throw normaliseError(error) ?? new Error('Failed to create project');
   }
 
-  return mapProjectRow(data, [], [], []);
+  return mapProjectRow(data, [], [], [], []);
 };
 
 export const updateProject = async (
@@ -422,13 +711,14 @@ export const updateProject = async (
     throw normaliseError(error) ?? new Error('Failed to update project');
   }
 
-  return mapProjectRow(data, [], [], []);
+  return mapProjectRow(data, [], [], [], []);
 };
 
 export const deleteProject = async (ownerId: string, projectId: string): Promise<void> => {
+  // Soft delete: mark as deleted instead of hard delete for consistency with chat function
   const { error } = await supabase
     .from('projects')
-    .delete()
+    .update({ status: 'deleted', active: false })
     .eq('id', projectId)
     .eq('owner_id', ownerId);
 
@@ -500,9 +790,10 @@ export const updateGoal = async (
 };
 
 export const deleteGoal = async (ownerId: string, goalId: string): Promise<void> => {
+  // Soft delete: mark as deleted instead of hard delete for consistency with chat function
   const { error } = await supabase
     .from('project_goals')
-    .delete()
+    .update({ status: 'deleted' })
     .eq('id', goalId)
     .eq('owner_id', ownerId);
 
@@ -783,6 +1074,51 @@ export const fetchUserInsights = async (ownerId: string): Promise<UserInsight[]>
   }
 
   return (data ?? []).map(mapInsightRow);
+};
+
+// Task Rollover Functions
+export interface RolloverSuggestion {
+  id: string;
+  name: string;
+  description: string;
+  priority: string;
+  created_at: string;
+  rollover_count: number;
+}
+
+export const getRolloverSuggestions = async (ownerId: string): Promise<RolloverSuggestion[]> => {
+  const { data, error } = await supabase.rpc('get_rollover_suggestions', {
+    user_id: ownerId
+  });
+
+  if (error) {
+    console.error('Failed to fetch rollover suggestions:', error);
+    return [];
+  }
+
+  return data || [];
+};
+
+export const rolloverTaskToToday = async (ownerId: string, taskId: string): Promise<string> => {
+  const { data, error } = await supabase.rpc('rollover_task_to_today', {
+    task_id: taskId,
+    user_id: ownerId
+  });
+
+  if (error) {
+    throw new Error(`Failed to rollover task: ${error.message}`);
+  }
+
+  return data; // Returns new task ID
+};
+
+export const archiveOldTasks = async (): Promise<void> => {
+  const { error } = await supabase.rpc('archive_old_tasks');
+
+  if (error) {
+    console.error('Failed to archive old tasks:', error);
+    throw new Error(`Failed to archive old tasks: ${error.message}`);
+  }
 };
 
 export const upsertUserInsight = async (

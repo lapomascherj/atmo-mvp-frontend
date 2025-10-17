@@ -457,23 +457,9 @@ const mapProjectRow = (
   knowledgeItems: KnowledgeItem[],
   standaloneTasks: Task[]
 ): Project => {
+  // REMOVED: No longer creating virtual "Tasks" goal
+  // Tasks must have a real goal_id to appear in Priority Stream
   const combinedGoals = [...goals];
-
-  // CRITICAL: Add standalone tasks (tasks without goal_id) to a virtual "Tasks" goal
-  // This ensures they appear in Priority Stream without auto-creating real goals
-  if (standaloneTasks.length > 0) {
-    combinedGoals.push({
-      id: `${row.id}-standalone-tasks`,
-      name: 'Tasks',
-      status: Status.Active,
-      priority: Priority.Medium,
-      targetDate: row.target_date ?? new Date().toISOString(),
-      completedDate: undefined,
-      description: 'Standalone tasks',
-      order: 999, // Show last
-      tasks: standaloneTasks,
-    });
-  }
 
   return {
     id: row.id,

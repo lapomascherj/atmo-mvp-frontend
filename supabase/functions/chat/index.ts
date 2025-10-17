@@ -782,8 +782,8 @@ Remember: ALWAYS return valid JSON with conversationalResponse and entities fiel
                 }
 
                 // CRITICAL: If no goal specified/found, find first active goal in project
-                // DO NOT auto-create goals - tasks can exist without goals
-                if (!goalId && entity.data.goal) {
+                // Tasks MUST have a goal_id to appear in Priority Stream
+                if (!goalId) {
                   console.log(`⚠️ No goal specified, looking for first active goal in project`)
                   const { data: firstGoal } = await supabaseClient
                     .from('project_goals')
@@ -799,12 +799,12 @@ Remember: ALWAYS return valid JSON with conversationalResponse and entities fiel
                   if (firstGoal) {
                     goalId = firstGoal.id
                     console.log(`✅ Using first active goal: ${firstGoal.name} (${goalId})`)
+                  } else {
+                    // No goals in project - ask user to create a goal first
+                    console.error(`❌ No active goals in project ${projectId}`)
+                    automationMessages.push(`This project needs at least one goal. Could you create a goal first, like "add goal 'Launch MVP' to this project"?`)
+                    break
                   }
-                }
-
-                // If still no goalId, that's OK - task will be created without a goal
-                if (!goalId) {
-                  console.log(`ℹ️ Task will be created without a goal (standalone task)`)
                 }
 
                 const calculatedPriority = await calculateTaskPriority(

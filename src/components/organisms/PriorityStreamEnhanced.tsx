@@ -156,8 +156,9 @@ export const PriorityStreamEnhanced: React.FC<PriorityStreamProps> = ({ classNam
   }, [outstandingTasks]);
 
   const tasksToShow = useMemo(() => {
-    return sortedTasks.slice(0, priorityOnly ? 3 : 5);
-  }, [sortedTasks, priorityOnly]);
+    // Show ALL active tasks - no artificial limit
+    return sortedTasks;
+  }, [sortedTasks]);
 
   const priorityTotals = useMemo(() => {
     return sortedTasks.reduce(

@@ -9,8 +9,9 @@ import {
   ReactNode,
 } from 'react';
 import { Session, User, AuthError, PostgrestError } from '@supabase/supabase-js';
-import { supabase, UserProfile, SUPABASE_STORAGE_KEY } from '@/lib/supabase';
+import { supabase, UserProfile, SUPABASE_STORAGE_KEY, isSupabaseConfigured } from '@/lib/supabase';
 import { PROFILE_SCHEMA_VERSION, ProfileDraft } from '@/types/profile';
+import SupabaseConfigurationError from '@/components/organisms/SupabaseConfigurationError';
 
 interface BasicProfileUpdates {
   display_name?: string;
@@ -248,6 +249,11 @@ const createFallbackProfile = (targetUser: User | null): UserProfile | null => {
 };
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  // Check Supabase configuration early and show error if not configured
+  if (!isSupabaseConfigured) {
+    return <SupabaseConfigurationError />;
+  }
+
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -278,8 +284,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return;
       }
 
+      // Skip loading state if we already have a profile for this user (silent background refresh)
+      const hasExistingProfile = profile?.id === targetUser.id;
+
       fetchingProfileRef.current = true;
-      setProfileLoading(true);
+      
+      // Only show loading spinner on initial fetch, not on background refreshes
+      if (!hasExistingProfile) {
+        setProfileLoading(true);
+      }
+      
       try {
         const { data, error } = await supabase
           .from('profiles')
@@ -329,13 +343,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         const friendly = mapAuthError(error as AuthError | PostgrestError | Error);
         setLastError(friendly);
-        applyProfile(createFallbackProfile(targetUser));
+        
+        // Only create fallback if we don't have an existing profile (keep stale data on error)
+        if (!profile) {
+          applyProfile(createFallbackProfile(targetUser));
+        }
       } finally {
+        // Always clean up loading state and fetch guard
         setProfileLoading(false);
         fetchingProfileRef.current = false;
       }
     },
-    [applyProfile]
+    [applyProfile, profile]
   );
 
   const refreshProfile = useCallback(async () => {

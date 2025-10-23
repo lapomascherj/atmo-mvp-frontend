@@ -84,24 +84,86 @@ serve(async (req) => {
           }
 
           else if (entity.entity_type === 'task') {
-            // Find project by name if specified
-            let projectId = null
-            if (entity.entity_data.project) {
-              const { data: project } = await supabaseClient
+            const projectConfirmed = entity.entity_data.projectConfirmed === true || entity.entity_data.project_confirmed === true
+            let projectId = entity.entity_data.projectId ?? entity.entity_data.project_id ?? null
+
+            if (entity.entity_data.project && typeof entity.entity_data.project === 'string') {
+              const rawName = entity.entity_data.project.trim()
+              const { data: matchingProjects, error: projectLookupError } = await supabaseClient
                 .from('projects')
-                .select('id')
+                .select('id, name')
                 .eq('owner_id', entity.owner_id)
-                .ilike('name', `%${entity.entity_data.project}%`)
-                .limit(1)
-                .single()
-              projectId = project?.id
+                .eq('active', true)
+                .neq('status', 'deleted')
+                .ilike('name', `%${rawName}%`)
+                .order('updated_at', { ascending: false })
+                .limit(5)
+
+              if (projectLookupError) {
+                console.error('⚠️ Project lookup error (process-entities):', projectLookupError)
+              } else if (matchingProjects && matchingProjects.length > 0) {
+                const exactMatches = matchingProjects.filter((project) => project.name.trim().toLowerCase() === rawName.toLowerCase())
+                if (projectConfirmed && exactMatches.length === 1) {
+                  projectId = exactMatches[0].id
+                } else if (projectConfirmed) {
+                  errors.push(`Task "${entity.entity_data.name}" skipped: unable to disambiguate project "${rawName}".`)
+                  await supabaseClient
+                    .from('claude_parsed_entities')
+                    .update({ processed: true })
+                    .eq('id', entity.id)
+                  processed++
+                  continue
+                } else if (exactMatches.length === 1 && !projectConfirmed) {
+                  errors.push(`Task "${entity.entity_data.name}" skipped: project "${rawName}" not explicitly confirmed by user.`)
+                  await supabaseClient
+                    .from('claude_parsed_entities')
+                    .update({ processed: true })
+                    .eq('id', entity.id)
+                  processed++
+                  continue
+                } else {
+                  errors.push(`Task "${entity.entity_data.name}" skipped: multiple projects matched "${rawName}" without confirmation.`)
+                  await supabaseClient
+                    .from('claude_parsed_entities')
+                    .update({ processed: true })
+                    .eq('id', entity.id)
+                  processed++
+                  continue
+                }
+              } else if (projectConfirmed) {
+                errors.push(`Task "${entity.entity_data.name}" skipped: confirmed project "${rawName}" not found.`)
+                await supabaseClient
+                  .from('claude_parsed_entities')
+                  .update({ processed: true })
+                  .eq('id', entity.id)
+                processed++
+                continue
+              } else {
+                errors.push(`Task "${entity.entity_data.name}" skipped: project mention "${rawName}" could not be matched.`)
+                await supabaseClient
+                  .from('claude_parsed_entities')
+                  .update({ processed: true })
+                  .eq('id', entity.id)
+                processed++
+                continue
+              }
             }
 
-            // Check for duplicate task
+            if (!projectId) {
+              errors.push(`Task "${entity.entity_data.name}" skipped: no confirmed project specified.`)
+              await supabaseClient
+                .from('claude_parsed_entities')
+                .update({ processed: true })
+                .eq('id', entity.id)
+              processed++
+              continue
+            }
+
             const { data: existingTask } = await supabaseClient
               .from('project_tasks')
               .select('id')
               .eq('owner_id', entity.owner_id)
+              .eq('project_id', projectId)
               .ilike('name', entity.entity_data.name)
               .single()
 

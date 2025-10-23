@@ -16,6 +16,9 @@ export interface ChatSessionMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
   createdAt: string;
+  metadata?: {
+    highlightColor?: "green" | "yellow" | "purple";
+  };
 }
 
 /**
@@ -131,6 +134,41 @@ export const getSessionMessages = async (sessionId: string): Promise<ChatSession
 };
 
 /**
+ * Get recent messages from active session (for focus area analysis)
+ */
+export const getRecentMessagesFromActiveSession = async (limit: number = 20): Promise<ChatSessionMessage[]> => {
+  try {
+    const activeSession = await getActiveSession();
+    if (!activeSession) {
+      return [];
+    }
+
+    const { data, error } = await supabase
+      .from('chat_messages')
+      .select('*')
+      .eq('session_id', activeSession.id)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.error('Failed to fetch recent messages:', error);
+      return [];
+    }
+
+    return (data || []).map(msg => ({
+      id: msg.id,
+      sessionId: msg.session_id,
+      role: msg.role,
+      content: msg.content,
+      createdAt: msg.created_at
+    }));
+  } catch (error) {
+    console.error('Failed to get recent messages:', error);
+    return [];
+  }
+};
+
+/**
  * Load an archived session (unarchive it and archive current active session)
  */
 export const loadArchivedSession = async (sessionId: string): Promise<void> => {
@@ -167,6 +205,58 @@ export const updateSessionTitle = async (sessionId: string, title: string): Prom
     .eq('id', sessionId);
 
   if (error) throw error;
+};
+
+/**
+ * Save an AI-initiated message (like Today's Actions questions) to the database
+ * This ensures the message persists across page refreshes
+ * @param content - The message content
+ * @param highlightColor - Optional color for Today's Actions questions (green/yellow/purple)
+ */
+export const saveAIMessage = async (
+  content: string,
+  highlightColor?: "green" | "yellow" | "purple"
+): Promise<ChatSessionMessage | null> => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    console.error('Cannot save AI message: not authenticated');
+    return null;
+  }
+
+  try {
+    // Get or create active session
+    const session = await getOrCreateActiveSession();
+
+    // Insert the AI message with color metadata
+    const { data, error } = await supabase
+      .from('chat_messages')
+      .insert({
+        owner_id: user.id,
+        session_id: session.id,
+        role: 'assistant',
+        content: content,
+        metadata: highlightColor ? { highlightColor } : {}
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Failed to save AI message:', error);
+      return null;
+    }
+
+    return {
+      id: data.id,
+      sessionId: data.session_id,
+      role: data.role,
+      content: data.content,
+      createdAt: data.created_at,
+      metadata: data.metadata
+    };
+  } catch (error) {
+    console.error('Error saving AI message:', error);
+    return null;
+  }
 };
 
 // Helper to map database row to ChatSession

@@ -264,6 +264,11 @@ export const ChatOverlay: React.FC<ChatOverlayProps> = ({
   const initializeChatSessions = useChatSessionsStore((state) => state.initialize);
   const refreshActiveSession = useChatSessionsStore((state) => state.refreshActiveSession);
   const activeSessionMessages = useChatSessionsStore((state) => state.messages);
+  const chatMessagesRef = useRef(chatMessages);
+
+  useEffect(() => {
+    chatMessagesRef.current = chatMessages;
+  }, [chatMessages]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -283,6 +288,23 @@ export const ChatOverlay: React.FC<ChatOverlayProps> = ({
   useEffect(() => {
     if (!isOpen) return;
 
+    // CRITICAL FIX: Only sync from store if we're NOT currently loading (sending a message)
+    // This prevents race conditions where local messages get wiped while waiting for server response
+    if (isLoading) {
+      console.log('[ChatOverlay] Skipping message sync - message in flight');
+      return;
+    }
+
+    if (activeSessionMessages.length === 0) {
+      // Avoid wiping locally queued messages (e.g. when an invocation fails)
+      if (chatMessagesRef.current.length > 0) {
+        console.log('[ChatOverlay] Preserving local messages, store is empty');
+        return;
+      }
+      setChatMessages([]);
+      return;
+    }
+
     const normalizedMessages: ChatMessage[] = activeSessionMessages.map((msg) => ({
       id: msg.id,
       text: msg.content,
@@ -290,8 +312,20 @@ export const ChatOverlay: React.FC<ChatOverlayProps> = ({
       timestamp: new Date(msg.createdAt),
     }));
 
+    // Only update if messages have actually changed
+    const currentMessages = chatMessagesRef.current;
+    if (currentMessages.length === normalizedMessages.length) {
+      const isSame = currentMessages.every((msg, idx) =>
+        msg.id === normalizedMessages[idx].id && msg.text === normalizedMessages[idx].text
+      );
+      if (isSame) {
+        return; // No changes, skip update
+      }
+    }
+
+    console.log('[ChatOverlay] Syncing messages from store:', normalizedMessages.length);
     setChatMessages(normalizedMessages);
-  }, [isOpen, activeSessionMessages, setChatMessages]);
+  }, [isOpen, activeSessionMessages, setChatMessages, isLoading]);
 
   // Helper: Normalize status strings to enum values
   const normalizeStatus = (status: string): string => {
@@ -333,38 +367,71 @@ export const ChatOverlay: React.FC<ChatOverlayProps> = ({
     return /^(planned|in.?progress|complete|completed|done|active|ongoing)$/i.test(str);
   };
 
-  // Helper: Resolve project by name with fallback to most recently updated
+  // Helper: Resolve project by name with intelligent matching and fallback
   const resolveProject = (projectName: string, projects: any[]) => {
     // Filter active projects
     const activeProjects = projects.filter(p =>
       p.status !== 'deleted' && p.status !== 'completed'
     );
 
+    if (activeProjects.length === 0) {
+      return { project: null, error: 'no_active_projects' as const };
+    }
+
     // Exact match (case-insensitive)
     const exactMatches = activeProjects.filter(p =>
       p.name.toLowerCase() === projectName.toLowerCase()
     );
 
-    if (exactMatches.length === 0) {
-      return { project: null, error: 'not_found' as const };
-    }
-
     if (exactMatches.length === 1) {
       return { project: exactMatches[0], error: null };
     }
 
-    // Multiple matches: pick most recently updated
-    const mostRecent = exactMatches.sort((a, b) => {
-      const dateA = new Date(a.updated_at || a.created_at || 0);
-      const dateB = new Date(b.updated_at || b.created_at || 0);
-      return dateB.getTime() - dateA.getTime();
-    })[0];
+    if (exactMatches.length > 1) {
+      // Multiple exact matches: pick most recently updated
+      const mostRecent = exactMatches.sort((a, b) => {
+        const dateA = new Date(a.updated_at || a.created_at || 0);
+        const dateB = new Date(b.updated_at || b.created_at || 0);
+        return dateB.getTime() - dateA.getTime();
+      })[0];
 
-    return {
-      project: mostRecent,
-      error: null,
-      ambiguous: true,
-      matchCount: exactMatches.length
+      return {
+        project: mostRecent,
+        error: null,
+        ambiguous: true,
+        matchCount: exactMatches.length
+      };
+    }
+
+    // No exact matches - try partial matching
+    const partialMatches = activeProjects.filter(p => {
+      const projectLower = p.name.toLowerCase();
+      const searchLower = projectName.toLowerCase();
+      return projectLower.includes(searchLower) || searchLower.includes(projectLower);
+    });
+
+    if (partialMatches.length === 1) {
+      return { 
+        project: partialMatches[0], 
+        error: null,
+        fuzzyMatch: true
+      };
+    }
+
+    // INTELLIGENT FALLBACK: If only one active project exists, suggest it
+    if (activeProjects.length === 1) {
+      return {
+        project: activeProjects[0],
+        error: null,
+        suggestedFallback: true,
+        message: `No project named "${projectName}" found. Would you like to add this to your only active project "${activeProjects[0].name}"?`
+      };
+    }
+
+    return { 
+      project: null, 
+      error: 'not_found' as const,
+      suggestions: activeProjects.slice(0, 3).map(p => p.name) // Suggest top 3 active projects
     };
   };
 
@@ -586,9 +653,46 @@ export const ChatOverlay: React.FC<ChatOverlayProps> = ({
     return suggestions.slice(0, 3); // Max 3 suggestions
   };
 
+  // Helper: Extract project context from recent conversation
+  const extractProjectContext = () => {
+    const recentMessages = chatMessages.slice(-10); // Look at last 10 messages
+    const projectNames = new Set<string>();
+    
+    for (const message of recentMessages) {
+      // Look for project mentions in recent messages
+      const projectMentions = message.text.match(/project\s+["']?([^"'\n,]+)["']?/gi);
+      if (projectMentions) {
+        projectMentions.forEach(mention => {
+          const match = mention.match(/project\s+["']?([^"'\n,]+)["']?/i);
+          if (match) {
+            projectNames.add(match[1].trim());
+          }
+        });
+      }
+      
+      // Look for "working on X" or "focusing on X" patterns
+      const workingOnMatches = message.text.match(/(?:working on|focusing on|building|developing)\s+["']?([^"'\n,]+)["']?/gi);
+      if (workingOnMatches) {
+        workingOnMatches.forEach(mention => {
+          const match = mention.match(/(?:working on|focusing on|building|developing)\s+["']?([^"'\n,]+)["']?/i);
+          if (match) {
+            projectNames.add(match[1].trim());
+          }
+        });
+      }
+    }
+    
+    return Array.from(projectNames);
+  };
+
   const handleSendMessage = async () => {
+    console.log('🔵 [ChatOverlay] handleSendMessage called');
+    console.log('🔵 [ChatOverlay] chatInput:', chatInput);
+    console.log('🔵 [ChatOverlay] isLoading:', isLoading);
+
     if (chatInput.trim() && !isLoading) {
       const userMessageText = chatInput.trim();
+      console.log('🔵 [ChatOverlay] Processing message:', userMessageText);
 
       // Add user message
       const newMessage = {
@@ -597,6 +701,7 @@ export const ChatOverlay: React.FC<ChatOverlayProps> = ({
         sender: 'user' as const,
         timestamp: new Date()
       };
+      console.log('🔵 [ChatOverlay] Adding user message to chat');
       setChatMessages(prev => [...prev, newMessage]);
       setChatInput('');
       setIsLoading(true);
@@ -994,18 +1099,42 @@ export const ChatOverlay: React.FC<ChatOverlayProps> = ({
 
           console.log(`📊 [${new Date().toLocaleTimeString()}] Available projects:`, projects.map(p => ({ id: p.id, name: p.name, status: p.status })));
 
-          // Resolve project by name with fallback
-          const { project: matchedProject, error, ambiguous, matchCount } = resolveProject(
-            parsedGoalCommand.projectName,
-            projects
-          );
+          // Resolve project by name with improved intelligence
+          const resolution = resolveProject(parsedGoalCommand.projectName, projects);
+          const { project: matchedProject, error, ambiguous, matchCount, fuzzyMatch, suggestedFallback, message, suggestions } = resolution;
 
-          console.log(`🔍 [${new Date().toLocaleTimeString()}] Project resolution:`, { matchedProject: matchedProject?.name, error, ambiguous, matchCount });
+          console.log(`🔍 [${new Date().toLocaleTimeString()}] Project resolution:`, { matchedProject: matchedProject?.name, error, ambiguous, matchCount, fuzzyMatch, suggestedFallback });
 
-          if (error === 'not_found') {
+          if (error === 'no_active_projects') {
             setChatMessages(prev => [...prev, {
               id: (Date.now() + 1).toString(),
-              text: `❌ Project **"${parsedGoalCommand.projectName}"** not found. Please check the project name and try again.`,
+              text: `❌ No active projects found. Please create a project first before adding goals.`,
+              sender: 'ai' as const,
+              timestamp: new Date()
+            }]);
+            setIsLoading(false);
+            return;
+          }
+
+          if (error === 'not_found') {
+            const suggestionText = suggestions && suggestions.length > 0 
+              ? `\n\nYour active projects:\n${suggestions.map((name, i) => `${i + 1}. ${name}`).join('\n')}`
+              : '';
+            setChatMessages(prev => [...prev, {
+              id: (Date.now() + 1).toString(),
+              text: `❌ Project **"${parsedGoalCommand.projectName}"** not found.${suggestionText}\n\nPlease use an exact project name or create the project first.`,
+              sender: 'ai' as const,
+              timestamp: new Date()
+            }]);
+            setIsLoading(false);
+            return;
+          }
+
+          // Handle suggested fallback
+          if (suggestedFallback && message) {
+            setChatMessages(prev => [...prev, {
+              id: (Date.now() + 1).toString(),
+              text: message,
               sender: 'ai' as const,
               timestamp: new Date()
             }]);
@@ -1016,7 +1145,16 @@ export const ChatOverlay: React.FC<ChatOverlayProps> = ({
           if (ambiguous) {
             setChatMessages(prev => [...prev, {
               id: (Date.now() + 1).toString(),
-              text: `⚠️ Found ${matchCount} projects named **"${parsedGoalCommand.projectName}"**. Using the most recently updated one.`,
+              text: `⚠️ Found ${matchCount} projects named **"${parsedGoalCommand.projectName}"**. Using the most recently updated one: **${matchedProject?.name}**.`,
+              sender: 'ai' as const,
+              timestamp: new Date()
+            }]);
+          }
+
+          if (fuzzyMatch) {
+            setChatMessages(prev => [...prev, {
+              id: (Date.now() + 1).toString(),
+              text: `ℹ️ No exact match for **"${parsedGoalCommand.projectName}"** found. Using similar project: **${matchedProject?.name}**.`,
               sender: 'ai' as const,
               timestamp: new Date()
             }]);
@@ -1667,7 +1805,54 @@ export const ChatOverlay: React.FC<ChatOverlayProps> = ({
         }
 
         // Call Claude AI via Supabase edge function
-        const response = await sendChatMessage(userMessageText);
+        console.log('🔵 [ChatOverlay] Reached Claude AI call section');
+        console.log('🤖 Sending message to Claude...', { message: userMessageText.substring(0, 100) + '...' });
+
+        let response;
+        try {
+          console.log('🔵 [ChatOverlay] Calling sendChatMessage...');
+          response = await sendChatMessage(userMessageText);
+          console.log('🔵 [ChatOverlay] sendChatMessage returned successfully');
+          console.log('✅ Claude response received:', { 
+            responseLength: response.response?.length || 0,
+            entitiesCreated: response.entitiesCreated?.length || 0
+          });
+        } catch (chatError) {
+          console.error('❌ Chat service error details:', chatError);
+          
+          // More specific error handling based on error type
+          let specificErrorMessage = 'Sorry, I encountered an error. Please try again.';
+          
+          if (chatError instanceof Error) {
+            const errorMsg = chatError.message.toLowerCase();
+            
+            if (errorMsg.includes('authentication') || errorMsg.includes('session') || errorMsg.includes('login')) {
+              specificErrorMessage = '🔐 Your session has expired. Please refresh the page and sign in again.';
+            } else if (errorMsg.includes('network') || errorMsg.includes('fetch')) {
+              specificErrorMessage = '🌐 Network connection issue. Please check your internet and try again.';
+            } else if (errorMsg.includes('edge function') || errorMsg.includes('supabase')) {
+              specificErrorMessage = '⚡ Chat service is temporarily unavailable. Please try again in a moment.';
+            } else if (errorMsg.includes('claude') || errorMsg.includes('api')) {
+              specificErrorMessage = '🤖 AI service is temporarily busy. Please try again in a few seconds.';
+            } else {
+              specificErrorMessage = `❌ Error: ${chatError.message}`;
+            }
+          }
+          
+          // Add error message to chat without crashing
+          const errorMessage = {
+            id: (Date.now() + 1).toString(),
+            text: specificErrorMessage,
+            sender: 'ai' as const,
+            timestamp: new Date()
+          };
+          setChatMessages(prev => [...prev, errorMessage]);
+          setIsLoading(false);
+          
+          // Keep chat open so user can try again
+          console.log('💬 Chat remains open for retry after error');
+          return; // Exit early without crashing
+        }
 
         // Build AI response text with created entities
         let responseText = response.response;
@@ -1688,31 +1873,80 @@ export const ChatOverlay: React.FC<ChatOverlayProps> = ({
         };
         setChatMessages(prev => [...prev, aiMessage]);
 
-        // CRITICAL FIX: Wait 2.5 seconds for edge function to complete entity creation in database
-        // This prevents race condition where UI refresh happens before DB write completes
-        if (createdEntities.length > 0) {
-          console.log(`⏳ [${new Date().toLocaleTimeString()}] Waiting 2.5s for entity creation to complete...`);
-          await new Promise(resolve => setTimeout(resolve, 2500));
+        // CRITICAL: If a document was generated, refresh the ATMO Outputs card
+        if (response.documentGenerated) {
+          console.log('📄 Document generated! Refreshing ATMO Outputs card...');
+          window.dispatchEvent(new Event('atmo:outputs:refresh'));
         }
 
-        // Trigger workspace synchronization with force=true to ensure new entities appear immediately
-        const { fetchPersonaByIam, profileSnapshot } = usePersonasStore.getState();
-        if (profileSnapshot?.id) {
-          console.log(`🔄 [${new Date().toLocaleTimeString()}] Force refreshing workspace after entity creation...`);
-          await fetchPersonaByIam(null, profileSnapshot.id, true);
-          console.log(`✅ [${new Date().toLocaleTimeString()}] Workspace synchronized, entities should be visible in UI`);
+        // CRITICAL FIX: Wait for entity creation and synchronize properly
+        if (createdEntities.length > 0) {
+          console.log(`⏳ [${new Date().toLocaleTimeString()}] Waiting for entity creation to complete...`);
+          await new Promise(resolve => setTimeout(resolve, 3000)); // Increased to 3 seconds
+          
+          // Force workspace synchronization with validation
+          const { fetchPersonaByIam, profileSnapshot, getProjects } = usePersonasStore.getState();
+          if (profileSnapshot?.id) {
+            console.log(`🔄 [${new Date().toLocaleTimeString()}] Force refreshing workspace after entity creation...`);
+            await fetchPersonaByIam(null, profileSnapshot.id, true);
+            
+            // VALIDATION: Check if created entities are actually visible and detect state changes
+            const refreshedProjects = getProjects();
+            const createdTasks = createdEntities.filter(e => e.type === 'task');
+            
+            for (const taskEntity of createdTasks) {
+              // Check if task exists (including completed/archived ones to detect state changes)
+              let taskFound = null;
+              let taskState = null;
+              
+              for (const p of refreshedProjects) {
+                for (const g of (p.goals ?? [])) {
+                  const task = (g.tasks ?? []).find(t => 
+                    t.name.toLowerCase() === taskEntity.name.toLowerCase()
+                  );
+                  if (task) {
+                    taskFound = task;
+                    if (task.completed) {
+                      taskState = 'completed';
+                    } else if (task.archived_at) {
+                      taskState = 'archived';
+                    } else {
+                      taskState = 'active';
+                    }
+                    break;
+                  }
+                }
+                if (taskFound) break;
+              }
+              
+              if (!taskFound) {
+                console.warn(`❌ Task "${taskEntity.name}" was reported as created but is not found in workspace`);
+                setChatMessages(prev => [...prev, {
+                  id: (Date.now() + 100).toString(),
+                  text: `⚠️ Task "${taskEntity.name}" was created but is not visible. This might be due to a project assignment issue or sync delay. Please try recreating it with explicit project name.`,
+                  sender: 'ai' as const,
+                  timestamp: new Date()
+                }]);
+              } else if (taskState === 'completed') {
+                console.log(`ℹ️ Task "${taskEntity.name}" was previously completed - not visible in Priority Stream`);
+              } else if (taskState === 'archived') {
+                console.log(`ℹ️ Task "${taskEntity.name}" was previously archived - not visible in Priority Stream`);
+              } else {
+                console.log(`✅ Task "${taskEntity.name}" confirmed visible in Priority Stream`);
+              }
+            }
+            
+            console.log(`✅ [${new Date().toLocaleTimeString()}] Workspace synchronized and validated`);
+          }
         }
       } catch (error) {
-        console.error('Failed to send message:', error);
+        console.error('❌ Unexpected error in chat handler:', error);
 
-        // Show detailed error message to user
-        let errorText = 'Sorry, I encountered an error. Please try again.';
+        // This catch block handles other unexpected errors (not chat service errors)
+        let errorText = '🔥 An unexpected error occurred. Please refresh the page and try again.';
         if (error instanceof Error) {
-          errorText = error.message;
-          // If it's an auth error, provide clearer message
-          if (error.message.includes('login') || error.message.includes('auth')) {
-            errorText = 'You must be logged in to use chat. Please refresh the page and sign in.';
-          }
+          console.error('Error details:', error.stack);
+          errorText = `🔥 Unexpected error: ${error.message}`;
         }
 
         const errorMessage = {
@@ -1723,12 +1957,18 @@ export const ChatOverlay: React.FC<ChatOverlayProps> = ({
         };
         setChatMessages(prev => [...prev, errorMessage]);
       } finally {
+        // CRITICAL: First set loading to false so the message sync can happen
         setIsLoading(false);
-      }
 
-      await refreshActiveSession({ force: true }).catch((err) => {
-        console.error('ChatOverlay: Failed to sync active session after sending message', err);
-      });
+        // Then refresh the session to get persisted messages from database
+        // This must happen AFTER setIsLoading(false) to avoid race condition
+        try {
+          console.log('[ChatOverlay] Refreshing session after message sent');
+          await refreshActiveSession({ force: true });
+        } catch (err) {
+          console.error('ChatOverlay: Failed to sync active session after sending message', err);
+        }
+      }
     }
   };
 
@@ -1880,7 +2120,7 @@ export const ChatOverlay: React.FC<ChatOverlayProps> = ({
                     : 'bg-white/10 text-white/90 rounded-[18px] rounded-bl-[6px] backdrop-blur-sm border border-white/10'
                 } shadow-lg`}
               >
-                <p className="text-sm leading-relaxed">{message.text}</p>
+                <p className="text-xs leading-normal">{message.text}</p>
                 <span className="text-[10px] opacity-60 mt-1 block">
                   {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </span>
@@ -1913,7 +2153,7 @@ export const ChatOverlay: React.FC<ChatOverlayProps> = ({
                 onChange={(e) => setChatInput(e.target.value)}
                 onKeyPress={handleKeyPress}
                 placeholder="Type your message..."
-                className="flex-1 bg-transparent text-white text-sm placeholder:text-white/40 outline-none resize-none min-h-[32px] max-h-[120px] py-1 px-2 rounded-xl"
+                className="flex-1 bg-transparent text-white text-xs placeholder:text-white/40 outline-none resize-none min-h-[28px] max-h-[100px] py-1 px-2 rounded-xl"
                 rows={1}
                 style={{
                   scrollbarWidth: 'thin',

@@ -158,6 +158,7 @@ interface PersonasStoreState {
   applyGoalAutomation: (payload: GoalAutomationPayload) => void;
   sendChatMessage: (message: string) => Promise<ChatResponse>;
   getChatHistory: (limit?: number) => Promise<ChatMessage[]>;
+  debugProjectPersistence: () => Promise<Project[]>;
 }
 
 // Fetch debouncing and deduplication state
@@ -165,6 +166,10 @@ let lastFetchTimestamp = 0;
 let fetchInProgress: Promise<Persona | null> | null = null;
 let debounceTimer: NodeJS.Timeout | null = null;
 let lastDataHash = '';
+let lastFetchedUserId = '';
+
+// Minimum time between fetches (in milliseconds) - 5 seconds
+const FETCH_COOLDOWN_MS = 5000;
 
 // Simple hash function for data deduplication
 const hashData = (data: any): string => {
@@ -178,16 +183,27 @@ const hashData = (data: any): string => {
 export const usePersonasStore = create<PersonasStoreState>((set, get) => {
   const synchronizeWorkspace = async (ownerId: string) => {
     const timestamp = new Date().toLocaleTimeString();
-    console.log(`🔄 [${timestamp}] Fetching workspace for user:`, ownerId);
+    console.log(`🔄 [${timestamp}] [PersonasStore.synchronizeWorkspace] Fetching workspace for user:`, ownerId);
 
     const profile = get().profileSnapshot;
     const integrations = get().integrations;
+
+    console.log(`   → Calling fetchWorkspaceGraph...`);
     const { projects, knowledgeItems, insights } = await fetchWorkspaceGraph(ownerId);
+    console.log(`   → fetchWorkspaceGraph returned: ${projects.length} projects, ${knowledgeItems.length} knowledge items`);
 
     // Deduplicate: check if data has actually changed
     const newDataHash = hashData({ projects, knowledgeItems, insights });
+    console.log(`🧮 [${timestamp}] Hash comparison:`, {
+      newHash: newDataHash.substring(0, 20) + '...',
+      lastHash: lastDataHash.substring(0, 20) + '...',
+      matches: newDataHash === lastDataHash,
+      projectsInNewData: projects.length,
+      currentProjectsInStore: get().projects.length
+    });
+    
     if (newDataHash === lastDataHash) {
-      console.log(`⏭️ [${timestamp}] Data unchanged, skipping store update`);
+      console.log(`⏭️ [${timestamp}] Data unchanged (hash match), skipping store update`);
       set({ loading: false });
       return;
     }
@@ -195,6 +211,18 @@ export const usePersonasStore = create<PersonasStoreState>((set, get) => {
     const persona = mapProfileToPersona(profile, projects, knowledgeItems, integrations);
 
     console.log(`💾 [${timestamp}] Rehydrated ${projects.length} projects, ${knowledgeItems.length} knowledge items from database`);
+    console.log(`   → Previous projects count:`, get().projects.length);
+    console.log(`   → New projects count:`, projects.length);
+
+    // Debug: Log ALL project details
+    if (projects.length > 0) {
+      console.log(`   → Projects from database:`);
+      projects.forEach((p, i) => {
+        console.log(`      ${i+1}. "${p.name}": active=${p.active}, status=${p.status}, id=${p.id}`);
+      });
+    } else {
+      console.log(`   ⚠️ NO PROJECTS RETURNED FROM DATABASE`);
+    }
 
     lastDataHash = newDataHash;
     set({
@@ -204,6 +232,14 @@ export const usePersonasStore = create<PersonasStoreState>((set, get) => {
       currentPersona: persona,
       loading: false,
       error: null,
+    });
+
+    console.log(`✅ [${timestamp}] Store updated successfully`);
+    console.log(`📊 [${timestamp}] Store state summary:`, {
+      projectsCount: projects.length,
+      projectNames: projects.map(p => `"${p.name}" (status: ${p.status}, active: ${p.active})`),
+      knowledgeItemsCount: knowledgeItems.length,
+      insightsCount: insights.length
     });
   };
 
@@ -274,6 +310,15 @@ export const usePersonasStore = create<PersonasStoreState>((set, get) => {
     profileSnapshot: null,
 
     syncWithProfile: (profile) => {
+      const state = get();
+      const timestamp = new Date().toLocaleTimeString();
+      console.log(`🔄 [${timestamp}] [PersonasStore] syncWithProfile`, {
+        hasProfile: !!profile,
+        profileId: profile?.id,
+        currentProjectsCount: state.projects.length,
+        currentKnowledgeItemsCount: state.knowledgeItems.length,
+      });
+
       set((state) => ({
         profileSnapshot: profile,
         currentPersona: mapProfileToPersona(profile, state.projects, state.knowledgeItems, state.integrations),
@@ -283,9 +328,12 @@ export const usePersonasStore = create<PersonasStoreState>((set, get) => {
     fetchPersonaByIam: async (_pb, _iam, forceRefresh = false) => {
       try {
         const profile = ensureProfile();
+        const currentTime = Date.now();
+        const timeSinceLastFetch = currentTime - lastFetchTimestamp;
 
         // Return existing data if not forcing refresh and persona exists
-        if (!forceRefresh && get().currentPersona) {
+        if (!forceRefresh && get().currentPersona && get().currentPersona.iam === profile.id) {
+          console.log(`✅ [${new Date().toLocaleTimeString()}] Using cached persona data`);
           return get().currentPersona;
         }
 
@@ -295,9 +343,22 @@ export const usePersonasStore = create<PersonasStoreState>((set, get) => {
           return fetchInProgress;
         }
 
+        // Cooldown: prevent fetching too frequently (ONLY if not forcing refresh)
+        if (!forceRefresh && timeSinceLastFetch < FETCH_COOLDOWN_MS && lastFetchedUserId === profile.id) {
+          console.log(`⏭️ [${new Date().toLocaleTimeString()}] Fetch cooldown active (${Math.round(timeSinceLastFetch/1000)}s ago), using cache`);
+          return get().currentPersona;
+        }
+
+        // Log when cooldown is overridden
+        if (forceRefresh && timeSinceLastFetch < FETCH_COOLDOWN_MS) {
+          console.log(`🔥 [${new Date().toLocaleTimeString()}] FORCE REFRESH - Overriding cooldown (${Math.round(timeSinceLastFetch/1000)}s ago)`);
+        }
+
         // Start new fetch
+        console.log(`🔄 [${new Date().toLocaleTimeString()}] Starting fresh workspace fetch for user:`, profile.id);
         set({ loading: true, error: null });
-        lastFetchTimestamp = Date.now();
+        lastFetchTimestamp = currentTime;
+        lastFetchedUserId = profile.id;
 
         fetchInProgress = (async () => {
           try {
@@ -313,6 +374,7 @@ export const usePersonasStore = create<PersonasStoreState>((set, get) => {
         const message = error instanceof Error ? error.message : 'Failed to load workspace';
         set({ loading: false, error: message });
         fetchInProgress = null;
+        lastFetchedUserId = ''; // Reset on error
         return null;
       }
     },
@@ -372,11 +434,24 @@ export const usePersonasStore = create<PersonasStoreState>((set, get) => {
       try {
         const profile = ensureProfile();
         set({ loading: true, error: null });
-        await createProjectInSupabase(profile.id, project);
+        
+        console.log(`📝 [${new Date().toLocaleTimeString()}] Creating project:`, project);
+        const createdProject = await createProjectInSupabase(profile.id, project);
+        console.log(`✅ [${new Date().toLocaleTimeString()}] Project created in database:`, {
+          id: createdProject.id,
+          name: createdProject.name,
+          status: createdProject.status,
+          active: createdProject.active
+        });
+        
+        console.log(`🔄 [${new Date().toLocaleTimeString()}] Synchronizing workspace after project creation...`);
         await synchronizeWorkspace(profile.id);
+        console.log(`✅ [${new Date().toLocaleTimeString()}] Workspace synchronized after project creation`);
+        
         return true;
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to add project';
+        console.error(`❌ [${new Date().toLocaleTimeString()}] Project creation failed:`, error);
         set({ loading: false, error: message });
         return false;
       }
@@ -906,7 +981,45 @@ export const usePersonasStore = create<PersonasStoreState>((set, get) => {
         return [];
       }
     },
+    
+    // Debug function to test project persistence
+    debugProjectPersistence: async () => {
+      try {
+        const profile = ensureProfile();
+        console.log('🔍 DEBUG: Testing project persistence for user:', profile.id);
+        
+        // Force clear cache to ensure fresh data
+        const originalHash = lastDataHash;
+        lastDataHash = '';
+        
+        console.log('🔍 DEBUG: Calling fetchWorkspaceGraph directly...');
+        const { projects } = await fetchWorkspaceGraph(profile.id);
+        
+        console.log('🔍 DEBUG: Raw projects from database:', projects.map(p => ({
+          id: p.id,
+          name: p.name,
+          status: p.status,
+          active: p.active,
+          created_at: (p as any).created_at
+        })));
+        
+        // Restore original hash
+        lastDataHash = originalHash;
+        
+        return projects;
+      } catch (error) {
+        console.error('🔍 DEBUG: Error testing persistence:', error);
+        return [];
+      }
+    },
   };
 });
+
+// Make debug function globally available for testing
+if (typeof window !== 'undefined') {
+  (window as any).debugProjectPersistence = () => {
+    return usePersonasStore.getState().debugProjectPersistence();
+  };
+}
 
 export default usePersonasStore;

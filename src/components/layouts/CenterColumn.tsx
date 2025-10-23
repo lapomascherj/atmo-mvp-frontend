@@ -15,9 +15,11 @@ import { useChatSessionsStore } from '@/stores/chatSessionsStore';
 
 interface CenterColumnProps {
     maxWidthPercent?: number;
+    initialMessage?: string;
+    onMessageUsed?: () => void;
 }
 
-const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) => {
+const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100, initialMessage, onMessageUsed }) => {
     const { user } = useMockAuth();
     const { toast } = useToast();
     const { sidebarWidth } = useSidebar();
@@ -129,17 +131,26 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
     const startNewChatSession = useChatSessionsStore((state) => state.startNewChatSession);
     const refreshActiveSession = useChatSessionsStore((state) => state.refreshActiveSession);
 
+    // Get PersonasStore refresh function
+    const fetchPersonaByIam = usePersonasStore((state) => state.fetchPersonaByIam);
+    const profileSnapshot = usePersonasStore((state) => state.profileSnapshot);
+
     useEffect(() => {
         void initializeChatSessions();
     }, [initializeChatSessions]);
+
+    // Note: initialMessage is no longer used - questions are now added directly via promptStore
 
     const handleAIResponse = async (userMessage: string) => {
         // Set responding state to true at start
         promptStore.getState().setRespondingState?.(true);
 
+        // CRITICAL FIX: Declare response outside try block so it's accessible in finally block
+        let response: any = null;
+
         try {
             // Use real Claude AI via Supabase edge function
-            const response = await sendChatMessage(userMessage);
+            response = await sendChatMessage(userMessage);
 
             // Add AI response to history using addAIResponse function
             const { addAIResponse } = promptStore.getState();
@@ -158,6 +169,7 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
                     .map(e => `✓ ${e.type}: "${e.name}"`)
                     .join('\n');
                 addAIResponse(`${response.response}\n\n**Created:**\n${createdList}`);
+                window.dispatchEvent(new Event('atmo:outputs:refresh'));
             } else {
                 addAIResponse(response.response);
             }
@@ -171,10 +183,30 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
             // Ensure responding state is false after response
             promptStore.getState().setRespondingState?.(false);
 
-            // Refresh chat session to ensure it's synced (but don't force persona reload)
+            // Refresh chat session to ensure it's synced
             await refreshActiveSession({ force: true }).catch((err) => {
                 console.error('Failed to synchronize chat session after AI response:', err);
             });
+
+            // CRITICAL: Refresh workspace to fetch newly created projects/goals/tasks
+            if (profileSnapshot?.id) {
+                console.log('🔄 [CenterColumn] Refreshing workspace to fetch newly created entities...');
+                console.log('   → Profile ID:', profileSnapshot.id);
+                console.log('   → Force refresh: TRUE');
+                console.log('   → Created entities:', response?.entitiesCreated?.length || 0);
+                try {
+                    const refreshedPersona = await fetchPersonaByIam(null, profileSnapshot.id, true);
+                    console.log('✅ [CenterColumn] Workspace refreshed successfully');
+                    console.log('   → Current projects count:', refreshedPersona?.projects?.length || 0);
+                    if (refreshedPersona?.projects && refreshedPersona.projects.length > 0) {
+                        console.log('   → Projects:', refreshedPersona.projects.map(p => ({ name: p.name, id: p.id })));
+                    }
+                } catch (err) {
+                    console.error('❌ [CenterColumn] Failed to refresh workspace after AI response:', err);
+                }
+            } else {
+                console.error('❌ [CenterColumn] No profileSnapshot available - cannot refresh workspace!');
+            }
         }
     };
 
@@ -393,7 +425,34 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
                     ) : (
                         history
                             .filter(message => message.message && message.message.trim() && message.message.trim() !== '...')
-                            .map((message, index) => (
+                            .map((message, index) => {
+                                // Get highlight color styles for AI questions
+                                const getHighlightStyles = () => {
+                                    if (!message.highlightColor) return {};
+
+                                    const colorMap = {
+                                        green: {
+                                            bg: "bg-green-500/15",
+                                            border: "border-green-500/40",
+                                            glow: "shadow-lg shadow-green-500/20"
+                                        },
+                                        yellow: {
+                                            bg: "bg-yellow-500/15",
+                                            border: "border-yellow-500/40",
+                                            glow: "shadow-lg shadow-yellow-500/20"
+                                        },
+                                        purple: {
+                                            bg: "bg-purple-500/15",
+                                            border: "border-purple-500/40",
+                                            glow: "shadow-lg shadow-purple-500/20"
+                                        }
+                                    };
+                                    return colorMap[message.highlightColor];
+                                };
+
+                                const highlightStyles = getHighlightStyles();
+
+                                return (
                             <div
                                 key={index}
                                 className={cn(
@@ -407,7 +466,9 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
                                             "px-4 py-3 text-sm leading-relaxed transition-all duration-200 backdrop-blur-sm",
                                             message.sender === 'user'
                                                 ? "bg-orange-500/15 border border-orange-500/30 text-white rounded-2xl rounded-br-md"
-                                                : "bg-slate-800/70 border border-slate-600/40 text-white/95 rounded-2xl rounded-bl-md"
+                                                : message.highlightColor
+                                                    ? `${highlightStyles.bg} border ${highlightStyles.border} ${highlightStyles.glow} text-white rounded-2xl rounded-bl-md`
+                                                    : "bg-slate-800/70 border border-slate-600/40 text-white/95 rounded-2xl rounded-bl-md"
                                         )}
                                         style={{
                                             lineHeight: '1.6',
@@ -428,7 +489,8 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100 }) =>
                                     </div>
                                 </div>
                             </div>
-                        ))
+                                );
+                            })
                     )}
 
                     {/* Typing Indicator */}

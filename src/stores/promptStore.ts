@@ -6,6 +6,7 @@ import { digitalBrainAPI } from "@/api/mockDigitalBrainApi";
 interface PromptInput {
   message: string;
   sender: "user" | "ai";
+  highlightColor?: "green" | "yellow" | "purple"; // For Today's Actions prompts
 }
 
 interface PromptState {
@@ -36,6 +37,7 @@ interface PromptState {
   processTaskWithAI: (task: Task) => Promise<void>;
   addAIResponse: (response: string) => void;
   addAvatarMessage: (message: string) => void;
+  addHighlightedAIQuestion: (question: string, color: "green" | "yellow" | "purple") => void;
   resetConversationState: () => void;
   setHistory: (entries: PromptInput[]) => void;
 }
@@ -253,6 +255,19 @@ Would you like me to help you think through any specific aspect of this task? I'
     const { addToHistory, toggleRespondingState } = promptStore.getState();
     addToHistory();
     toggleRespondingState();
+  },
+
+  addHighlightedAIQuestion: (question: string, color: "green" | "yellow" | "purple") => {
+    set((state) => ({
+      history: [
+        ...state.history,
+        {
+          message: question,
+          sender: "ai" as const,
+          highlightColor: color,
+        },
+      ],
+    }));
   },
 
   addAvatarMessage: (message: string) => {

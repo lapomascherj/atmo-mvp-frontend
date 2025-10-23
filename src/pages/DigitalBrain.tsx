@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { AtmoCard } from '@/components/molecules/AtmoCard';
 import { CardContent, CardHeader } from '@/components/atoms/Card';
 import SphereChat from '@/components/atoms/SphereChat';
-import { User, BarChart3, Brain, Lightbulb, ChevronUp, TrendingUp, Target, Zap, Star, Radar, Settings, Filter, BookOpen, Plus, Circle, X, Edit3, Trash2 } from 'lucide-react';
+import { User, BarChart3, Brain, Lightbulb, ChevronUp, TrendingUp, Target, Zap, Star, Radar, Settings, Filter, BookOpen, Plus, Circle, X, Edit3, Trash2, Loader2, Compass } from 'lucide-react';
 import { SchedulerView } from '@/components/scheduler/SchedulerView';
 import { useSchedulerSync } from '@/hooks/useSchedulerSync';
 import { ObsidianKnowledgeGraph } from '@/components/knowledge/ObsidianKnowledgeGraph';
@@ -13,6 +13,13 @@ import { usePersonasStore } from '@/stores/usePersonasStore';
 import { useMockAuth } from '@/hooks/useMockAuth';
 import { supabase } from '@/lib/supabase';
 import { updateUserProfile, toggleGrowthTrackerDismissed, getGrowthTrackerDismissed } from '@/services/supabaseDataService';
+import { getRecentMessagesFromActiveSession, type ChatSessionMessage } from '@/services/chatSessionService';
+import { analyzeIntelligentFocusAreas, shouldRecalculateFocusAreas } from '@/utils/intelligentFocusAnalyzer';
+import { generateProfessionalDescription } from '@/utils/professionalDescriptionGenerator';
+import { analyzeFocusAreaInsights, type FocusAreaInsight } from '@/utils/focusAreaInsights';
+import { FocusAreaCard } from '@/components/molecules/FocusAreaCard';
+import { PersonalSnapshotOverlay } from '@/components/organisms/PersonalSnapshotOverlay';
+import { getTimeHorizonSummary } from '@/utils/timeHorizonCalculator';
 import type { Project } from '@/models/Project';
 
 const DigitalBrain: React.FC = () => {
@@ -37,10 +44,60 @@ const DigitalBrain: React.FC = () => {
   // Project detail overlay state
   const [selectedProjectDetail, setSelectedProjectDetail] = useState<Project | null>(null);
 
-  // Editable fields state
-  const [editingFocusAreas, setEditingFocusAreas] = useState(false);
-  // FIXED: Initialize as empty string, will be populated by useEffect
-  const [focusAreasInput, setFocusAreasInput] = useState('');
+  // Personal snapshot overlay state
+  const [showPersonalSnapshot, setShowPersonalSnapshot] = useState(false);
+
+  // Check for URL parameters to auto-open chat
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('openChat') === 'true') {
+      setShowChatOverlay(true);
+      // Clean up URL parameters
+      const newURL = window.location.pathname;
+      window.history.replaceState({}, document.title, newURL);
+    }
+  }, []);
+  
+  // PersonasStore data (define before effects that use them)
+  const currentPersona = usePersonasStore(state => state.currentPersona);
+  const loading = usePersonasStore(state => state.loading);
+  const fetchPersonaByIam = usePersonasStore(state => state.fetchPersonaByIam);
+  const getProjects = usePersonasStore(state => state.getProjects);
+  const getMilestones = usePersonasStore(state => state.getMilestones);
+  const insights = usePersonasStore(state => state.insights);
+
+  // Force refresh on page load to ensure projects are loaded
+  useEffect(() => {
+    const handlePageLoad = () => {
+      console.log('🔄 Page loaded, forcing fresh data fetch...');
+      if (user?.iam) {
+        // Force refresh with cache clearing
+        fetchPersonaByIam(null as any, user.iam, true).catch(error => {
+          console.error('❌ Failed to force refresh on page load:', error);
+        });
+      }
+    };
+
+    // Check if this is a fresh page load (not just a route change)
+    if (document.readyState === 'complete') {
+      handlePageLoad();
+    } else {
+      window.addEventListener('load', handlePageLoad);
+      return () => window.removeEventListener('load', handlePageLoad);
+    }
+  }, [user?.iam, fetchPersonaByIam]);
+
+  // Focus areas state (automatically managed)
+  const [focusAreas, setFocusAreas] = useState<string[]>([]);
+  const [isAnalyzingFocusAreas, setIsAnalyzingFocusAreas] = useState(false);
+  const [selectedFocusArea, setSelectedFocusArea] = useState<{
+    area: string;
+    insight: FocusAreaInsight;
+    chipElement: HTMLElement;
+  } | null>(null);
+  const [recentChatMessages, setRecentChatMessages] = useState<ChatSessionMessage[]>([]);
+
+  // Growth tracker state
   const [editingGrowthTracker, setEditingGrowthTracker] = useState(false);
   const [growthTrackerInput, setGrowthTrackerInput] = useState('');
   const [growthTrackerDismissed, setGrowthTrackerDismissed] = useState(false);
@@ -57,14 +114,6 @@ const DigitalBrain: React.FC = () => {
   // Scheduler sync - shared with Dashboard
   const { events, updateEvents: setEvents } = useSchedulerSync(selectedDate);
 
-  // PersonasStore data
-  const currentPersona = usePersonasStore(state => state.currentPersona);
-  const loading = usePersonasStore(state => state.loading);
-  const fetchPersonaByIam = usePersonasStore(state => state.fetchPersonaByIam);
-  const getProjects = usePersonasStore(state => state.getProjects);
-  const getMilestones = usePersonasStore(state => state.getMilestones);
-  const insights = usePersonasStore(state => state.insights);
-
   // Monitor auth initialization
   useEffect(() => {
     if (user !== undefined) {
@@ -74,37 +123,139 @@ const DigitalBrain: React.FC = () => {
   }, [user]);
 
   // Initialize PersonasStore on mount and when route changes
+  // Stable ref to track if we've already loaded for this user
+  const loadedUserRef = useRef<string | null>(null);
+  
   useEffect(() => {
     if (!user?.iam) {
       console.warn('⚠️ DIGITAL BRAIN: User IAM not available, skipping PersonasStore hydration');
       return;
     }
 
-    if (loading) {
-      console.log('⏳ DIGITAL BRAIN: PersonasStore already loading, skipping');
+    // Skip if already loading or if we've already loaded for this user
+    if (loading || loadedUserRef.current === user.iam) {
+      console.log('⏳ DIGITAL BRAIN: PersonasStore already loaded/loading, skipping');
+      return;
+    }
+
+    // Skip if persona is already loaded
+    if (currentPersona && currentPersona.iam === user.iam) {
+      console.log('✅ DIGITAL BRAIN: PersonasStore already hydrated for this user');
+      loadedUserRef.current = user.iam;
       return;
     }
 
     console.log("🧠 DIGITAL BRAIN: Hydrating PersonasStore for user:", user.iam);
+    loadedUserRef.current = user.iam;
 
-    fetchPersonaByIam(null as any, user.iam, !currentPersona).catch(error => {
-      console.error('❌ DIGITAL BRAIN: PersonasStore hydration error:', error);
-      console.debug("PersonasStore hydration completed or auto-cancelled");
-    });
-  }, [user?.iam, loading, fetchPersonaByIam, currentPersona]);
-
-  // Rehydrate focus areas from onboarding_data on user load/change
-  useEffect(() => {
-    if (user?.id) {
-      const onboardingData = user.onboarding_data as any;
-      const focusAreas = onboardingData?.work?.focusAreas || user?.focusAreas || [];
-      setFocusAreasInput(focusAreas.join(', '));
-      console.log('🔄 Rehydrated focus areas from onboarding_data:', focusAreas);
-    }
-  }, [user?.id, user?.onboarding_data]);
+    // Access store method directly without dependency (async IIFE for error handling)
+    (async () => {
+      try {
+        // FIX: Force refresh on page load to ensure projects created via chat are visible
+        // Previously was false, which would use cached data and miss newly created projects
+        await usePersonasStore.getState().fetchPersonaByIam(null as any, user.iam, true);
+      } catch (error) {
+        console.error('❌ DIGITAL BRAIN: PersonasStore hydration error:', error);
+        console.debug("PersonasStore hydration completed or auto-cancelled");
+        loadedUserRef.current = null; // Reset on error to allow retry
+      }
+    })();
+  }, [user?.iam, loading, currentPersona]);
 
   // Subscribe to store projects for real-time updates
   const storeProjects = usePersonasStore(state => state.projects);
+
+  // Intelligent focus area analysis - automatic, no manual intervention
+  // Use ref to track if analysis has been performed for this user
+  const focusAreasAnalyzedRef = useRef<string | null>(null);
+  
+  useEffect(() => {
+    const analyzeAndUpdateFocusAreas = async () => {
+      if (!user?.id) return;
+
+      // Prevent multiple concurrent analyses
+      if (isAnalyzingFocusAreas) {
+        console.log('⏳ DIGITAL BRAIN: Focus area analysis already in progress, skipping');
+        return;
+      }
+
+      // Skip if already analyzed for this user (unless 7 days have passed)
+      const onboardingData = user.onboarding_data as any;
+      const lastUpdated = onboardingData?.work?.focusAreasUpdatedAt || null;
+      
+      if (focusAreasAnalyzedRef.current === user.id && lastUpdated && !shouldRecalculateFocusAreas(lastUpdated)) {
+        console.log('⏭️ DIGITAL BRAIN: Focus areas already analyzed for this user, skipping');
+        return;
+      }
+
+      try {
+        // Check if we need to recalculate (every 7 days or if empty)
+        const storedAreas = onboardingData?.work?.focusAreas || [];
+
+        // Load existing areas first
+        if (storedAreas.length > 0 && !shouldRecalculateFocusAreas(lastUpdated)) {
+          setFocusAreas(storedAreas);
+          focusAreasAnalyzedRef.current = user.id;
+          console.log('✅ Loaded existing focus areas:', storedAreas);
+          return;
+        }
+
+        // Perform intelligent analysis
+        setIsAnalyzingFocusAreas(true);
+        console.log('🧠 Analyzing professional focus areas automatically...');
+
+        // Get role from onboarding or profile
+        const role = onboardingData?.work?.role || onboardingData?.identity?.role || 'Professional';
+
+        // Get recent chat messages
+        const chatMessages = await getRecentMessagesFromActiveSession(50);
+        setRecentChatMessages(chatMessages); // Cache for focus area insights
+
+        // Analyze using intelligent algorithm
+        const intelligentAreas = analyzeIntelligentFocusAreas(
+          storeProjects,
+          chatMessages,
+          role,
+          5 // Max 5 areas
+        );
+
+        if (intelligentAreas.length > 0) {
+          setFocusAreas(intelligentAreas);
+
+          // Save to database with timestamp
+          await updateUserProfile(user.id, {
+            focusAreas: intelligentAreas,
+          });
+
+          // Also update the timestamp in onboarding_data
+          await supabase
+            .from('profiles')
+            .update({
+              onboarding_data: {
+                ...onboardingData,
+                work: {
+                  ...(onboardingData?.work || {}),
+                  focusAreas: intelligentAreas,
+                  focusAreasUpdatedAt: new Date().toISOString(),
+                }
+              }
+            })
+            .eq('id', user.id);
+
+          focusAreasAnalyzedRef.current = user.id;
+          console.log('✅ Automatically updated focus areas:', intelligentAreas);
+        } else {
+          console.warn('⚠️ No focus areas detected from analysis');
+        }
+      } catch (error) {
+        console.error('Failed to analyze focus areas:', error);
+      } finally {
+        setIsAnalyzingFocusAreas(false);
+      }
+    };
+
+    analyzeAndUpdateFocusAreas();
+  }, [user?.id, storeProjects.length]);
 
   // Memoize data retrieval to prevent unnecessary recalculations
   const { projects, milestones, goals } = useMemo(() => {
@@ -126,11 +277,17 @@ const DigitalBrain: React.FC = () => {
     );
 
     // Filter for active items only (exclude completed/deleted)
-    const projects = allProjects.filter(p =>
-      p.active !== false &&
-      p.status !== 'deleted' &&
-      p.status !== 'completed'
-    );
+    // FIX: Normalize status check to be case-insensitive and simpler
+    const projects = allProjects.filter(p => {
+      const normalizedStatus = p.status?.toString().toLowerCase() || '';
+      const isActive = p.active !== false &&
+        normalizedStatus !== 'deleted' &&
+        normalizedStatus !== 'completed';
+      console.log(`🧠 DIGITAL BRAIN - Project "${p.name}": active=${p.active}, status="${p.status}", normalizedStatus="${normalizedStatus}", isActive=${isActive}`);
+      return isActive;
+    });
+
+    console.log(`🧠 DIGITAL BRAIN: Total projects from store: ${allProjects.length}, Active projects after filter: ${projects.length}`);
 
     const milestones = allMilestones.filter(m =>
       m.status !== 'completed' &&
@@ -194,24 +351,64 @@ const DigitalBrain: React.FC = () => {
       });
   }, [user?.id, goals.length, milestones.length]);
 
-  // Handler functions for editable fields
-  const handleSaveFocusAreas = async () => {
-    if (!user?.id) return;
-    const areas = focusAreasInput.split(',').map(a => a.trim()).filter(Boolean);
+  // Handle focus area chip click
+  const handleFocusAreaClick = async (area: string, event: React.MouseEvent<HTMLDivElement>) => {
+    const chipElement = event.currentTarget;
 
-    // Validation: require non-empty focus areas
-    if (areas.length === 0) {
-      console.warn('Focus areas cannot be empty');
-      return;
-    }
+    // Generate insights for this focus area
+    const insight = analyzeFocusAreaInsights(area, storeProjects, recentChatMessages);
+
+    setSelectedFocusArea({
+      area,
+      insight,
+      chipElement,
+    });
+  };
+
+  // Force recalculation of focus areas (manual trigger if needed)
+  const handleRecalculateFocusAreas = async () => {
+    if (!user?.id || isAnalyzingFocusAreas) return;
+
+    setIsAnalyzingFocusAreas(true);
+    console.log('🔄 Manually triggered focus area recalculation...');
 
     try {
-      await updateUserProfile(user.id, { focusAreas: areas });
-      // No refetch needed - changes persist via write-through
-      setEditingFocusAreas(false);
+      const onboardingData = user.onboarding_data as any;
+      const role = onboardingData?.work?.role || onboardingData?.identity?.role || 'Professional';
+      const chatMessages = await getRecentMessagesFromActiveSession(50);
+
+      const intelligentAreas = analyzeIntelligentFocusAreas(
+        storeProjects,
+        chatMessages,
+        role,
+        5
+      );
+
+      if (intelligentAreas.length > 0) {
+        setFocusAreas(intelligentAreas);
+
+        await updateUserProfile(user.id, { focusAreas: intelligentAreas });
+
+        await supabase
+          .from('profiles')
+          .update({
+            onboarding_data: {
+              ...onboardingData,
+              work: {
+                ...(onboardingData?.work || {}),
+                focusAreas: intelligentAreas,
+                focusAreasUpdatedAt: new Date().toISOString(),
+              }
+            }
+          })
+          .eq('id', user.id);
+
+        console.log('✅ Focus areas recalculated:', intelligentAreas);
+      }
     } catch (error) {
-      console.error('Failed to save focus areas:', error);
-      // On failure, could add rollback UI notification here
+      console.error('Failed to recalculate focus areas:', error);
+    } finally {
+      setIsAnalyzingFocusAreas(false);
     }
   };
 
@@ -320,29 +517,6 @@ const DigitalBrain: React.FC = () => {
 
     return () => clearTimeout(debounceTimer);
   }, [growthTrackerInput, editingGrowthTracker, user?.id]);
-
-  // Focus Areas: Debounced auto-save while typing
-  useEffect(() => {
-    if (!editingFocusAreas || !user?.id) return;
-
-    const debounceTimer = setTimeout(async () => {
-      const areas = focusAreasInput.split(',').map(a => a.trim()).filter(Boolean);
-
-      // Deduplicate areas
-      const uniqueAreas = Array.from(new Set(areas));
-
-      if (uniqueAreas.length > 0) {
-        try {
-          await updateUserProfile(user.id, { focusAreas: uniqueAreas });
-          console.log(`💾 [${new Date().toLocaleTimeString()}] Focus Areas auto-saved:`, uniqueAreas);
-        } catch (error) {
-          console.error('Failed to auto-save focus areas:', error);
-        }
-      }
-    }, 300); // 300ms debounce (faster for better UX)
-
-    return () => clearTimeout(debounceTimer);
-  }, [focusAreasInput, editingFocusAreas, user?.id]);
 
   // Knowledge Graph is now data-driven from Zustand stores
 
@@ -716,66 +890,68 @@ const DigitalBrain: React.FC = () => {
                     {user?.nickname?.charAt(0)?.toUpperCase() || user?.preferredName?.charAt(0)?.toUpperCase() || 'U'}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="text-sm font-semibold text-white">{user?.nickname || user?.preferredName || user?.email?.split('@')[0] || 'User'}</h3>
-                    <p className="text-xs text-white/70 leading-relaxed mt-1 pr-2">
-                      {user?.bio || user?.mainPriority || 'Finish setting up in Avatar.'}
+                    <h3
+                      onClick={() => setShowPersonalSnapshot(true)}
+                      className="text-sm font-semibold text-white cursor-pointer hover:text-purple-300 transition-colors"
+                    >
+                      {user?.nickname || user?.preferredName || user?.email?.split('@')[0] || 'User'}
+                    </h3>
+                    <p className="text-xs text-white/70 leading-relaxed mt-1 pr-2 line-clamp-3">
+                      {generateProfessionalDescription(user?.onboarding_data)}
                     </p>
                   </div>
                 </div>
 
               </div>
 
-              {/* Skills & USP Section */}
-              <div className="mb-4 px-3 py-2 bg-white/5 rounded-lg border border-purple-500/20">
-                <div className="flex items-center justify-between mb-2">
+              {/* Professional Focus Areas - Automatically Analyzed */}
+              <div className="mb-4 px-3 py-2.5 bg-gradient-to-br from-white/[0.07] to-white/[0.03] rounded-lg border border-purple-500/15 shadow-sm">
+                <div className="flex items-center justify-between mb-2.5">
                   <div className="flex items-center gap-2">
-                    <Star size={12} className="text-purple-400" />
-                    <span className="text-xs font-medium text-purple-400">Focus Areas</span>
+                    <Compass size={13} className="text-purple-300" />
+                    <span className="text-xs font-semibold text-purple-200 tracking-wide">Professional Focus</span>
                   </div>
-                  <button
-                    onClick={() => {
-                      if (editingFocusAreas) {
-                        handleSaveFocusAreas();
-                      } else {
-                        setFocusAreasInput(user?.focusAreas?.join(', ') || '');
-                        setEditingFocusAreas(true);
-                      }
-                    }}
-                    className="text-xs text-white/60 hover:text-white transition-colors"
-                  >
-                    {editingFocusAreas ? 'Save' : 'Edit'}
-                  </button>
+                  {focusAreas.length > 0 && (
+                    <button
+                      onClick={handleRecalculateFocusAreas}
+                      disabled={isAnalyzingFocusAreas}
+                      className="text-[10px] text-white/40 hover:text-white/60 transition-colors disabled:opacity-50 flex items-center gap-1"
+                      title="Recalculate focus areas"
+                    >
+                      {isAnalyzingFocusAreas ? (
+                        <>
+                          <Loader2 size={10} className="animate-spin" />
+                          Analyzing...
+                        </>
+                      ) : (
+                        'Auto-updated'
+                      )}
+                    </button>
+                  )}
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {editingFocusAreas ? (
-                    <input
-                      type="text"
-                      value={focusAreasInput}
-                      onChange={(e) => setFocusAreasInput(e.target.value)}
-                      onBlur={handleSaveFocusAreas}
-                      onKeyDown={(e) => e.key === 'Enter' && handleSaveFocusAreas()}
-                      className="w-full bg-white/10 text-white text-xs rounded px-2 py-1 border border-purple-500/20 focus:outline-none focus:border-purple-500/40"
-                      placeholder="Enter focus areas (comma separated)"
-                      autoFocus
-                    />
+                  {focusAreas.length > 0 ? (
+                    focusAreas.map((area, index) => (
+                      <div
+                        key={`${area}-${index}`}
+                        onClick={(e) => handleFocusAreaClick(area, e)}
+                        className="px-3 py-1.5 bg-gradient-to-r from-purple-500/15 to-purple-600/10 text-purple-100 text-[11px] font-medium rounded-full border border-purple-400/20 shadow-sm backdrop-blur-sm hover:from-purple-500/20 hover:to-purple-600/15 transition-all duration-200 cursor-pointer"
+                        data-area={area}
+                      >
+                        {area}
+                      </div>
+                    ))
                   ) : (
-                    <>
-                      {(() => {
-                        const onboardingData = user?.onboarding_data as any;
-                        const focusAreas = onboardingData?.work?.focusAreas || user?.focusAreas || [];
-                        return focusAreas.length > 0 ? (
-                          focusAreas.slice(0, 3).map((area: string, index: number) => (
-                            <span key={index} className="px-2 py-1 bg-purple-500/10 text-purple-300 text-xs rounded-full border border-purple-500/20">
-                              {area}
-                            </span>
-                        ))
+                    <div className="flex flex-col items-center justify-center w-full py-2">
+                      {isAnalyzingFocusAreas ? (
+                        <>
+                          <Loader2 size={16} className="animate-spin text-purple-400 mb-1" />
+                          <span className="text-[10px] text-white/40">Analyzing your professional focus...</span>
+                        </>
                       ) : (
-                        <span className="text-xs text-white/40">
-                          Finish setting up in Avatar.
-                        </span>
-                      );
-                      })()}
-                    </>
+                        <span className="text-[10px] text-white/30">Add projects and start chatting to see your focus areas</span>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
@@ -788,7 +964,13 @@ const DigitalBrain: React.FC = () => {
                     <Zap size={12} className="text-purple-400" />
                     <span className="text-xs font-medium text-purple-400">Projects</span>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 flex-1 overflow-y-auto pr-1">
+                  <div
+                    className={`grid grid-cols-2 gap-2 pr-1 ${
+                      projects.length > 2
+                        ? 'h-[95px] overflow-y-auto scrollbar-thin scrollbar-thumb-purple-500/40 scrollbar-track-transparent'
+                        : 'h-auto overflow-visible'
+                    }`}
+                  >
                     {projects.map((project) => (
                       <div
                         key={project.id}
@@ -803,7 +985,7 @@ const DigitalBrain: React.FC = () => {
                           ></div>
                         </div>
                         <div className="text-xs text-white/50 truncate mb-1">
-                          {(project.goals || []).filter(g => g.status !== 'deleted' && g.status !== 'Completed').length} goals
+                          {getTimeHorizonSummary((project.goals || []).filter(g => g.status !== 'deleted' && g.status !== 'Completed'))}
                         </div>
                         <div className="w-full bg-white/10 rounded-full h-1">
                           <div
@@ -1205,6 +1387,27 @@ const DigitalBrain: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Focus Area Insights Card */}
+      {selectedFocusArea && (
+        <FocusAreaCard
+          insight={selectedFocusArea.insight}
+          chipElement={selectedFocusArea.chipElement}
+          onClose={() => setSelectedFocusArea(null)}
+        />
+      )}
+
+      {/* Personal Snapshot Overlay */}
+      {showPersonalSnapshot && user && (
+        <PersonalSnapshotOverlay
+          user={user}
+          projects={projects}
+          allGoals={goals}
+          focusAreas={focusAreas}
+          userLevel={userLevel}
+          onClose={() => setShowPersonalSnapshot(false)}
+        />
       )}
     </div>
   );

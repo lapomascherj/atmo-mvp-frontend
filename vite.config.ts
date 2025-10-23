@@ -8,6 +8,8 @@ export default defineConfig(({ mode }) => ({
     host: "::",
     port: 3000,
     strictPort: false,
+    // Enable SPA routing - serve index.html for all routes
+    historyApiFallback: true,
   },
   optimizeDeps: {
     exclude: ["lovable-tagger"],

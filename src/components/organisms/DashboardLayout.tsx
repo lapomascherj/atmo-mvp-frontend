@@ -7,6 +7,7 @@ import { Button } from '../atoms/Button.tsx';
 import { Badge } from '../atoms/Badge.tsx';
 import { Target, Plus, BarChart3 } from 'lucide-react';
 import { usePersonasStore } from '@/stores/usePersonasStore.ts';
+import { promptStore } from '@/stores/promptStore.ts';
 import useMockAuth from '@/hooks/useMockAuth';
 import { Priority } from '@/models/Priority.ts';
 import HorizontalScrollGrid from '@/components/atoms/HorizontalScrollGrid.tsx';
@@ -19,6 +20,9 @@ import InteractiveDivider from '@/components/atoms/InteractiveDivider.tsx';
 import { CompactSchedulerView } from '@/components/scheduler/CompactSchedulerView.tsx';
 import { useSchedulerSync } from '@/hooks/useSchedulerSync.ts';
 import { PriorityStreamEnhanced } from '@/components/organisms/PriorityStreamEnhanced';
+import TodaysActionsCard from '@/components/organisms/TodaysActionsCard';
+import { saveAIMessage } from '@/services/chatSessionService.ts';
+import { useChatSessionsStore } from '@/stores/chatSessionsStore.ts';
 
 interface DashboardLayoutProps {
   userName: string;
@@ -33,19 +37,41 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ userName }) => {
   const getProjects = usePersonasStore(state => state.getProjects);
   const getTasks = usePersonasStore(state => state.getTasks);
   const getGoals = usePersonasStore(state => state.getGoals);
-  
+
   // Get user data for dashboard
   const { user } = useMockAuth();
 
   // Initialize PersonasStore on mount and when route changes
+  // Stable ref to track if we've already loaded for this user
+  const loadedUserRef = React.useRef<string | null>(null);
+  
   useEffect(() => {
-    if (user?.iam && !loading) {
-      console.log("📊 DASHBOARD: Hydrating PersonasStore for user:", user.iam);
-      fetchPersonaByIam(null as any, user.iam, !currentPersona).catch(error => {
-        console.debug("PersonasStore hydration completed or auto-cancelled");
-      });
+    if (!user?.iam) {
+      return;
     }
-  }, [user?.iam, loading, fetchPersonaByIam]);
+
+    // Skip if already loading or if we've already loaded for this user
+    if (loading || loadedUserRef.current === user.iam) {
+      return;
+    }
+
+    // Skip if persona is already loaded for this user
+    if (currentPersona && currentPersona.iam === user.iam) {
+      loadedUserRef.current = user.iam;
+      return;
+    }
+
+    loadedUserRef.current = user.iam;
+
+    // Access store method directly without dependency (async IIFE for error handling)
+    (async () => {
+      try {
+        await usePersonasStore.getState().fetchPersonaByIam(null as any, user.iam, false);
+      } catch (error) {
+        loadedUserRef.current = null; // Reset on error to allow retry
+      }
+    })();
+  }, [user?.iam, loading]); // Removed currentPersona dependency
 
   // Add modal state for project creation
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
@@ -61,6 +87,38 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ userName }) => {
   // Scheduler state - synced across dashboard and Digital Brain
   const [selectedDate, setSelectedDate] = useState(new Date());
   const { events: schedulerEvents, updateEvents: setSchedulerEvents } = useSchedulerSync(selectedDate);
+
+  // Handler for Today's Actions - ATMO asks the question in main chat
+  const handleOpenChatWithQuestion = async (question: string, color: "green" | "yellow" | "purple") => {
+    console.log('🎯 Today\'s Actions clicked:', { question, color });
+    const { addHighlightedAIQuestion, toggleConversationStarted, isConversationStarted } = promptStore.getState();
+    const { refreshActiveSession } = useChatSessionsStore.getState();
+
+    // Add the highlighted question from ATMO to main chat history (in-memory)
+    addHighlightedAIQuestion(question, color);
+    console.log('✅ Question added to main chat with color:', color);
+
+    // Start conversation if not started
+    if (!isConversationStarted) {
+      toggleConversationStarted();
+      console.log('✅ Conversation started in main chat');
+    }
+
+    // Save the question to the database with color so it persists across refreshes
+    try {
+      await saveAIMessage(question, color);
+      console.log('✅ Question saved to database with color:', color);
+
+      // Refresh the active session to sync the database message
+      await refreshActiveSession({ force: true });
+      console.log('✅ Chat session refreshed');
+    } catch (error) {
+      console.error('❌ Failed to save question to database:', error);
+    }
+
+    // NO NAVIGATION - question appears in main chat on Dashboard
+    // The CenterColumn component already displays the history, so the question appears immediately
+  };
 
   // Check for new mantra content (6am daily)
   React.useEffect(() => {
@@ -110,7 +168,15 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ userName }) => {
 
   // Memoize dashboard calculations to prevent re-computation on every render
   const dashboardStats = useMemo(() => {
-    const activeProjects = projects.filter(project => project.active !== false).slice(0, 4);
+    // More robust filtering: include projects that are explicitly active or have no active field set
+    const activeProjects = projects.filter(project => {
+      const isActive = project.active !== false && project.status !== 'deleted' && project.status !== 'completed';
+      console.log(`📊 Project "${project.name}": active=${project.active}, status=${project.status}, isActive=${isActive}`);
+      return isActive;
+    }).slice(0, 4);
+    
+    console.log(`📊 DASHBOARD STATS: Total projects: ${projects.length}, Active projects: ${activeProjects.length}`);
+    
     const completedTasks = tasks.filter(t => t.completed).length;
     const totalTasks = tasks.length;
     const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
@@ -181,7 +247,9 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ userName }) => {
                 }}
               >
                 <div className="w-full h-full overflow-hidden">
-                    <CenterColumn maxWidthPercent={dividerPosition} />
+                    <CenterColumn
+                      maxWidthPercent={dividerPosition}
+                    />
                 </div>
               </div>
 
@@ -222,21 +290,8 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ userName }) => {
                     <PriorityStreamEnhanced compact={false} priorityOnly={true} context="dashboard" className="w-full h-full" />
                   </div>
 
-                  {/* Card 2 */}
-                  <AtmoCard
-                    className="w-72 h-64"
-                    variant="gold"
-                  >
-                    <CardContent className="h-full flex items-center justify-center p-4">
-                      <div className="text-center text-white/40">
-                        <div className="w-10 h-10 mx-auto mb-3 rounded-full bg-yellow-500/20 flex items-center justify-center">
-                          <div className="w-4 h-4 rounded-full bg-yellow-500/60"></div>
-                        </div>
-                        <p className="text-sm font-medium">Card 2</p>
-                        <p className="text-xs opacity-60 mt-1">Coming Soon</p>
-                      </div>
-                    </CardContent>
-                  </AtmoCard>
+                  {/* Card 2 - Today's Actions */}
+                  <TodaysActionsCard onOpenChat={handleOpenChatWithQuestion} />
                   </div>
                 </div>
               </div>

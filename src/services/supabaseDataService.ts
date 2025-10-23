@@ -457,9 +457,23 @@ const mapProjectRow = (
   knowledgeItems: KnowledgeItem[],
   standaloneTasks: Task[]
 ): Project => {
-  // REMOVED: No longer creating virtual "Tasks" goal
-  // Tasks must have a real goal_id to appear in Priority Stream
   const combinedGoals = [...goals];
+
+  // Add standalone tasks (goal_id = null) to a virtual goal for display only
+  // This virtual goal is NOT stored in database - it's only for UI rendering
+  if (standaloneTasks.length > 0) {
+    combinedGoals.push({
+      id: `${row.id}-standalone-virtual`,
+      name: 'Standalone Tasks',
+      status: Status.Active,
+      priority: Priority.Medium,
+      targetDate: row.target_date ?? new Date().toISOString(),
+      completedDate: undefined,
+      description: 'Tasks without a goal assignment',
+      order: 999,
+      tasks: standaloneTasks,
+    });
+  }
 
   return {
     id: row.id,
@@ -513,9 +527,11 @@ const normaliseError = (error: PostgrestError | Error | null | undefined): Error
 };
 
 export const fetchWorkspaceGraph = async (ownerId: string): Promise<WorkspaceGraph> => {
+  console.log(`🗄️ [supabaseDataService.fetchWorkspaceGraph] Fetching for owner:`, ownerId);
+
   const [projectsRes, goalsRes, tasksRes, milestonesRes, knowledgeRes, knowledgeLinksRes, insightsRes] =
     await Promise.all([
-      supabase.from<ProjectRow>('projects').select('*').eq('owner_id', ownerId).order('created_at', { ascending: true }),
+      supabase.from<ProjectRow>('projects').select('*').eq('owner_id', ownerId).or('status.is.null,status.neq.deleted').order('created_at', { ascending: true }),
       supabase.from<GoalRow>('project_goals').select('*').eq('owner_id', ownerId),
       supabase
         .from<TaskRow>('project_tasks')
@@ -530,6 +546,18 @@ export const fetchWorkspaceGraph = async (ownerId: string): Promise<WorkspaceGra
       supabase.from<UserInsightRow>('user_insights').select('*').eq('owner_id', ownerId).order('created_at', { ascending: false }),
     ]);
 
+  console.log(`   → Database query results:`);
+  console.log(`      Projects: ${projectsRes.data?.length || 0}`, projectsRes.error ? `ERROR: ${projectsRes.error.message}` : '');
+  console.log(`      Goals: ${goalsRes.data?.length || 0}`, goalsRes.error ? `ERROR: ${goalsRes.error.message}` : '');
+  console.log(`      Tasks: ${tasksRes.data?.length || 0}`, tasksRes.error ? `ERROR: ${tasksRes.error.message}` : '');
+
+  if (projectsRes.data && projectsRes.data.length > 0) {
+    console.log(`   → Raw projects from DB:`);
+    projectsRes.data.forEach((p, i) => {
+      console.log(`      ${i+1}. "${p.name}": status=${p.status}, active=${p.active}, id=${p.id}`);
+    });
+  }
+
   const firstError =
     normaliseError(projectsRes.error) ||
     normaliseError(goalsRes.error) ||
@@ -540,6 +568,7 @@ export const fetchWorkspaceGraph = async (ownerId: string): Promise<WorkspaceGra
     normaliseError(insightsRes.error);
 
   if (firstError) {
+    console.error(`❌ [supabaseDataService] Database error:`, firstError);
     throw firstError;
   }
 

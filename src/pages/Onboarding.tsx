@@ -174,20 +174,98 @@ const reviewTabs = [
   'Files',
 ] as const;
 
+const DRAFT_STORAGE_KEY = 'atmo_onboarding_draft';
+
 const Onboarding: React.FC = () => {
   const navigate = useNavigate();
   const { completeOnboarding, hydratedProfile } = useAuth();
 
+  // Check if user has already completed onboarding - if so, redirect immediately
+  React.useEffect(() => {
+    if (hydratedProfile?.onboarding_completed) {
+      console.log('⏭️ ONBOARDING: User already completed onboarding, redirecting...');
+      navigate('/app', { replace: true });
+    }
+  }, [hydratedProfile?.onboarding_completed, navigate]);
+
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
-  const [formState, setFormState] = useState<FormState>(defaultFormState);
+  const [formState, setFormState] = useState<FormState>(() => {
+    // Don't restore draft if user already completed onboarding
+    if (hydratedProfile?.onboarding_completed) {
+      return defaultFormState;
+    }
+
+    // Try to restore from localStorage on mount
+    try {
+      const saved = localStorage.getItem(DRAFT_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Check if draft is stale (older than 7 days)
+        const savedAt = parsed.savedAt ? new Date(parsed.savedAt) : null;
+        const now = new Date();
+        const daysSinceSave = savedAt ? (now.getTime() - savedAt.getTime()) / (1000 * 60 * 60 * 24) : Infinity;
+        
+        if (daysSinceSave < 7) {
+          console.log('📥 Restored onboarding draft from localStorage');
+          return parsed.formState || defaultFormState;
+        } else {
+          console.log('🗑️ Onboarding draft is stale, clearing...');
+          localStorage.removeItem(DRAFT_STORAGE_KEY);
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to restore onboarding draft:', error);
+    }
+    return defaultFormState;
+  });
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [activeReviewTab, setActiveReviewTab] = useState<(typeof reviewTabs)[number]>(
     reviewTabs[0]
   );
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
   const currentStep = stepOrder[currentStepIndex];
+
+  // Auto-save to localStorage whenever formState changes (debounced)
+  // Use ref to prevent saving default state on mount
+  const hasUserInputRef = React.useRef(false);
+  const saveTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  
+  React.useEffect(() => {
+    // Skip first render (mount) to avoid saving empty state
+    if (!hasUserInputRef.current) {
+      hasUserInputRef.current = true;
+      return;
+    }
+
+    // Debounce saves to avoid too frequent writes
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    saveTimeoutRef.current = setTimeout(() => {
+      try {
+        const draft = {
+          formState,
+          currentStepIndex,
+          savedAt: new Date().toISOString(),
+        };
+        localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+        setLastSaved(new Date());
+        console.log('💾 Auto-saved onboarding draft to localStorage');
+      } catch (error) {
+        console.warn('Failed to save onboarding draft:', error);
+      }
+    }, 1000); // Debounce for 1 second
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [formState, currentStepIndex]);
 
   const resetErrorForPrefix = (prefix: string) => {
     setValidationErrors((prev) => {
@@ -464,6 +542,14 @@ const Onboarding: React.FC = () => {
         setSubmitError(error);
         setIsSubmitting(false);
         return;
+      }
+
+      // Clear localStorage draft after successful submission
+      try {
+        localStorage.removeItem(DRAFT_STORAGE_KEY);
+        console.log('🗑️ Cleared onboarding draft from localStorage after successful submission');
+      } catch (error) {
+        console.warn('Failed to clear onboarding draft:', error);
       }
 
       navigate('/app', { replace: true });
@@ -1206,8 +1292,16 @@ const Onboarding: React.FC = () => {
               {stepMeta[currentStep].description}
             </p>
           </div>
-          <div className="text-right text-white/50 text-xs uppercase tracking-wide">
-            Step {currentStepIndex + 1} of {stepOrder.length}
+          <div className="text-right">
+            <div className="text-white/50 text-xs uppercase tracking-wide">
+              Step {currentStepIndex + 1} of {stepOrder.length}
+            </div>
+            {lastSaved && (
+              <div className="text-green-400/60 text-[10px] mt-1 flex items-center justify-end gap-1">
+                <Check size={10} />
+                Draft saved
+              </div>
+            )}
           </div>
         </div>
 

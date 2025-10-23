@@ -1,8 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Edit3, Check, Plus, Trash2 } from 'lucide-react';
+import { X, Edit3, Check, Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 import type { Project } from '@/models/Project';
 import type { Goal } from '@/models/Goal';
 import { usePersonasStore } from '@/stores/usePersonasStore';
+import {
+  categorizeGoalsByTimeHorizon,
+  TimeHorizon,
+  TIME_HORIZON_LABELS,
+  type GoalsByTimeHorizon,
+} from '@/utils/timeHorizonCalculator';
 
 interface ProjectDetailOverlayProps {
   project: Project;
@@ -52,6 +58,9 @@ export const ProjectDetailOverlay: React.FC<ProjectDetailOverlayProps> = ({ proj
 
   // Delete confirmation state
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  // Time horizon collapsed state
+  const [collapsedHorizons, setCollapsedHorizons] = useState<Set<TimeHorizon>>(new Set());
 
   // Store actions
   const updateProject = usePersonasStore(state => state.updateProject);
@@ -123,6 +132,20 @@ export const ProjectDetailOverlay: React.FC<ProjectDetailOverlayProps> = ({ proj
   };
 
   const activeGoals = (project.goals || []).filter(g => g.status !== 'deleted' && g.status !== 'Completed');
+
+  // Categorize goals by time horizon
+  const goalsByHorizon: GoalsByTimeHorizon = categorizeGoalsByTimeHorizon(activeGoals);
+
+  // Toggle horizon collapse
+  const toggleHorizon = (horizon: TimeHorizon) => {
+    const newCollapsed = new Set(collapsedHorizons);
+    if (newCollapsed.has(horizon)) {
+      newCollapsed.delete(horizon);
+    } else {
+      newCollapsed.add(horizon);
+    }
+    setCollapsedHorizons(newCollapsed);
+  };
 
   return (
     <div ref={overlayRef} className="absolute inset-0 bg-slate-900/95 backdrop-blur-sm z-10 p-4 overflow-y-auto rounded-2xl">
@@ -374,55 +397,293 @@ export const ProjectDetailOverlay: React.FC<ProjectDetailOverlayProps> = ({ proj
           </div>
         )}
 
-        {/* Goals List */}
-        <div className="space-y-2">
-          {activeGoals.map(goal => (
-            <div
-              key={goal.id}
-              className="bg-white/5 rounded-lg p-3 border transition-colors"
-              style={{ borderColor: `${project.color || '#a855f7'}40` }}
-            >
-              <div className="flex items-center justify-between mb-1">
-                <div className="flex items-center gap-2 flex-1">
-                  <div
-                    className="w-2 h-2 rounded-full"
-                    style={{ backgroundColor: project.color || '#a855f7' }}
-                  ></div>
-                  <span className="text-sm text-white font-medium">{goal.name}</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => handleToggleGoalStatus(goal)}
-                    className="px-2 py-1 text-xs rounded transition-colors"
-                    style={{
-                      backgroundColor: goal.status === 'Completed' ? '#22c55e40' : `${project.color || '#a855f7'}20`,
-                      color: goal.status === 'Completed' ? '#22c55e' : project.color || '#a855f7'
-                    }}
-                  >
-                    {goal.status === 'Completed' ? 'Done' : goal.status || 'Active'}
-                  </button>
-                  <button
-                    onClick={() => handleDeleteGoal(goal.id)}
-                    className="text-red-400/60 hover:text-red-400 transition-colors"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              </div>
-              {goal.description && (
-                <p className="text-xs text-white/60 mt-1 ml-4">{goal.description}</p>
-              )}
-              {goal.targetDate && (
-                <p className="text-xs mt-2 ml-4" style={{ color: project.color || '#a855f7' }}>
-                  Target: {new Date(goal.targetDate).toLocaleDateString()}
-                </p>
-              )}
-            </div>
-          ))}
-          {activeGoals.length === 0 && !creatingGoal && (
+        {/* Goals by Time Horizon */}
+        <div className="space-y-3">
+          {activeGoals.length === 0 && !creatingGoal ? (
             <p className="text-xs text-white/40 bg-white/5 rounded-lg p-3 text-center">
               Finish setting up in Avatar.
             </p>
+          ) : (
+            <>
+              {/* Short-term Goals */}
+              {goalsByHorizon[TimeHorizon.ShortTerm].length > 0 && (
+                <div>
+                  <button
+                    onClick={() => toggleHorizon(TimeHorizon.ShortTerm)}
+                    className="w-full flex items-center justify-between mb-2 group"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">{TIME_HORIZON_LABELS[TimeHorizon.ShortTerm].emoji}</span>
+                      <span className="text-sm font-medium text-white">
+                        {TIME_HORIZON_LABELS[TimeHorizon.ShortTerm].label}
+                      </span>
+                      <span className="text-xs text-white/40">
+                        ({goalsByHorizon[TimeHorizon.ShortTerm].length})
+                      </span>
+                    </div>
+                    {collapsedHorizons.has(TimeHorizon.ShortTerm) ? (
+                      <ChevronDown size={16} className="text-white/60 group-hover:text-white/80" />
+                    ) : (
+                      <ChevronUp size={16} className="text-white/60 group-hover:text-white/80" />
+                    )}
+                  </button>
+                  {!collapsedHorizons.has(TimeHorizon.ShortTerm) && (
+                    <div className="space-y-2 ml-2">
+                      {goalsByHorizon[TimeHorizon.ShortTerm].map(goal => (
+                        <div
+                          key={goal.id}
+                          className="bg-white/5 rounded-lg p-3 border border-purple-500/20 transition-colors hover:border-purple-500/30"
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center gap-2 flex-1">
+                              <div
+                                className="w-2 h-2 rounded-full"
+                                style={{ backgroundColor: project.color || '#a855f7' }}
+                              ></div>
+                              <span className="text-sm text-white font-medium">{goal.name}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => handleToggleGoalStatus(goal)}
+                                className="px-2 py-1 text-xs rounded transition-colors"
+                                style={{
+                                  backgroundColor: goal.status === 'Completed' ? '#22c55e40' : `${project.color || '#a855f7'}20`,
+                                  color: goal.status === 'Completed' ? '#22c55e' : project.color || '#a855f7'
+                                }}
+                              >
+                                {goal.status === 'Completed' ? 'Done' : goal.status || 'Active'}
+                              </button>
+                              <button
+                                onClick={() => handleDeleteGoal(goal.id)}
+                                className="text-red-400/60 hover:text-red-400 transition-colors"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </div>
+                          {goal.description && (
+                            <p className="text-xs text-white/60 mt-1 ml-4">{goal.description}</p>
+                          )}
+                          {goal.targetDate && (
+                            <p className="text-xs mt-2 ml-4" style={{ color: project.color || '#a855f7' }}>
+                              Target: {new Date(goal.targetDate).toLocaleDateString()}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Medium-term Goals */}
+              {goalsByHorizon[TimeHorizon.MediumTerm].length > 0 && (
+                <div>
+                  <button
+                    onClick={() => toggleHorizon(TimeHorizon.MediumTerm)}
+                    className="w-full flex items-center justify-between mb-2 group"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">{TIME_HORIZON_LABELS[TimeHorizon.MediumTerm].emoji}</span>
+                      <span className="text-sm font-medium text-white">
+                        {TIME_HORIZON_LABELS[TimeHorizon.MediumTerm].label}
+                      </span>
+                      <span className="text-xs text-white/40">
+                        ({goalsByHorizon[TimeHorizon.MediumTerm].length})
+                      </span>
+                    </div>
+                    {collapsedHorizons.has(TimeHorizon.MediumTerm) ? (
+                      <ChevronDown size={16} className="text-white/60 group-hover:text-white/80" />
+                    ) : (
+                      <ChevronUp size={16} className="text-white/60 group-hover:text-white/80" />
+                    )}
+                  </button>
+                  {!collapsedHorizons.has(TimeHorizon.MediumTerm) && (
+                    <div className="space-y-2 ml-2">
+                      {goalsByHorizon[TimeHorizon.MediumTerm].map(goal => (
+                        <div
+                          key={goal.id}
+                          className="bg-white/5 rounded-lg p-3 border border-blue-500/20 transition-colors hover:border-blue-500/30"
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center gap-2 flex-1">
+                              <div
+                                className="w-2 h-2 rounded-full"
+                                style={{ backgroundColor: project.color || '#a855f7' }}
+                              ></div>
+                              <span className="text-sm text-white font-medium">{goal.name}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => handleToggleGoalStatus(goal)}
+                                className="px-2 py-1 text-xs rounded transition-colors"
+                                style={{
+                                  backgroundColor: goal.status === 'Completed' ? '#22c55e40' : `${project.color || '#a855f7'}20`,
+                                  color: goal.status === 'Completed' ? '#22c55e' : project.color || '#a855f7'
+                                }}
+                              >
+                                {goal.status === 'Completed' ? 'Done' : goal.status || 'Active'}
+                              </button>
+                              <button
+                                onClick={() => handleDeleteGoal(goal.id)}
+                                className="text-red-400/60 hover:text-red-400 transition-colors"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </div>
+                          {goal.description && (
+                            <p className="text-xs text-white/60 mt-1 ml-4">{goal.description}</p>
+                          )}
+                          {goal.targetDate && (
+                            <p className="text-xs mt-2 ml-4" style={{ color: project.color || '#a855f7' }}>
+                              Target: {new Date(goal.targetDate).toLocaleDateString()}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Long-term Goals */}
+              {goalsByHorizon[TimeHorizon.LongTerm].length > 0 && (
+                <div>
+                  <button
+                    onClick={() => toggleHorizon(TimeHorizon.LongTerm)}
+                    className="w-full flex items-center justify-between mb-2 group"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">{TIME_HORIZON_LABELS[TimeHorizon.LongTerm].emoji}</span>
+                      <span className="text-sm font-medium text-white">
+                        {TIME_HORIZON_LABELS[TimeHorizon.LongTerm].label}
+                      </span>
+                      <span className="text-xs text-white/40">
+                        ({goalsByHorizon[TimeHorizon.LongTerm].length})
+                      </span>
+                    </div>
+                    {collapsedHorizons.has(TimeHorizon.LongTerm) ? (
+                      <ChevronDown size={16} className="text-white/60 group-hover:text-white/80" />
+                    ) : (
+                      <ChevronUp size={16} className="text-white/60 group-hover:text-white/80" />
+                    )}
+                  </button>
+                  {!collapsedHorizons.has(TimeHorizon.LongTerm) && (
+                    <div className="space-y-2 ml-2">
+                      {goalsByHorizon[TimeHorizon.LongTerm].map(goal => (
+                        <div
+                          key={goal.id}
+                          className="bg-white/5 rounded-lg p-3 border border-green-500/20 transition-colors hover:border-green-500/30"
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center gap-2 flex-1">
+                              <div
+                                className="w-2 h-2 rounded-full"
+                                style={{ backgroundColor: project.color || '#a855f7' }}
+                              ></div>
+                              <span className="text-sm text-white font-medium">{goal.name}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => handleToggleGoalStatus(goal)}
+                                className="px-2 py-1 text-xs rounded transition-colors"
+                                style={{
+                                  backgroundColor: goal.status === 'Completed' ? '#22c55e40' : `${project.color || '#a855f7'}20`,
+                                  color: goal.status === 'Completed' ? '#22c55e' : project.color || '#a855f7'
+                                }}
+                              >
+                                {goal.status === 'Completed' ? 'Done' : goal.status || 'Active'}
+                              </button>
+                              <button
+                                onClick={() => handleDeleteGoal(goal.id)}
+                                className="text-red-400/60 hover:text-red-400 transition-colors"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </div>
+                          {goal.description && (
+                            <p className="text-xs text-white/60 mt-1 ml-4">{goal.description}</p>
+                          )}
+                          {goal.targetDate && (
+                            <p className="text-xs mt-2 ml-4" style={{ color: project.color || '#a855f7' }}>
+                              Target: {new Date(goal.targetDate).toLocaleDateString()}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* No Date Goals */}
+              {goalsByHorizon[TimeHorizon.NoDate].length > 0 && (
+                <div>
+                  <button
+                    onClick={() => toggleHorizon(TimeHorizon.NoDate)}
+                    className="w-full flex items-center justify-between mb-2 group"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">{TIME_HORIZON_LABELS[TimeHorizon.NoDate].emoji}</span>
+                      <span className="text-sm font-medium text-white">
+                        {TIME_HORIZON_LABELS[TimeHorizon.NoDate].label}
+                      </span>
+                      <span className="text-xs text-white/40">
+                        ({goalsByHorizon[TimeHorizon.NoDate].length})
+                      </span>
+                    </div>
+                    {collapsedHorizons.has(TimeHorizon.NoDate) ? (
+                      <ChevronDown size={16} className="text-white/60 group-hover:text-white/80" />
+                    ) : (
+                      <ChevronUp size={16} className="text-white/60 group-hover:text-white/80" />
+                    )}
+                  </button>
+                  {!collapsedHorizons.has(TimeHorizon.NoDate) && (
+                    <div className="space-y-2 ml-2">
+                      {goalsByHorizon[TimeHorizon.NoDate].map(goal => (
+                        <div
+                          key={goal.id}
+                          className="bg-white/5 rounded-lg p-3 border border-gray-500/20 transition-colors hover:border-gray-500/30"
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center gap-2 flex-1">
+                              <div
+                                className="w-2 h-2 rounded-full"
+                                style={{ backgroundColor: project.color || '#a855f7' }}
+                              ></div>
+                              <span className="text-sm text-white font-medium">{goal.name}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => handleToggleGoalStatus(goal)}
+                                className="px-2 py-1 text-xs rounded transition-colors"
+                                style={{
+                                  backgroundColor: goal.status === 'Completed' ? '#22c55e40' : `${project.color || '#a855f7'}20`,
+                                  color: goal.status === 'Completed' ? '#22c55e' : project.color || '#a855f7'
+                                }}
+                              >
+                                {goal.status === 'Completed' ? 'Done' : goal.status || 'Active'}
+                              </button>
+                              <button
+                                onClick={() => handleDeleteGoal(goal.id)}
+                                className="text-red-400/60 hover:text-red-400 transition-colors"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </div>
+                          {goal.description && (
+                            <p className="text-xs text-white/60 mt-1 ml-4">{goal.description}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

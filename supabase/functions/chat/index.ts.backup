@@ -1,0 +1,1829 @@
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.20.0'
+import { jsPDF } from 'https://esm.sh/jspdf@2.5.1'
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+/**
+ * Update active streak for user
+ * Tracks consecutive days of activity
+ */
+async function updateActiveStreak(userId: string, supabaseClient: any): Promise<void> {
+  const { data: profile, error: fetchError } = await supabaseClient
+    .from('profiles')
+    .select('last_activity_date, active_streak_days')
+    .eq('id', userId)
+    .single()
+
+  if (fetchError) {
+    console.error('Failed to fetch streak data:', fetchError)
+    return
+  }
+
+  const today = new Date().toISOString().split('T')[0]
+  const lastActivityDate = profile?.last_activity_date
+  const currentStreak = profile?.active_streak_days ?? 0
+
+  let newStreak = currentStreak
+
+  if (!lastActivityDate) {
+    // First activity ever
+    newStreak = 1
+  } else {
+    const lastDate = new Date(lastActivityDate).toISOString().split('T')[0]
+    if (lastDate === today) {
+      // Already counted today, no update needed
+      return
+    }
+
+    const yesterday = new Date()
+    yesterday.setDate(yesterday.getDate() - 1)
+    const yesterdayStr = yesterday.toISOString().split('T')[0]
+
+    if (lastDate === yesterdayStr) {
+      // Consecutive day
+      newStreak = currentStreak + 1
+    } else {
+      // Streak broken, restart
+      newStreak = 1
+    }
+  }
+
+  const { error: updateError } = await supabaseClient
+    .from('profiles')
+    .update({
+      last_activity_date: today,
+      active_streak_days: newStreak
+    })
+    .eq('id', userId)
+
+  if (updateError) {
+    console.error('Failed to update streak:', updateError)
+  }
+}
+
+const normaliseGoalStatus = (status?: string | null): string => {
+  if (!status) return 'in-progress'
+  const normalized = status.toString().toLowerCase().trim()
+  if (['planned', 'not started', 'todo', 'to-do'].includes(normalized)) return 'planned'
+  if (['in-progress', 'in progress', 'progress', 'active', 'ongoing', 'working'].includes(normalized)) return 'in-progress'
+  if (['complete', 'completed', 'done', 'finished'].includes(normalized)) return 'completed'
+  return 'in-progress'
+}
+
+const normaliseGoalPriority = (priority?: string | null): string => {
+  if (!priority) return 'medium'
+  const normalized = priority.toString().toLowerCase().trim()
+  if (['high', 'highest', 'urgent'].includes(normalized)) return 'high'
+  if (['low', 'lowest', 'minor'].includes(normalized)) return 'low'
+  return 'medium'
+}
+
+/**
+ * Extract a meaningful title from user message or content
+ */
+const extractTitle = (userMessage: string, content: string): string => {
+  // Try to extract from user message first (e.g., "create a strategy for...")
+  const userMatch = userMessage.match(/(?:create|write|make|generate)\s+(?:a|an)?\s*(.*?)(?:\s+for|\s+about|\s+on)?/i)
+  if (userMatch && userMatch[1] && userMatch[1].length > 5 && userMatch[1].length < 60) {
+    return userMatch[1].trim()
+  }
+
+  // Look for titles in markdown (# Title or ## Title)
+  const titleMatch = content.match(/^#{1,2}\s+(.+)$/m)
+  if (titleMatch && titleMatch[1]) {
+    return titleMatch[1].trim()
+  }
+
+  // Use first sentence if it's reasonable length
+  const firstSentence = content.split(/[.!?]\s+/)[0]
+  if (firstSentence && firstSentence.length > 10 && firstSentence.length < 100) {
+    return firstSentence.trim()
+  }
+
+  // Default fallback
+  return 'ATMO Document'
+}
+
+/**
+ * Generate a professional, comprehensive PDF document with ATMO branding
+ * Creates 3-4 page business-ready documents with rich content
+ */
+const generateSimplePDF = (params: {
+  title: string
+  documentType: string
+  summary: string
+  content: string
+  userMessage: string
+  userContext?: any
+}): string => {
+  const { title, documentType, summary, content, userMessage, userContext } = params
+  const doc = new jsPDF()
+
+  // ATMO Branding Colors
+  const atmoOrange = [255, 95, 31]
+  const atmoPurple = [147, 51, 234]
+  const darkGray = [51, 51, 51]
+  const lightGray = [128, 128, 128]
+
+  let yPosition = 20
+  const pageWidth = doc.internal.pageSize.getWidth()
+  const margin = 20
+  const contentWidth = pageWidth - (margin * 2)
+
+  // PAGE 1 - Header
+  doc.setFillColor(atmoOrange[0], atmoOrange[1], atmoOrange[2])
+  doc.rect(0, 0, pageWidth, 15, 'F')
+
+  doc.setTextColor(255, 255, 255)
+  doc.setFontSize(10)
+  doc.text('ATMO AI', margin, 10)
+
+  yPosition = 30
+
+  // Title
+  doc.setTextColor(darkGray[0], darkGray[1], darkGray[2])
+  doc.setFontSize(20)
+  doc.setFont('helvetica', 'bold')
+  const titleLines = doc.splitTextToSize(title, contentWidth)
+  doc.text(titleLines, margin, yPosition)
+  yPosition += (titleLines.length * 8) + 5
+
+  // Document Type & Date
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(lightGray[0], lightGray[1], lightGray[2])
+  doc.text(`${documentType} • ${new Date().toLocaleDateString()}`, margin, yPosition)
+  yPosition += 15
+
+  // Divider
+  doc.setDrawColor(atmoOrange[0], atmoOrange[1], atmoOrange[2])
+  doc.setLineWidth(0.5)
+  doc.line(margin, yPosition, pageWidth - margin, yPosition)
+  yPosition += 10
+
+  // Executive Summary
+  doc.setFontSize(12)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(darkGray[0], darkGray[1], darkGray[2])
+  doc.text('EXECUTIVE SUMMARY', margin, yPosition)
+  yPosition += 8
+
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'normal')
+  const summaryLines = doc.splitTextToSize(summary, contentWidth)
+  doc.text(summaryLines, margin, yPosition)
+  yPosition += (summaryLines.length * 5) + 10
+
+  // Key Points
+  doc.setFontSize(12)
+  doc.setFont('helvetica', 'bold')
+  doc.text('KEY POINTS', margin, yPosition)
+  yPosition += 8
+
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'normal')
+
+  // Extract key points from content (first 4 sentences or bullet points)
+  const sentences = content.split(/[.!?]\s+/).filter(s => s.length > 20).slice(0, 4)
+  sentences.forEach((sentence, idx) => {
+    if (yPosition > 250) {
+      doc.addPage()
+      yPosition = 20
+    }
+
+    doc.setTextColor(atmoOrange[0], atmoOrange[1], atmoOrange[2])
+    doc.text('•', margin, yPosition)
+
+    doc.setTextColor(darkGray[0], darkGray[1], darkGray[2])
+    const pointLines = doc.splitTextToSize(sentence.trim(), contentWidth - 5)
+    doc.text(pointLines, margin + 5, yPosition)
+    yPosition += (pointLines.length * 5) + 3
+  })
+
+  // PAGE 2
+  doc.addPage()
+  yPosition = 20
+
+  // Action Items
+  doc.setFontSize(12)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(darkGray[0], darkGray[1], darkGray[2])
+  doc.text('ACTION ITEMS', margin, yPosition)
+  yPosition += 8
+
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'normal')
+
+  // Extract action-oriented sentences
+  const actionWords = /(should|must|need to|recommend|suggest|action|step|implement)/i
+  const actionItems = content.split(/[.!?]\s+/)
+    .filter(s => actionWords.test(s) && s.length > 20)
+    .slice(0, 5)
+
+  if (actionItems.length > 0) {
+    actionItems.forEach((action, idx) => {
+      doc.setTextColor(atmoPurple[0], atmoPurple[1], atmoPurple[2])
+      doc.text(`${idx + 1}.`, margin, yPosition)
+
+      doc.setTextColor(darkGray[0], darkGray[1], darkGray[2])
+      const actionLines = doc.splitTextToSize(action.trim(), contentWidth - 5)
+      doc.text(actionLines, margin + 7, yPosition)
+      yPosition += (actionLines.length * 5) + 5
+    })
+  } else {
+    doc.setTextColor(lightGray[0], lightGray[1], lightGray[2])
+    doc.text('Review the content above and determine next steps.', margin, yPosition)
+    yPosition += 10
+  }
+
+  yPosition += 10
+
+  // Next Steps
+  doc.setFontSize(12)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(darkGray[0], darkGray[1], darkGray[2])
+  doc.text('NEXT STEPS', margin, yPosition)
+  yPosition += 8
+
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'normal')
+  doc.text('1. Review this document thoroughly', margin, yPosition)
+  yPosition += 6
+  doc.text('2. Prioritize action items based on urgency', margin, yPosition)
+  yPosition += 6
+  doc.text('3. Set specific deadlines for each action', margin, yPosition)
+  yPosition += 6
+  doc.text('4. Track progress and adjust as needed', margin, yPosition)
+
+  // Footer
+  const footerY = doc.internal.pageSize.getHeight() - 15
+  doc.setDrawColor(atmoOrange[0], atmoOrange[1], atmoOrange[2])
+  doc.setLineWidth(0.5)
+  doc.line(margin, footerY - 5, pageWidth - margin, footerY - 5)
+
+  doc.setFontSize(8)
+  doc.setTextColor(lightGray[0], lightGray[1], lightGray[2])
+  doc.setFont('helvetica', 'italic')
+  doc.text('Generated by ATMO AI', margin, footerY)
+  doc.text(new Date().toLocaleString(), pageWidth - margin - 40, footerY)
+
+  // Return base64
+  const pdfOutput = doc.output('datauristring')
+  return pdfOutput.split(',')[1] // Remove data:application/pdf;base64, prefix
+}
+
+/**
+ * Normalize task name for duplicate detection
+ * Removes articles, extra spaces, converts to lowercase
+ */
+const normalizeTaskName = (name: string): string => {
+  return name
+    .toLowerCase()
+    .replace(/\b(the|a|an)\b/g, '') // Remove articles
+    .replace(/[^\w\s]/g, ' ') // Remove punctuation
+    .replace(/\s+/g, ' ') // Normalize spaces
+    .trim()
+}
+
+/**
+ * Extract keywords from task name
+ */
+const extractKeywords = (name: string): string[] => {
+  const stopWords = ['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'as']
+  return normalizeTaskName(name)
+    .split(' ')
+    .filter(word => word.length > 2 && !stopWords.includes(word))
+}
+
+/**
+ * Calculate keyword similarity between two task names
+ * Returns percentage of overlapping keywords (0-100)
+ */
+const calculateTaskSimilarity = (name1: string, name2: string): number => {
+  const keywords1 = extractKeywords(name1)
+  const keywords2 = extractKeywords(name2)
+
+  if (keywords1.length === 0 || keywords2.length === 0) {
+    return 0
+  }
+
+  const commonKeywords = keywords1.filter(k1 =>
+    keywords2.some(k2 => k2.includes(k1) || k1.includes(k2))
+  )
+
+  const similarity = (commonKeywords.length / Math.max(keywords1.length, keywords2.length)) * 100
+  return Math.round(similarity)
+}
+
+/**
+ * Check if task is a semantic duplicate of existing tasks
+ * Returns the duplicate task if found, null otherwise
+ */
+const findDuplicateTask = (newTaskName: string, existingTasks: Array<{ name: string }>, similarityThreshold: number = 70): { name: string, similarity: number } | null => {
+  for (const task of existingTasks) {
+    const similarity = calculateTaskSimilarity(newTaskName, task.name)
+
+    if (similarity >= similarityThreshold) {
+      console.log(`🔍 Found potential duplicate: "${newTaskName}" vs "${task.name}" (${similarity}% similar)`)
+      return { name: task.name, similarity }
+    }
+  }
+
+  return null
+}
+
+/**
+ * Detect and save documents from chat responses
+ */
+const detectAndSaveDocument = async (params: {
+  supabaseClient: any
+  userId: string
+  sessionId: string
+  userMessage: string
+  assistantResponse: string
+}): Promise<void> => {
+  const { supabaseClient, userId, sessionId, userMessage, assistantResponse } = params
+
+  console.log('🔍 Document detection called')
+  console.log('📝 User message:', userMessage.substring(0, 100))
+  console.log('📝 Response length:', assistantResponse.length)
+
+  // EMERGENCY TRIGGERS - Force document creation on explicit request
+  const forceSaveTriggers = /\b(save this|add to outputs|add it to|create document|save conversation|export this)/i
+  const forceSave = forceSaveTriggers.test(userMessage)
+
+  // Explicit document creation commands - ALWAYS trigger regardless of length
+  const explicitDocumentRequest = /\b(create|make|generate|give me|write|draft)\s+(a|an|me)?\s*(document|plan|strategy|guide|framework|outline|report|analysis)/i
+  const isExplicitRequest = explicitDocumentRequest.test(userMessage)
+
+  // Enhanced document type patterns with user intent detection
+  const documentPatterns: Record<string, RegExp> = {
+    'Strategic Plan': /\b(plan|planning|strategy|roadmap|strategic|steps|approach)\b/i,
+    'Organization Framework': /\b(organize|organiz|structure|framework|system)\b/i,
+    'Preparation Guide': /\b(prepar|prep|getting ready|guide)\b/i,
+    'Action Plan': /\b(approach|how should|action plan|what should i do|next steps)\b/i,
+    'Goal Achievement Plan': /\b(goal|achieve|objective|target|accomplish)\b/i,
+    'Problem-Solving Strategy': /\b(problem|challenge|solve|solution|issue|fix)\b/i,
+    'Market Research Summary': /\b(market|research|analysis|competitive|industry)\b/i,
+    'Team Organization Plan': /\b(team|collaboration|organization|workflow|process)\b/i,
+    'Business Strategy': /\b(business|startup|company|venture|enterprise)\b/i,
+    'Project Plan': /\b(project|initiative|campaign|program)\b/i
+  }
+
+  // EMERGENCY: Force save if user explicitly requests
+  if (forceSave) {
+    console.log('⚡ FORCE SAVE TRIGGERED')
+    // Skip all checks, save as general document
+  }
+
+  // Check if response is substantial - REDUCED threshold to 50 characters for explicit requests
+  if (!isExplicitRequest && !forceSave && assistantResponse.length < 50) {
+    console.log('❌ Response too short, skipping document creation')
+    return
+  }
+
+  // Check if user message or response matches any document pattern
+  let matchedType = Object.entries(documentPatterns).find(([type, pattern]) =>
+    pattern.test(userMessage) || pattern.test(assistantResponse)
+  )
+
+  // If force save without pattern match, default to general document
+  if (forceSave && !matchedType) {
+    matchedType = ['ATMO Document', /./]
+    console.log('📄 Force save: creating general document')
+  }
+
+  // FALLBACK: Check if response contains actionable advice (3+ sentences with structured content)
+  if (!matchedType && !forceSave && assistantResponse.length >= 200) {
+    const sentenceCount = (assistantResponse.match(/[.!?]+/g) || []).length
+    const hasStructure = /(\d+\.|•|-|\*)\s/g.test(assistantResponse) // Has numbered or bullet lists
+    const hasActionWords = /(should|must|need to|recommend|suggest|consider|important|key|essential)/gi
+    const actionWordCount = (assistantResponse.match(hasActionWords) || []).length
+
+    if ((sentenceCount >= 3 && hasStructure) || actionWordCount >= 3) {
+      matchedType = ['Action Plan', /./] // Default to Action Plan for structured advice
+      console.log('📋 Fallback: detected structured advice')
+    }
+  }
+
+  if (!matchedType) {
+    console.log('❌ No document pattern matched, skipping')
+    return
+  }
+
+  const [documentType] = matchedType
+
+  try {
+    console.log(`📄 Creating ${documentType} PDF for you...`)
+
+    // Extract meaningful title
+    const baseTitle = extractTitle(userMessage, assistantResponse)
+    const timestamp = new Date().toISOString().split('T')[0]
+    const filename = `${baseTitle} - ${timestamp}.pdf`
+    console.log(`📝 Filename: ${filename}`)
+
+    // Generate summary (first 2-3 sentences of response)
+    const summaryMatch = assistantResponse.match(/^(.+?[.!?]\s+.+?[.!?]\s+.+?[.!?])/)
+    const summary = summaryMatch ? summaryMatch[1].trim() : assistantResponse.substring(0, 300) + '...'
+    console.log(`📝 Summary length: ${summary.length}`)
+
+    // Generate PDF
+    console.log(`🔨 Calling generateSimplePDF...`)
+    let pdfBase64
+    try {
+      pdfBase64 = generateSimplePDF({
+        title: baseTitle,
+        documentType,
+        summary,
+        content: assistantResponse,
+        userMessage
+      })
+      console.log(`✅ PDF generated, base64 length: ${pdfBase64?.length || 0}`)
+    } catch (pdfError) {
+      console.error('❌ PDF generation failed:', pdfError)
+      throw pdfError
+    }
+
+    // Estimate file size from base64 length
+    const fileSize = Math.ceil((pdfBase64.length * 3) / 4)
+    console.log(`📊 Estimated file size: ${fileSize} bytes`)
+
+    // Prepare insert data
+    const insertData = {
+      persona_id: userId,
+      session_id: sessionId,
+      filename: filename,
+      file_type: 'pdf',
+      content_data: {
+        content: assistantResponse,
+        pdfBase64: pdfBase64
+      },
+      file_size: fileSize
+    }
+    console.log(`💾 Inserting to atmo_outputs table...`, {
+      persona_id: userId,
+      filename,
+      file_type: 'pdf',
+      file_size: fileSize
+    })
+
+    // Save to atmo_outputs table
+    const { data, error } = await supabaseClient
+      .from('atmo_outputs')
+      .insert(insertData)
+      .select()
+
+    if (error) {
+      console.error('❌ Database insert failed:', error)
+      console.error('❌ Error details:', JSON.stringify(error, null, 2))
+      throw new Error(`Database insert failed: ${error.message}`)
+    } else {
+      console.log(`✅ Saved document: ${filename} (${documentType})`)
+      console.log(`✅ Database response:`, data)
+    }
+  } catch (err) {
+    console.error('❌ ERROR in document generation:', err)
+    console.error('❌ Error stack:', err instanceof Error ? err.stack : 'No stack trace')
+    console.error('❌ Error type:', typeof err)
+    console.error('❌ Error message:', err instanceof Error ? err.message : String(err))
+    // Fallback: save as markdown if PDF generation fails
+    try {
+      const baseTitle = extractTitle(userMessage, assistantResponse)
+      const timestamp = new Date().toISOString().split('T')[0]
+      const filename = `${baseTitle} - ${timestamp}.md`
+      const markdownContent = `# ${baseTitle}\n\n**Type:** ${documentType}\n**Generated:** ${new Date().toLocaleString()}\n\n---\n\n${assistantResponse}`
+
+      await supabaseClient
+        .from('atmo_outputs')
+        .insert({
+          persona_id: userId,
+          session_id: sessionId,
+          filename: filename,
+          file_type: 'markdown',
+          content_data: { content: markdownContent },
+          file_size: new Blob([markdownContent]).size
+        })
+
+      console.log(`⚠️ Fallback: Saved as markdown instead of PDF`)
+    } catch (fallbackErr) {
+      console.error('Fallback markdown save also failed:', fallbackErr)
+    }
+  }
+}
+
+type ProjectLookupResult = {
+  project: { id: string; name: string; updated_at: string | null; active: boolean | null } | null
+  error?: string
+}
+
+const resolveProjectForGoal = async (
+  supabaseClient: any,
+  userId: string,
+  identifiers: { projectId?: string | null; projectName?: string | null }
+): Promise<ProjectLookupResult> => {
+  const trimmedId = identifiers.projectId?.toString().trim()
+  const trimmedName = identifiers.projectName?.toString().trim()
+
+  if (trimmedId) {
+    const { data, error } = await supabaseClient
+      .from('projects')
+      .select('id, name, updated_at, active')
+      .eq('owner_id', userId)
+      .eq('id', trimmedId)
+      .maybeSingle()
+
+    if (error) {
+      console.error('Failed to resolve project by id:', error)
+      return { project: null, error: 'I had trouble looking up that project. Could you try again?' }
+    }
+
+    if (!data) {
+      return { project: null, error: `I couldn't find a project for that id. Which project should I use?` }
+    }
+
+    return { project: data }
+  }
+
+  if (trimmedName) {
+    const { data, error } = await supabaseClient
+      .from('projects')
+      .select('id, name, updated_at, active')
+      .eq('owner_id', userId)
+      .eq('name', trimmedName)
+
+    if (error) {
+      console.error('Failed to resolve project by name:', error)
+      return { project: null, error: 'I had trouble checking that project name. Can you confirm it?' }
+    }
+
+    if (!data || data.length === 0) {
+      return { project: null, error: `I couldn't find a project called "${trimmedName}". Which project should I update?` }
+    }
+
+    const activeProjects = data.filter((project) => project.active !== false)
+    const candidates = activeProjects.length > 0 ? activeProjects : data
+
+    const sorted = candidates
+      .map((project) => ({
+        ...project,
+        __ts: project.updated_at ? new Date(project.updated_at).getTime() : 0
+      }))
+      .sort((a, b) => b.__ts - a.__ts)
+
+    return { project: sorted[0] }
+  }
+
+  return { project: null, error: 'Which project should I use for that goal?' }
+}
+
+/**
+ * Calculate task priority based on deadline proximity rules:
+ * - High: Goal/milestone due within 3 days OR project priority is High
+ * - Medium: Default for all other cases
+ */
+async function calculateTaskPriority(
+  supabaseClient: ReturnType<typeof createClient>,
+  userId: string,
+  projectId: string | null,
+  goalId: string | null
+): Promise<string> {
+  if (!projectId) {
+    return 'medium'
+  }
+
+  // Fetch project with priority
+  const { data: project } = await supabaseClient
+    .from('projects')
+    .select('priority')
+    .eq('owner_id', userId)
+    .eq('id', projectId)
+    .maybeSingle()
+
+  // Rule 1: Check if goal has a target date within 3 days
+  if (goalId) {
+    const { data: goal } = await supabaseClient
+      .from('project_goals')
+      .select('target_date')
+      .eq('owner_id', userId)
+      .eq('id', goalId)
+      .maybeSingle()
+
+    if (goal?.target_date) {
+      const goalDate = new Date(goal.target_date)
+      const now = new Date()
+      const daysUntil = Math.ceil((goalDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+
+      if (daysUntil <= 3 && daysUntil >= 0) {
+        return 'high'
+      }
+    }
+  }
+
+  // Rule 2: Check if project has milestones due within 3 days
+  const { data: upcomingMilestones } = await supabaseClient
+    .from('project_milestones')
+    .select('due_date, status')
+    .eq('owner_id', userId)
+    .eq('project_id', projectId)
+    .neq('status', 'Completed')
+
+  if (upcomingMilestones && upcomingMilestones.length > 0) {
+    const now = new Date()
+    const hasUrgentMilestone = upcomingMilestones.some((m) => {
+      if (!m.due_date) return false
+      const milestoneDate = new Date(m.due_date)
+      const daysUntil = Math.ceil((milestoneDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+      return daysUntil <= 3 && daysUntil >= 0
+    })
+
+    if (hasUrgentMilestone) {
+      return 'high'
+    }
+  }
+
+  // Rule 3: Check if project priority is High
+  if (project?.priority?.toLowerCase() === 'high') {
+    return 'high'
+  }
+
+  return 'medium'
+}
+
+// Test jsPDF import at startup
+console.log('🔧 Edge function loaded, jsPDF available:', typeof jsPDF)
+
+serve(async (req) => {
+  // Handle CORS preflight
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
+  }
+
+  try {
+    // Initialize Supabase client with user's auth token
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
+    )
+
+    // Verify user authentication
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser()
+    if (authError || !user) {
+      console.error('Authentication error:', authError)
+      return new Response(
+        JSON.stringify({ error: 'You must be logged in to use chat. Please sign in or create an account.' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Parse request body
+    const { message, messageId } = await req.json()
+    if (!message || typeof message !== 'string') {
+      throw new Error('Message is required')
+    }
+
+    // Get user profile for context
+    const { data: profile } = await supabaseClient
+      .from('profiles')
+      .select('onboarding_data, display_name, email')
+      .eq('id', user.id)
+      .single()
+
+    // Get recent chat history (last 10 messages)
+    const { data: chatHistory } = await supabaseClient
+      .from('chat_messages')
+      .select('role, content')
+      .eq('owner_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(10)
+
+    // Get current projects for context
+    const { data: projects } = await supabaseClient
+      .from('projects')
+      .select('name, description, status, priority')
+      .eq('owner_id', user.id)
+      .eq('active', true)
+
+    // Get recent tasks for duplicate prevention
+    const { data: recentTasks } = await supabaseClient
+      .from('project_tasks')
+      .select('name, created_at')
+      .eq('owner_id', user.id)
+      .eq('completed', false)
+      .order('created_at', { ascending: false })
+      .limit(20)
+
+    // Build Claude system prompt with user context
+    const onboardingData = profile?.onboarding_data || {}
+    const userName = profile?.display_name || profile?.email?.split('@')[0] || 'User'
+
+    const systemPrompt = `You are ATMO, a proactive AI co-pilot helping ${userName} achieve their goals.
+
+USER CONTEXT:
+Name: ${userName}
+Onboarding Data: ${JSON.stringify(onboardingData, null, 2)}
+Focus Areas: ${onboardingData?.work?.focusAreas?.join(', ') || 'Not set'}
+
+CURRENT PROJECTS:
+${projects && projects.length > 0 ? JSON.stringify(projects, null, 2) : 'No active projects yet'}
+
+RECENT ACTIVE TASKS (for duplicate prevention):
+${recentTasks && recentTasks.length > 0 ? recentTasks.map(t => `- ${t.name}`).join('\n') : 'No active tasks yet'}
+
+RESPONSE BEHAVIOR - CRITICAL RULES:
+1. BE DECISIVE: When user requests something, DO IT FIRST, then ask clarifying questions if needed
+2. MAX 3 QUESTIONS: If you need clarification, ask maximum 3 questions in bullet format (• Question?)
+3. CONCISE RESPONSES: Keep responses under 100 words unless generating detailed documents/strategies
+4. ACTION FIRST: Create entities/documents immediately, don't ask permission first
+5. BULLET FORMAT: All follow-up questions must use bullet points (• Question here?)
+6. NO OVER-EXPLAINING: State what you did, then move forward
+
+EXAMPLE TRANSFORMATIONS:
+❌ BAD: "I'd be happy to help! Before I proceed, I need to understand: What's your target audience? What's your budget? Which channels have you tried? What are your competitors doing?"
+✅ GOOD: "I've created a marketing strategy document for you.
+• Which digital channels should I prioritize: paid social, SEO, or content?
+• What's your launch timeline?
+• Do you prefer community-building or direct acquisition?"
+
+❌ BAD: "That sounds great! Before we create this, can you tell me more about the project scope and timeline?"
+✅ GOOD: "Created! Should I add initial milestones for Q1?"
+
+YOUR ROLE:
+- Proactively anticipate user needs and suggest next steps
+- Extract actionable items from conversation
+- Use onboarding data + profile + chat history as single source of truth
+- Automatically suggest updates when user intent shifts
+- Help organize projects, goals, milestones, and tasks with proper hierarchical links
+
+PROACTIVE INTELLIGENCE:
+After creating entities, ALWAYS suggest logical next steps:
+- After creating project → "I created '{projectName}'—shall I add initial milestones based on your timeline?"
+- After creating goal → "Goal '{goalName}' added. Want me to break it into specific tasks?"
+- After creating task → "Task ready. Should I prioritize it based on your Focus Areas?"
+
+DAILY FOCUS LOGIC:
+- Analyze due dates from tasks/goals/milestones
+- Assign priority: < 3 days = High, < 7 days = Medium, else Low
+- Suggest today's specific actions based on deadlines + Focus Areas
+- Example: "Based on your deadlines, I recommend focusing on {task1}, {task2} today."
+
+FOCUS AREAS AUTO-UPDATE:
+- Monitor recent messages for intent shifts
+- If user focus changes, suggest: "I noticed you're focusing on {newArea}—should I update your Focus Areas to include this?"
+
+IMPORTANT - RESPONSE FORMAT:
+When users mention projects, tasks, goals, or milestones, YOU MUST respond with BOTH:
+1. A natural, conversational response
+2. Structured JSON for entities to extract
+
+CRITICAL - DISTINGUISH REQUEST TYPES:
+
+1. ENTITY CREATION REQUESTS (create entities in database):
+   - Explicit commands: "add goal X", "create task Y", "add project Z", "I'm working on X"
+   - Action verbs: add, create, start, make, build, working on
+   - Specific entity names provided by user
+   - User wants to track/organize something new
+
+2. INFORMATION/SUGGESTION REQUESTS (NO entities, only conversational response):
+   - Question patterns: "what tasks should I...", "which goals...", "best tasks to...", "what should I..."
+   - Recommendation requests: "suggest tasks", "recommend priorities", "help me prioritize"
+   - Analysis requests: "analyze my goals", "review my tasks", "what to focus on"
+   - NEVER create entities like "imbox", "inbox", or nonsensical names
+   - Return EMPTY entities array [] but provide helpful suggestions in conversationalResponse
+
+CRITICAL - TASK CREATION RULES:
+When user says "add task" or "create task":
+- ONLY create entity type: "task" - NEVER create "goal" entities
+- Tasks can exist independently without goals
+- Extract project name from context if mentioned
+- NEVER auto-create goals, projects, or placeholder entities
+- If project doesn't exist, ask user to specify which project
+
+CRITICAL - TASK QUALITY STANDARDS:
+PRIORITY STREAM must contain ONLY high-quality, specific, actionable tasks:
+- Each task must be SPECIFIC and CONCRETE (not vague like "work on project")
+- Task names must be ACTION-ORIENTED with clear deliverables
+- NEVER create generic tasks like "review", "update", "check", "work on"
+- Each task needs a detailed description explaining WHAT and WHY
+- Tasks should be completable in a single work session (1-4 hours)
+
+GOOD TASK EXAMPLES:
+✅ "Design mobile-responsive navigation component for dashboard"
+✅ "Write API endpoint for user authentication with JWT tokens"
+✅ "Create marketing copy for landing page hero section"
+✅ "Research competitor pricing models for SaaS tier structure"
+
+BAD TASK EXAMPLES (NEVER CREATE THESE):
+❌ "Work on website" (too vague)
+❌ "Update project" (no specific deliverable)
+❌ "Review code" (missing context - which code?)
+❌ "Fix bugs" (which bugs? where?)
+❌ "Marketing" (not an actionable task)
+
+CRITICAL - DUPLICATE PREVENTION:
+Before creating ANY task, check RECENT ACTIVE TASKS list above:
+1. If task name matches existing task (exact or similar), DO NOT CREATE
+2. If similar task exists (e.g., "review code" vs "code review"), DO NOT CREATE
+3. If user repeats same request, acknowledge existing task: "I already added 'Review code' - would you like to add something else?"
+4. Check for semantic duplicates (different words, same meaning)
+5. If creating multiple tasks in one response, ensure they're distinct from each other
+6. Priority Stream is not a TODO dump - quality over quantity ALWAYS
+
+Format your response EXACTLY like this:
+{
+  "conversationalResponse": "Your natural response here...",
+  "entities": [
+    {
+      "type": "project|task|goal|milestone|knowledge|insight",
+      "data": {
+        "name": "...",
+        "description": "...",
+        // Additional fields based on type
+      }
+    }
+  ],
+  "nextSteps": [
+    {
+      "action": "create_milestone|create_task|set_priority|update_focus",
+      "description": "What this action will do",
+      "command": "Exact command user can say to execute this"
+    }
+  ]
+}
+
+ENTITY TYPES & FIELDS:
+- project: name (required), description, priority (high/medium/low), status, action (create|update|delete)
+- task: name (required), description, project (name of related project), priority, dueDate (ISO date), action (create|update|delete)
+- goal: name (required), description, project (name required), targetDate, status, action (create|update|delete)
+- milestone: name (required), description, project (name required), dueDate, status, action (create|update|delete)
+- knowledge: name (required), content, type (summary|note|idea), tags (array)
+- insight: title (required), type (article|opportunity|trend|note required), summary, category (personal|project), project (name), source_url, relevance (1-100)
+
+EXAMPLES:
+User: "I'm working on building ATMO"
+You: {
+  "conversationalResponse": "That's exciting! ATMO sounds like an ambitious project. I've created it—shall I add initial milestones based on your timeline?",
+  "entities": [{
+    "type": "project",
+    "data": {
+      "name": "ATMO Platform",
+      "description": "Building ATMO",
+      "priority": "high",
+      "status": "active"
+    }
+  }],
+  "nextSteps": [
+    {
+      "action": "create_milestone",
+      "description": "Add key milestones for ATMO Platform",
+      "command": "add milestone 'Launch MVP' to ATMO Platform due next month"
+    },
+    {
+      "action": "create_goal",
+      "description": "Define primary goals for this project",
+      "command": "add a goal 'Complete core features' to ATMO Platform"
+    }
+  ]
+}
+
+User: "I need to design the landing page and write docs"
+You: {
+  "conversationalResponse": "Got it! I've noted those tasks. When would you like to have the landing page and docs completed?",
+  "entities": [
+    {
+      "type": "task",
+      "data": {
+        "name": "Design landing page",
+        "description": "Create landing page design for ATMO",
+        "project": "ATMO Platform",
+        "priority": "high"
+      }
+    },
+    {
+      "type": "task",
+      "data": {
+        "name": "Write documentation",
+        "description": "Write docs for ATMO",
+        "project": "ATMO Platform",
+        "priority": "medium"
+      }
+    }
+  ]
+}
+
+User: "I found an article about productivity at example.com"
+You: {
+  "conversationalResponse": "Great find! I've saved that article to your insights.",
+  "entities": [{
+    "type": "insight",
+    "data": {
+      "title": "Productivity techniques article",
+      "type": "article",
+      "summary": "Article about productivity techniques",
+      "category": "personal",
+      "source_url": "example.com",
+      "relevance": 70
+    }
+  }]
+}
+
+User: "Delete the ATMO Platform project"
+You: {
+  "conversationalResponse": "I've deleted the ATMO Platform project for you.",
+  "entities": [{
+    "type": "project",
+    "data": {
+      "name": "ATMO Platform",
+      "action": "delete"
+    }
+  }]
+}
+
+User: "Remove the landing page goal"
+You: {
+  "conversationalResponse": "I've removed the landing page goal.",
+  "entities": [{
+    "type": "goal",
+    "data": {
+      "name": "Design landing page",
+      "action": "delete"
+    }
+  }]
+}
+
+EXAMPLES OF SUGGESTION REQUESTS (NO entity creation):
+User: "What are the best tasks to perform to reach my goals?"
+You: {
+  "conversationalResponse": "Based on your current goals, I recommend prioritizing:\n\n1. **Launch MVP** - Focus on completing core features and testing\n2. **Marketing Campaign** - Start with audience research and content planning\n3. **Team Hiring** - Quick win: post job descriptions today\n\nWant me to create any of these as actual tasks?",
+  "entities": [],
+  "nextSteps": []
+}
+
+User: "Suggest tasks for my current projects"
+You: {
+  "conversationalResponse": "Here are suggested tasks for your active projects:\n\n**ATMO Platform:**\n• Complete API integration\n• Write user documentation\n• Set up analytics\n\n**Marketing Campaign:**\n• Design social media graphics\n• Draft email sequences\n\nShall I create any of these tasks for you?",
+  "entities": [],
+  "nextSteps": []
+}
+
+User: "What should I focus on today?"
+You: {
+  "conversationalResponse": "Based on your deadlines and priorities, focus on:\n\n1. High priority: Complete design mockups (due in 2 days)\n2. Quick win: Review and approve marketing copy\n3. Important: Schedule team meeting for next sprint\n\nWant to prioritize any of these tasks?",
+  "entities": [],
+  "nextSteps": []
+}
+
+INSIGHT GENERATION RULES:
+- Generate insights ONLY from: user onboarding data, current active projects/goals, and recent chat context
+- Types: article (external link), opportunity (action item), trend (pattern observed), note (observation)
+- NEVER invent URLs or external sources - only use user-provided links
+- Base relevance on user's current focus areas and active work
+- Goals and milestones MUST have a project specified
+
+If user is just chatting with no actionable items, return empty entities array but still provide conversational response.
+
+Remember: ALWAYS return valid JSON with conversationalResponse and entities fields.`
+
+    // Initialize Claude client
+    const claude = new Anthropic({
+      apiKey: Deno.env.get('CLAUDE_API_KEY')!
+    })
+
+    // Build conversation history
+    const conversationHistory = (chatHistory || [])
+      .reverse()
+      .map(m => ({
+        role: m.role as 'user' | 'assistant',
+        content: m.content
+      }))
+
+    // Send request to Claude
+    const response = await claude.messages.create({
+      model: 'claude-3-7-sonnet-20250219',
+      max_output_tokens: 2048,
+      system: systemPrompt,
+      messages: [
+        ...conversationHistory,
+        { role: 'user', content: message }
+      ]
+    })
+
+    const responseText = response.content
+      .filter((block) => block.type === 'text')
+      .map((block: any) => block.text)
+      .join('\n');
+
+    const extractJson = (input: string): string | null => {
+      if (!input) return null;
+      const start = input.indexOf('{');
+      if (start === -1) return null;
+      let depth = 0;
+      for (let i = start; i < input.length; i++) {
+        const char = input[i];
+        if (char === '{') depth++;
+        else if (char === '}') {
+          depth--;
+          if (depth === 0) return input.slice(start, i + 1);
+        }
+      }
+      return null;
+    };
+
+    const jsonPayload = extractJson(responseText);
+
+    if (!jsonPayload) {
+      console.error('Claude response missing JSON payload. Raw response:', responseText);
+      throw new Error('Claude response missing JSON payload');
+    }
+
+    let parsed: { conversationalResponse: string; entities: any[] };
+    try {
+      parsed = JSON.parse(jsonPayload);
+    } catch (error) {
+      console.error('Failed to parse Claude JSON response:', error, '\nExtracted payload:', jsonPayload);
+      throw new Error('Claude returned an unexpected response format');
+    }
+
+    if (!parsed || typeof parsed.conversationalResponse !== 'string' || !Array.isArray(parsed.entities)) {
+      console.error('Parsed Claude response missing required fields:', parsed);
+      throw new Error('Claude response missing required fields');
+    }
+
+    // Get or create active session
+    const { data: sessionId, error: sessionError } = await supabaseClient
+      .rpc('get_or_create_active_session', { user_id: user.id })
+
+    if (sessionError) {
+      console.error('Failed to get/create session:', sessionError)
+      throw new Error('Failed to create chat session')
+    }
+
+    // Store user message with session
+    await supabaseClient.from('chat_messages').insert({
+      owner_id: user.id,
+      session_id: sessionId,
+      role: 'user',
+      content: message
+    })
+
+    // Store assistant response with session
+    const { data: assistantMsg } = await supabaseClient
+      .from('chat_messages')
+      .insert({
+        owner_id: user.id,
+        session_id: sessionId,
+        role: 'assistant',
+        content: parsed.conversationalResponse
+      })
+      .select()
+      .single()
+
+    // Autonomous document detection
+    console.log('🚀 About to call detectAndSaveDocument...')
+    try {
+      await detectAndSaveDocument({
+        supabaseClient,
+        userId: user.id,
+        sessionId,
+        userMessage: message,
+        assistantResponse: parsed.conversationalResponse
+      })
+      console.log('✅ detectAndSaveDocument completed')
+    } catch (docError) {
+      console.error('❌ detectAndSaveDocument FAILED:', docError)
+      console.error('❌ Stack:', docError instanceof Error ? docError.stack : 'No stack')
+    }
+
+    // Execute and store parsed entities
+    const executedEntities: any[] = []
+    const automationMessages: string[] = []
+    if (parsed.entities && parsed.entities.length > 0) {
+      console.log('🎯 Entities to create:', JSON.stringify(parsed.entities, null, 2))
+
+      for (const entity of parsed.entities) {
+        try {
+          let createdItem = null
+          console.log(`📝 Processing entity: ${entity.type} - ${entity.data.name}`)
+
+          switch (entity.type) {
+            case 'project':
+              if (entity.data.name) {
+                // Handle DELETE action
+                if (entity.data.action === 'delete') {
+                  const { data: projectToDelete } = await supabaseClient
+                    .from('projects')
+                    .select('id, name')
+                    .eq('owner_id', user.id)
+                    .ilike('name', entity.data.name)
+                    .limit(1)
+                    .single()
+
+                  if (projectToDelete) {
+                    const { error: deleteError } = await supabaseClient
+                      .from('projects')
+                      .update({ status: 'deleted', active: false })
+                      .eq('id', projectToDelete.id)
+
+                    if (!deleteError) {
+                      createdItem = { type: 'project', name: projectToDelete.name, id: projectToDelete.id, action: 'deleted' }
+                      console.log('Deleted project:', projectToDelete.name)
+                    }
+                  } else {
+                    console.warn('⚠️ Project not found for deletion:', entity.data.name)
+                  }
+                  break
+                }
+
+                // IDEMPOTENCY CHECK: Check for existing project within 5 minutes
+                const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
+                const { data: existingProjects } = await supabaseClient
+                  .from('projects')
+                  .select('id, name, status')
+                  .eq('owner_id', user.id)
+                  .ilike('name', entity.data.name)
+                  .gte('created_at', fiveMinutesAgo)
+                  .limit(1)
+
+                if (existingProjects && existingProjects.length > 0) {
+                  const existingProject = existingProjects[0]
+                  // UPDATE mode: update existing project
+                  const { data: updatedProject, error: updateError } = await supabaseClient
+                    .from('projects')
+                    .update({
+                      description: entity.data.description || null,
+                      priority: entity.data.priority || null,
+                      status: entity.data.status || existingProject.status
+                    })
+                    .eq('id', existingProject.id)
+                    .select()
+                    .single()
+
+                  if (!updateError && updatedProject) {
+                    createdItem = { type: 'project', name: updatedProject.name, id: updatedProject.id }
+                    console.log('Updated project:', updatedProject.name)
+                  }
+                } else {
+                  // INSERT mode: create new project
+                  const { data: newProject, error } = await supabaseClient
+                    .from('projects')
+                    .insert({
+                      owner_id: user.id,
+                      name: entity.data.name,
+                      description: entity.data.description || null,
+                      priority: entity.data.priority || null,
+                      status: entity.data.status || 'active',
+                      active: true,
+                      color: '#3b82f6', // Default blue
+                      progress: 0
+                    })
+                    .select()
+                    .single()
+
+                  if (!error && newProject) {
+                    createdItem = { type: 'project', name: newProject.name, id: newProject.id }
+                    console.log('Created project:', newProject.name)
+                  }
+                }
+              }
+              break
+
+            case 'task':
+              if (entity.data.name) {
+                console.log(`🔍 Processing task: "${entity.data.name}"`)
+
+                // Find project ID if project name is mentioned
+                let projectId = null
+                if (entity.data.project) {
+                  console.log(`🔍 Looking for project: "${entity.data.project}"`)
+                  const { data: foundProject, error: projectError } = await supabaseClient
+                    .from('projects')
+                    .select('id')
+                    .eq('owner_id', user.id)
+                    .ilike('name', `%${entity.data.project}%`)
+                    .limit(1)
+                    .single()
+
+                  if (projectError) {
+                    console.log(`⚠️ Project lookup error:`, projectError)
+                  } else if (foundProject) {
+                    projectId = foundProject.id
+                    console.log(`✅ Found project ID: ${projectId}`)
+                  } else {
+                    console.log(`⚠️ No project found matching "${entity.data.project}"`)
+                  }
+                }
+
+                // CRITICAL: If no project specified, find the first active project or prompt user
+                if (!projectId) {
+                  console.log(`⚠️ No project specified, looking for first active project`)
+                  const { data: firstProject } = await supabaseClient
+                    .from('projects')
+                    .select('id, name')
+                    .eq('owner_id', user.id)
+                    .eq('active', true)
+                    .order('created_at', { ascending: true })
+                    .limit(1)
+                    .maybeSingle()
+
+                  if (firstProject) {
+                    projectId = firstProject.id
+                    console.log(`✅ Using first active project: ${firstProject.name} (${projectId})`)
+                  } else {
+                    console.error(`❌ No active projects found for user`)
+                    automationMessages.push(`I need to know which project this task belongs to. Could you specify a project name?`)
+                    break
+                  }
+                }
+
+                console.log(`📝 Inserting task with data:`, {
+                  owner_id: user.id,
+                  project_id: projectId,
+                  name: entity.data.name,
+                  description: entity.data.description || null,
+                  priority: entity.data.priority || 'medium',
+                })
+
+                // ENHANCED DUPLICATE CHECK: Prevent exact AND semantic duplicates
+                // Step 1: Check for exact name matches within 5 minutes
+                const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
+                let exactDuplicateQuery = supabaseClient
+                  .from('project_tasks')
+                  .select('id, name')
+                  .eq('owner_id', user.id)
+                  .eq('name', entity.data.name)
+                  .gte('created_at', fiveMinutesAgo)
+
+                if (projectId) {
+                  exactDuplicateQuery = exactDuplicateQuery.eq('project_id', projectId)
+                }
+
+                const { data: exactDuplicates, error: exactCheckError } = await exactDuplicateQuery.limit(1)
+
+                if (!exactCheckError && exactDuplicates && exactDuplicates.length > 0) {
+                  const existingTask = exactDuplicates[0]
+                  console.log(`⚠️ Exact duplicate detected (within 5 min): "${entity.data.name}"`)
+                  createdItem = { type: 'task', name: existingTask.name, id: existingTask.id }
+                  continue  // Skip to next entity
+                }
+
+                // Step 2: Check for semantic duplicates (similar task names) in same project TODAY
+                const todayStart = new Date()
+                todayStart.setHours(0, 0, 0, 0)
+
+                let semanticDuplicateQuery = supabaseClient
+                  .from('project_tasks')
+                  .select('id, name')
+                  .eq('owner_id', user.id)
+                  .gte('created_at', todayStart.toISOString())
+
+                if (projectId) {
+                  semanticDuplicateQuery = semanticDuplicateQuery.eq('project_id', projectId)
+                }
+
+                const { data: todayTasks, error: semanticCheckError } = await semanticDuplicateQuery
+
+                if (!semanticCheckError && todayTasks && todayTasks.length > 0) {
+                  const semanticDuplicate = findDuplicateTask(entity.data.name, todayTasks, 70)
+
+                  if (semanticDuplicate) {
+                    console.log(`⚠️ Semantic duplicate detected: "${entity.data.name}" is ${semanticDuplicate.similarity}% similar to "${semanticDuplicate.name}"`)
+                    automationMessages.push(`I found a similar task "${semanticDuplicate.name}" already in your list. Should I create a new one or use the existing one?`)
+                    continue  // Skip to next entity
+                  }
+                }
+
+                // Optional: Try to find goal_id ONLY if explicitly mentioned by user
+                let goalId = entity.data.goalId || entity.data.goal_id || null
+
+                if (!goalId && entity.data.goal) {
+                  // User explicitly mentioned a goal - try to find it
+                  const { data: foundGoal } = await supabaseClient
+                    .from('project_goals')
+                    .select('id')
+                    .eq('owner_id', user.id)
+                    .eq('project_id', projectId)
+                    .ilike('name', `%${entity.data.goal}%`)
+                    .limit(1)
+                    .maybeSingle()
+
+                  if (foundGoal) {
+                    goalId = foundGoal.id
+                    console.log(`✅ Found goal by name: ${foundGoal.id}`)
+                  }
+                }
+
+                // If no goal specified, that's fine - create standalone task
+                // DO NOT automatically search for goals
+                if (!goalId) {
+                  console.log(`ℹ️ Creating standalone task (no goal specified)`)
+                }
+
+                const calculatedPriority = await calculateTaskPriority(
+                  supabaseClient,
+                  user.id,
+                  projectId,
+                  goalId
+                )
+
+                const { data: newTask, error } = await supabaseClient
+                  .from('project_tasks')
+                  .insert({
+                    owner_id: user.id,
+                    project_id: projectId,
+                    goal_id: goalId,
+                    name: entity.data.name,
+                    description: entity.data.description || null,
+                    priority: calculatedPriority,
+                    completed: false,
+                    agency: 'human',
+                    color: '#10b981', // Default green
+                    estimated_time: null,
+                    due_date: entity.data.dueDate || null
+                  })
+                  .select()
+                  .single()
+
+                if (error) {
+                  console.error('❌ Failed to create task:', JSON.stringify(error, null, 2))
+                  console.error('❌ Error details:', {
+                    message: error.message,
+                    details: error.details,
+                    hint: error.hint,
+                    code: error.code
+                  })
+                } else if (newTask) {
+                  createdItem = { type: 'task', name: newTask.name, id: newTask.id }
+                  console.log('✅ Created task:', newTask.name, 'with ID:', newTask.id)
+                } else {
+                  console.warn('⚠️ Task insert returned no data and no error')
+                }
+              } else {
+                console.warn('⚠️ Task entity missing name field')
+              }
+              break
+
+            case 'goal':
+              if (!entity.data?.name) {
+                automationMessages.push('I need the goal title to continue. What should I call it?')
+                break
+              }
+
+              // Determine target project
+              if (entity.data.action === 'delete') {
+                const { data: goalToDelete } = await supabaseClient
+                  .from('project_goals')
+                  .select('id, name, project_id')
+                  .eq('owner_id', user.id)
+                  .eq('name', entity.data.name)
+                  .maybeSingle()
+
+                if (!goalToDelete) {
+                  automationMessages.push(`I couldn't find a goal called "${entity.data.name}". Which one should I remove?`)
+                  break
+                }
+
+                const { error: deleteError } = await supabaseClient
+                  .from('project_goals')
+                  .update({ status: 'deleted' })
+                  .eq('id', goalToDelete.id)
+
+                if (deleteError) {
+                  console.error('Failed to delete goal:', deleteError)
+                  automationMessages.push("I couldn't remove that goal. Could you try again?")
+                  break
+                }
+
+                let deletedProjectName: string | undefined
+                if (goalToDelete.project_id) {
+                  const { data: goalProject } = await supabaseClient
+                    .from('projects')
+                    .select('name')
+                    .eq('owner_id', user.id)
+                    .eq('id', goalToDelete.project_id)
+                    .maybeSingle()
+                  deletedProjectName = goalProject?.name ?? undefined
+                }
+
+                createdItem = {
+                  type: 'goal',
+                  name: goalToDelete.name,
+                  id: goalToDelete.id,
+                  projectId: goalToDelete.project_id,
+                  projectName: deletedProjectName,
+                  status: 'deleted',
+                  mode: 'deleted'
+                }
+                automationMessages.push(
+                  deletedProjectName
+                    ? `Removed "${goalToDelete.name}" from ${deletedProjectName}.`
+                    : `Removed "${goalToDelete.name}".`
+                )
+                break
+              }
+
+              const projectLookup = await resolveProjectForGoal(supabaseClient, user.id, {
+                projectId: entity.data.projectId ?? entity.data.project_id ?? null,
+                projectName: entity.data.projectName ?? entity.data.project ?? null
+              })
+
+              if (!projectLookup.project) {
+                automationMessages.push(projectLookup.error ?? 'Which project should I use for that goal?')
+                break
+              }
+
+              const goalName = entity.data.name.toString().trim()
+              if (!goalName) {
+                automationMessages.push('I need the goal title to continue. What should I call it?')
+                break
+              }
+
+              const goalStatus = normaliseGoalStatus(entity.data.status)
+              const goalPriority = normaliseGoalPriority(entity.data.priority)
+              const targetDateValue = entity.data.targetDate ?? entity.data.dueDate ?? null
+              const goalDescription = entity.data.description ?? null
+
+              const goalIdFromEntity = entity.data.goalId ?? entity.data.goal_id ?? null
+
+              let existingGoal = null
+
+              if (goalIdFromEntity) {
+                const { data } = await supabaseClient
+                  .from('project_goals')
+                  .select('id, name, description, status, priority, target_date, order_index')
+                  .eq('owner_id', user.id)
+                  .eq('id', goalIdFromEntity)
+                  .maybeSingle()
+                existingGoal = data
+              }
+
+              if (!existingGoal) {
+                const { data } = await supabaseClient
+                  .from('project_goals')
+                  .select('id, name, description, status, priority, target_date, order_index')
+                  .eq('owner_id', user.id)
+                  .eq('project_id', projectLookup.project.id)
+                  .eq('name', goalName)
+                  .maybeSingle()
+                existingGoal = data
+              }
+
+              const mutationPayload: Record<string, unknown> = {
+                owner_id: user.id,
+                project_id: projectLookup.project.id,
+                name: goalName,
+                status: goalStatus,
+                priority: goalPriority
+              }
+
+              if (goalDescription !== undefined) {
+                mutationPayload.description = goalDescription
+              }
+
+              if (targetDateValue !== undefined) {
+                mutationPayload.target_date = targetDateValue
+              }
+
+              let goalResult = null
+              let goalMutationType: 'created' | 'updated' = 'created'
+
+              if (existingGoal) {
+                const updatePayload: Record<string, unknown> = {
+                  status: goalStatus,
+                  priority: goalPriority,
+                  project_id: projectLookup.project.id,
+                  name: goalName
+                }
+
+                if (goalDescription !== undefined) {
+                  updatePayload.description = goalDescription
+                }
+
+                if (targetDateValue !== undefined) {
+                  updatePayload.target_date = targetDateValue
+                }
+
+                const updateWithPersona = { ...updatePayload, persona_id: user.id }
+                let updatedGoalResponse = await supabaseClient
+                  .from('project_goals')
+                  .update(updateWithPersona)
+                  .eq('id', existingGoal.id)
+                  .select('id, name, description, status, priority, target_date, project_id')
+                  .single()
+
+                if (updatedGoalResponse.error && updatedGoalResponse.error.code === '42703') {
+                  console.warn('persona_id column missing on project_goals, retrying update without it')
+                  updatedGoalResponse = await supabaseClient
+                    .from('project_goals')
+                    .update(updatePayload)
+                    .eq('id', existingGoal.id)
+                    .select('id, name, description, status, priority, target_date, project_id')
+                    .single()
+                }
+
+                if (updatedGoalResponse.error) {
+                  console.error('Failed to update goal:', updatedGoalResponse.error)
+                  automationMessages.push("I couldn't update that goal. Could you try again?")
+                  break
+                }
+
+                goalResult = updatedGoalResponse.data
+                goalMutationType = 'updated'
+              } else {
+                const insertWithPersona = { ...mutationPayload, persona_id: user.id }
+                let insertedGoalResponse = await supabaseClient
+                  .from('project_goals')
+                  .insert(insertWithPersona)
+                  .select('id, name, description, status, priority, target_date, project_id')
+                  .single()
+
+                if (insertedGoalResponse.error && insertedGoalResponse.error.code === '42703') {
+                  console.warn('persona_id column missing on project_goals, retrying insert without it')
+                  insertedGoalResponse = await supabaseClient
+                    .from('project_goals')
+                    .insert(mutationPayload)
+                    .select('id, name, description, status, priority, target_date, project_id')
+                    .single()
+                }
+
+                if (insertedGoalResponse.error) {
+                  console.error('Failed to create goal:', insertedGoalResponse.error)
+                  automationMessages.push("I couldn't add that goal. Could you double-check the details?")
+                  break
+                }
+
+                goalResult = insertedGoalResponse.data
+                goalMutationType = 'created'
+              }
+
+              if (goalResult) {
+                createdItem = {
+                  type: 'goal',
+                  name: goalResult.name,
+                  id: goalResult.id,
+                  projectId: goalResult.project_id,
+                  projectName: projectLookup.project.name,
+                  status: goalResult.status,
+                  targetDate: goalResult.target_date,
+                  description: goalResult.description,
+                  priority: goalResult.priority,
+                  mode: goalMutationType
+                }
+
+                const confirmation = goalMutationType === 'updated'
+                  ? `Updated goal "${goalResult.name}" in ${projectLookup.project.name}.`
+                  : `Added "${goalResult.name}" to ${projectLookup.project.name}.`
+
+                automationMessages.push(confirmation)
+                console.log(`Goal ${goalMutationType}:`, goalResult.name)
+              }
+
+              break
+
+            case 'milestone':
+              if (entity.data.name) {
+                // Handle DELETE action
+                if (entity.data.action === 'delete') {
+                  const { data: milestoneToDelete } = await supabaseClient
+                    .from('project_milestones')
+                    .select('id, name')
+                    .eq('owner_id', user.id)
+                    .ilike('name', entity.data.name)
+                    .limit(1)
+                    .single()
+
+                  if (milestoneToDelete) {
+                    const { error: deleteError } = await supabaseClient
+                      .from('project_milestones')
+                      .update({ status: 'deleted' })
+                      .eq('id', milestoneToDelete.id)
+
+                    if (!deleteError) {
+                      createdItem = { type: 'milestone', name: milestoneToDelete.name, id: milestoneToDelete.id, action: 'deleted' }
+                      console.log('Deleted milestone:', milestoneToDelete.name)
+                    }
+                  } else {
+                    console.warn('⚠️ Milestone not found for deletion:', entity.data.name)
+                  }
+                  break
+                }
+
+                // Find project ID if project name is mentioned
+                let projectId = null
+                if (entity.data.project) {
+                  const { data: foundProject } = await supabaseClient
+                    .from('projects')
+                    .select('id')
+                    .eq('owner_id', user.id)
+                    .ilike('name', `%${entity.data.project}%`)
+                    .limit(1)
+                    .single()
+                  projectId = foundProject?.id
+                }
+
+                if (projectId) {
+                  // IDEMPOTENCY CHECK: Check for existing milestone within 5 minutes
+                  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
+                  const { data: existingMilestones } = await supabaseClient
+                    .from('project_milestones')
+                    .select('id, name, status')
+                    .eq('owner_id', user.id)
+                    .eq('project_id', projectId)
+                    .ilike('name', entity.data.name)
+                    .gte('created_at', fiveMinutesAgo)
+                    .limit(1)
+
+                  if (existingMilestones && existingMilestones.length > 0) {
+                    const existingMilestone = existingMilestones[0]
+                    // UPDATE mode: update existing milestone
+                    const { data: updatedMilestone, error: updateError } = await supabaseClient
+                      .from('project_milestones')
+                      .update({
+                        description: entity.data.description || null,
+                        status: entity.data.status || existingMilestone.status,
+                        due_date: entity.data.dueDate || null
+                      })
+                      .eq('id', existingMilestone.id)
+                      .select()
+                      .single()
+
+                    if (!updateError && updatedMilestone) {
+                      createdItem = { type: 'milestone', name: updatedMilestone.name, id: updatedMilestone.id }
+                      console.log('Updated milestone:', updatedMilestone.name)
+                    }
+                  } else {
+                    // INSERT mode: create new milestone
+                    const { data: newMilestone, error } = await supabaseClient
+                      .from('project_milestones')
+                      .insert({
+                        owner_id: user.id,
+                        project_id: projectId,
+                        name: entity.data.name,
+                        description: entity.data.description || null,
+                        status: entity.data.status || 'active',
+                        due_date: entity.data.dueDate || null
+                      })
+                      .select()
+                      .single()
+
+                    if (!error && newMilestone) {
+                      createdItem = { type: 'milestone', name: newMilestone.name, id: newMilestone.id }
+                      console.log('Created milestone:', newMilestone.name)
+                    }
+                  }
+                } else {
+                  console.warn('⚠️ Milestone requires valid project_id, skipping')
+                }
+              }
+              break
+
+            case 'knowledge':
+              if (entity.data.name) {
+                const { data: newKnowledge, error } = await supabaseClient
+                  .from('knowledge_items')
+                  .insert({
+                    owner_id: user.id,
+                    name: entity.data.name,
+                    content: entity.data.content || null,
+                    type: entity.data.type || 'summary',
+                    occurred_at: new Date().toISOString(),
+                    tags: entity.data.tags || null
+                  })
+                  .select()
+                  .single()
+
+                if (!error && newKnowledge) {
+                  createdItem = { type: 'knowledge', name: newKnowledge.name, id: newKnowledge.id }
+                  console.log('Created knowledge item:', newKnowledge.name)
+                }
+              }
+              break
+
+            case 'insight':
+              if (entity.data.title) {
+                // Validate insight type
+                const validTypes = ['article', 'opportunity', 'trend', 'note']
+                const insightType = entity.data.type && validTypes.includes(entity.data.type)
+                  ? entity.data.type
+                  : 'note'
+
+                // Find project ID if project name is mentioned
+                let projectId = null
+                if (entity.data.project) {
+                  const { data: foundProject } = await supabaseClient
+                    .from('projects')
+                    .select('id')
+                    .eq('owner_id', user.id)
+                    .ilike('name', `%${entity.data.project}%`)
+                    .limit(1)
+                    .single()
+                  projectId = foundProject?.id
+                }
+
+                // IDEMPOTENCY CHECK: Check for existing insight within 5 minutes
+                const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
+                const { data: existingInsights } = await supabaseClient
+                  .from('user_insights')
+                  .select('id, title')
+                  .eq('owner_id', user.id)
+                  .ilike('title', entity.data.title)
+                  .eq('category', entity.data.category || 'personal')
+                  .gte('created_at', fiveMinutesAgo)
+                  .limit(1)
+
+                if (existingInsights && existingInsights.length > 0) {
+                  console.log('⚠️ Duplicate insight detected, skipping:', entity.data.title)
+                  createdItem = { type: 'insight', name: existingInsights[0].title, id: existingInsights[0].id }
+                } else {
+                  // INSERT mode: create new insight
+                  const { data: newInsight, error } = await supabaseClient
+                    .from('user_insights')
+                    .insert({
+                      owner_id: user.id,
+                      title: entity.data.title,
+                      summary: entity.data.summary || null,
+                      insight_type: insightType,
+                      category: entity.data.category || 'personal',
+                      source_url: entity.data.source_url || null,
+                      project_id: projectId,
+                      relevance: entity.data.relevance || 50
+                    })
+                    .select()
+                    .single()
+
+                  if (!error && newInsight) {
+                    createdItem = { type: 'insight', name: newInsight.title, id: newInsight.id }
+                    console.log('Created insight:', newInsight.title, 'type:', insightType)
+                  }
+                }
+              }
+              break
+          }
+
+          if (createdItem) {
+            executedEntities.push(createdItem)
+
+            // Update active streak when entity is created/updated
+            if (createdItem.action !== 'deleted') {
+              await updateActiveStreak(user.id, supabaseClient)
+            }
+          }
+        } catch (entityError) {
+          console.error(`Failed to create ${entity.type}:`, entityError)
+        }
+      }
+
+      // Also store in parsed entities table for reference
+      const entitiesToInsert = parsed.entities.map((entity: any) => ({
+        owner_id: user.id,
+        entity_type: entity.type,
+        entity_data: entity.data,
+        source_message_id: assistantMsg?.id || null,
+        message_id: messageId || null
+      }))
+
+      await supabaseClient.from('claude_parsed_entities').insert(entitiesToInsert)
+    }
+
+    const finalResponseText = automationMessages.length > 0
+      ? automationMessages.join('\n')
+      : (parsed.conversationalResponse || assistantMsg?.content || 'All set.')
+
+    if (assistantMsg && finalResponseText !== assistantMsg.content) {
+      await supabaseClient
+        .from('chat_messages')
+        .update({ content: finalResponseText })
+        .eq('id', assistantMsg.id)
+    }
+
+    // Return response to frontend
+    return new Response(
+      JSON.stringify({
+        response: finalResponseText,
+        entitiesExtracted: parsed.entities?.length || 0,
+        entitiesCreated: executedEntities
+      }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200
+      }
+    )
+
+  } catch (error) {
+    console.error('Chat function error:', error)
+    return new Response(
+      JSON.stringify({
+        error: error.message || 'An error occurred',
+        details: error.toString()
+      }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400
+      }
+    )
+  }
+})

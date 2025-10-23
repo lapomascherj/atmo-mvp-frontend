@@ -100,6 +100,7 @@ const normalizeMessagesToPromptEntries = (messages: ChatSessionMessage[]): Promp
   messages.map((msg) => ({
     message: msg.content,
     sender: msg.role === 'user' ? 'user' : 'ai',
+    highlightColor: msg.metadata?.highlightColor,  // Restore color from metadata
   }));
 
 const historiesAreEqual = (current: PromptEntry[], next: PromptEntry[]): boolean => {

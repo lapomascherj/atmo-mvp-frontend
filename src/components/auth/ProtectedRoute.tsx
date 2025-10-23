@@ -18,19 +18,12 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
 
   const isAuthenticated = !!session;
   const isProfileReady = !isAuthenticated || !!hydratedProfile;
-  const isLoading = initializing || profileLoading || (isAuthenticated && !isProfileReady);
+  
+  // Only show loading on TRUE initialization, not on background refreshes
+  // If we already have a profile, skip the loading screen even if profileLoading is true
+  const isLoading = initializing || (profileLoading && !hydratedProfile) || (isAuthenticated && !isProfileReady);
 
-  if (import.meta.env.DEV) {
-    console.debug('[ProtectedRoute]', {
-      path: location.pathname,
-      initializing,
-      profileLoading,
-      isAuthenticated,
-      hasProfile: !!hydratedProfile,
-    });
-  }
-
-  // Show loading state while checking authentication
+  // Show loading state ONLY on initial authentication check (no profile yet)
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-950 flex items-center justify-center">
@@ -44,13 +37,11 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
 
   // Redirect to login if not authenticated
   if (!isAuthenticated) {
-    console.debug('[ProtectedRoute] Not authenticated, redirecting to login');
     return <Navigate to="/auth/login" state={{ from: location }} replace />;
   }
 
   // Wait for profile to load before making onboarding decisions
   if (isAuthenticated && !hydratedProfile) {
-    console.debug('[ProtectedRoute] Waiting for profile to load...');
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-950 flex items-center justify-center">
         <div className="text-center">
@@ -63,13 +54,11 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
 
   // Only redirect to onboarding if we have a profile and it's not completed
   if (isAuthenticated && hydratedProfile && !hydratedProfile.onboarding_completed && location.pathname !== '/onboarding') {
-    console.debug('[ProtectedRoute] Redirecting to onboarding - onboarding not completed');
     return <Navigate to="/onboarding" replace />;
   }
 
   // Only redirect away from onboarding if we have a profile and it IS completed
   if (isAuthenticated && hydratedProfile && hydratedProfile.onboarding_completed && location.pathname === '/onboarding') {
-    console.debug('[ProtectedRoute] Redirecting to /app - onboarding already completed');
     return <Navigate to="/app" replace />;
   }
 

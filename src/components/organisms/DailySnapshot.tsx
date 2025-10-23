@@ -3,6 +3,7 @@ import { MessageCircle, Headphones, Play, Pause } from 'lucide-react';
 import { Button } from '../atoms/Button';
 import { AtmoCard } from '../molecules/AtmoCard';
 import { promptStore } from '@/stores/promptStore.ts';
+import AtmoOutputsCard from './AtmoOutputsCard';
 
 interface DailySnapshotProps {
   // Props for backend integration
@@ -59,93 +60,19 @@ const DailySnapshot: React.FC<DailySnapshotProps> = ({
   };
 
   return (
-    <div className="w-full space-y-3">
-      {/* 1️⃣ Today Inspo Card - Compact */}
-      <AtmoCard variant="orange" className="p-3" hover={true} glow={true}>
-        <div className="relative">
-          {/* Card Title */}
-          <h3 className="text-lg font-semibold text-white mb-3">Today Inspo</h3>
-          
-          {/* User Routine Type */}
-          <div className="mb-4 pb-3 border-b border-white/10">
-            <p className="text-sm text-white/70 mb-1">Your routine</p>
-            <p className="text-sm font-medium text-[#FF5F1F]">Busy 9–5 worker</p>
-          </div>
-          
-          {/* Day Phases - Compact */}
-          <div className="space-y-2">
-            {/* Seed - Morning */}
-            <div className="bg-white/5 rounded-lg p-3 border border-white/10 hover:border-[#FF5F1F]/30 transition-colors">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-green-400"></div>
-                  <span className="text-sm font-medium text-white">Seed</span>
-                  <span className="text-xs text-white/60">morning</span>
-                </div>
-                <Button
-                  onClick={() => handleOpenInChat("Morning seed action")}
-                  size="sm"
-                  variant="ghost"
-                  className="h-7 px-2 text-xs text-[#FF5F1F] hover:text-white hover:bg-[#FF5F1F]/10"
-                >
-                  <MessageCircle size={10} className="mr-1" />
-                  Start
-                </Button>
-              </div>
-            </div>
-
-            {/* Grow - Afternoon */}
-            <div className="bg-white/5 rounded-lg p-3 border border-white/10 hover:border-[#FF5F1F]/30 transition-colors">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-yellow-400"></div>
-                  <span className="text-sm font-medium text-white">Grow</span>
-                  <span className="text-xs text-white/60">afternoon</span>
-                </div>
-                <Button
-                  onClick={() => handleOpenInChat("Afternoon grow action")}
-                  size="sm"
-                  variant="ghost"
-                  className="h-7 px-2 text-xs text-[#FF5F1F] hover:text-white hover:bg-[#FF5F1F]/10"
-                >
-                  <MessageCircle size={10} className="mr-1" />
-                  Start
-                </Button>
-              </div>
-            </div>
-
-            {/* Bloom - Evening */}
-            <div className="bg-white/5 rounded-lg p-3 border border-white/10 hover:border-[#FF5F1F]/30 transition-colors">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-purple-400"></div>
-                  <span className="text-sm font-medium text-white">Bloom</span>
-                  <span className="text-xs text-white/60">evening</span>
-                </div>
-                <Button
-                  onClick={() => handleOpenInChat("Evening bloom action")}
-                  size="sm"
-                  variant="ghost"
-                  className="h-7 px-2 text-xs text-[#FF5F1F] hover:text-white hover:bg-[#FF5F1F]/10"
-                >
-                  <MessageCircle size={10} className="mr-1" />
-                  Start
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </AtmoCard>
+    <div className="space-y-3">
+      {/* 1️⃣ ATMO Outputs Card - Shows today's AI-generated content */}
+      <AtmoOutputsCard />
 
       {/* 2️⃣ Morning AI Podcast Card - Simplified */}
-      <AtmoCard variant="orange" className="p-3" hover={true} glow={true}>
-        <div className="relative">
+      <AtmoCard variant="orange" className="p-3 w-72 h-[200px]" hover={true} glow={true}>
+        <div className="relative h-full flex flex-col">
           {/* Card Title */}
           <h3 className="text-lg font-semibold text-white mb-3">Morning AI Podcast</h3>
-          
+
           {/* Podcast Focus */}
           <p className="text-sm text-white/80 mb-4">Productivity Strategies for Busy 9-5 Workers</p>
-          
+
           {/* Compact Audio Player */}
           <div className="bg-[#FF5F1F]/10 rounded-lg p-3 border border-[#FF5F1F]/20">
             <div className="flex items-center justify-between">
@@ -169,13 +96,13 @@ const DailySnapshot: React.FC<DailySnapshotProps> = ({
       </AtmoCard>
 
       {/* 3️⃣ Second Card - Compact */}
-      <AtmoCard variant="orange" className="p-3" hover={true} glow={true}>
-        <div className="relative">
+      <AtmoCard variant="orange" className="p-3 w-72 h-[100px]" hover={true} glow={true}>
+        <div className="relative h-full flex flex-col">
           {/* Card Title */}
           <h3 className="text-lg font-semibold text-white mb-3">Coming Soon</h3>
-          
+
           {/* Compact Placeholder Content */}
-          <div className="text-center py-4">
+          <div className="flex-1 flex items-center justify-center">
             <p className="text-sm text-white/60">
               Additional feature coming soon
             </p>
@@ -187,4 +114,4 @@ const DailySnapshot: React.FC<DailySnapshotProps> = ({
   );
 };
 
-export default DailySnapshot;
+export default React.memo(DailySnapshot);

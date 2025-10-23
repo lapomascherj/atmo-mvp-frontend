@@ -176,7 +176,18 @@ export const useMockAuth = () => {
   }, [auth.session, auth.hydratedProfile]);
 
   useEffect(() => {
+    const timestamp = new Date().toLocaleTimeString();
+    console.log(`🔄 [${timestamp}] [useMockAuth] syncWithProfile called`, {
+      hasProfile: !!userProfile,
+      profileId: userProfile?.id,
+    });
     usePersonasStore.getState().syncWithProfile(userProfile);
+
+    // Force workspace fetch when user profile becomes available
+    if (userProfile?.id) {
+      console.log(`📥 [${timestamp}] [useMockAuth] Triggering workspace fetch for user:`, userProfile.id);
+      usePersonasStore.getState().fetchPersonaByIam(null, userProfile.id, false);
+    }
   }, [userProfile]);
 
   return {

@@ -19,7 +19,16 @@ const createFailingProxy = (): SupabaseClient<any, 'public', any> => {
   return proxyFactory() as unknown as SupabaseClient<any, 'public', any>;
 };
 
-export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
+// Check if URL and key are real (not placeholder values)
+const isPlaceholderUrl = supabaseUrl?.includes('placeholder') || false;
+const isPlaceholderKey = supabaseAnonKey?.includes('placeholder') || false;
+
+export const isSupabaseConfigured = Boolean(
+  supabaseUrl && 
+  supabaseAnonKey && 
+  !isPlaceholderUrl && 
+  !isPlaceholderKey
+);
 
 if (!isSupabaseConfigured && import.meta.env.DEV) {
   console.warn(

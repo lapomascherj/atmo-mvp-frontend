@@ -156,9 +156,11 @@ export const PriorityStreamEnhanced: React.FC<PriorityStreamProps> = ({ classNam
   }, [outstandingTasks]);
 
   const tasksToShow = useMemo(() => {
-    // Show ALL active tasks - no artificial limit
-    return sortedTasks;
-  }, [sortedTasks]);
+    // Smart limiting: show reasonable number based on context
+    // Dashboard gets more space, digital-brain is compact
+    const limit = context === 'dashboard' ? 8 : 5;
+    return sortedTasks.slice(0, limit);
+  }, [sortedTasks, context]);
 
   const priorityTotals = useMemo(() => {
     return sortedTasks.reduce(
@@ -349,176 +351,128 @@ export const PriorityStreamEnhanced: React.FC<PriorityStreamProps> = ({ classNam
                     backgroundColor: 'rgba(0, 0, 0, 0.3)',
                   }}
                 >
-                  {/* Card Header - Always visible */}
-                  <div className="p-4">
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="w-2 h-2 rounded-full"
-                          style={{ backgroundColor: task.projectColor || '#3b82f6' }}
-                        />
-                        <span className="text-xs font-semibold text-white/90 uppercase tracking-wide">
-                          {task.project || 'Uncategorized'}
-                        </span>
+                  <button
+                    className="w-full text-left"
+                    onClick={() => toggleTaskExpansion(task.id)}
+                  >
+                    <div className="p-4">
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-2 h-2 rounded-full"
+                            style={{ backgroundColor: task.projectColor || '#3b82f6' }}
+                          />
+                          <span className="text-xs font-semibold text-white/90 uppercase tracking-wide">
+                            {task.project || 'Uncategorized'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {task.time && (
+                            <span className="text-xs text-white/50">{task.time}</span>
+                          )}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleTaskEdit(task.id, task.description);
+                            }}
+                            className="p-1 rounded hover:bg-white/10 transition-colors text-white/50"
+                          >
+                            <Edit3 size={14} />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleTaskDelete(task.id, task.title);
+                            }}
+                            className="p-1 rounded hover:bg-white/10 transition-colors text-white/50"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
                       </div>
-                      {task.time && (
-                        <span className="text-xs text-white/50">{task.time}</span>
-                      )}
-                    </div>
 
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1">
-                        <h4 className="text-sm font-medium text-white/90 mb-1">
-                          {task.title}
-                        </h4>
-                        {task.description && !isExpanded && (
-                          <p className="text-xs text-white/60 line-clamp-1">{task.description}</p>
-                        )}
-                      </div>
-                      <button
-                        onClick={() => toggleTaskExpansion(task.id)}
-                        className="p-1 hover:bg-white/10 rounded transition-colors flex-shrink-0"
-                      >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 pr-4">
+                          <h4 className="text-sm font-medium text-white/90 mb-1">
+                            {task.title}
+                          </h4>
+                          {task.description && (
+                            <p className="text-xs text-white/60 line-clamp-2">
+                              {task.description}
+                            </p>
+                          )}
+                        </div>
                         <ChevronDown
                           size={16}
                           className={cn(
-                            'text-white/60 transition-transform',
-                            isExpanded && 'rotate-180'
+                            'text-white/40 transition-transform duration-200',
+                            isExpanded && 'rotate-180 text-white/60'
                           )}
                         />
-                      </button>
-                    </div>
+                      </div>
 
-                    <div className="flex items-center gap-2 mt-3">
-                      <span
-                        className={cn(
-                          'px-2 py-1 rounded text-[10px] font-semibold uppercase',
-                          priorityTheme[task.priority].className
-                        )}
-                      >
-                        {statusBadge}
-                      </span>
-                      <span
-                        className={cn(
-                          'px-2 py-1 rounded text-[10px] font-semibold uppercase',
-                          priorityTheme[task.priority].className
-                        )}
-                      >
-                        {priorityTheme[task.priority].label}
-                      </span>
+                      <div className="flex items-center gap-2 mt-3">
+                        <span
+                          className={cn(
+                            'px-2 py-1 rounded text-[10px] font-semibold uppercase',
+                            priorityTheme[task.priority].className
+                          )}
+                        >
+                          {statusBadge}
+                        </span>
+                        <span
+                          className={cn(
+                            'px-2 py-1 rounded text-[10px] font-semibold uppercase',
+                            priorityTheme[task.priority].className
+                          )}
+                        >
+                          {priorityTheme[task.priority].label}
+                        </span>
+                      </div>
                     </div>
-                  </div>
+                  </button>
 
-                  {/* Expanded Section - Only visible when expanded */}
                   {isExpanded && (
-                    <div className="px-4 pb-4 space-y-3 border-t border-white/10 pt-3">
-                      {/* AI Summary Panel */}
-                      <div className="bg-white/5 rounded-lg p-3">
-                        <h5 className="text-xs font-semibold text-white/80 mb-2 flex items-center gap-2">
-                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M10 3.5a1.5 1.5 0 013 0V4a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-.5a1.5 1.5 0 000 3h.5a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-.5a1.5 1.5 0 00-3 0v.5a1 1 0 01-1 1H6a1 1 0 01-1-1v-3a1 1 0 00-1-1h-.5a1.5 1.5 0 010-3H4a1 1 0 001-1V6a1 1 0 011-1h3a1 1 0 001-1v-.5z" />
-                          </svg>
-                          AI Summary
-                        </h5>
-                        <p className="text-xs text-white/60">
-                          {task.description || 'No summary available yet. The AI will generate one based on your progress and context.'}
-                        </p>
-                      </div>
-
-                      {/* Research Notes Panel */}
-                      <div className="bg-white/5 rounded-lg p-3">
-                        <h5 className="text-xs font-semibold text-white/80 mb-2">Research Notes</h5>
-                        <ul className="text-xs text-white/60 space-y-1 list-disc list-inside">
-                          <li>Key findings and insights will appear here</li>
-                          <li>Relevant resources and documentation links</li>
-                          <li>Important context and dependencies</li>
-                        </ul>
-                      </div>
-
-                      {/* Next Steps Panel */}
-                      <div className="bg-white/5 rounded-lg p-3">
-                        <h5 className="text-xs font-semibold text-white/80 mb-2">Next Steps</h5>
-                        <ol className="text-xs text-white/60 space-y-1 list-decimal list-inside">
-                          <li>Suggested action items will appear here</li>
-                          <li>Sequenced based on dependencies</li>
-                          <li>Updated as you make progress</li>
-                        </ol>
-                      </div>
-
-                      {/* AI-Generated Draft (for code-relevant tasks) */}
-                      {task.description?.toLowerCase().includes('code') ||
-                       task.description?.toLowerCase().includes('implement') ||
-                       task.title.toLowerCase().includes('code') ||
-                       task.title.toLowerCase().includes('implement') ? (
-                        <div className="bg-white/5 rounded-lg p-3">
-                          <h5 className="text-xs font-semibold text-white/80 mb-2 flex items-center gap-2">
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-                            </svg>
-                            AI-Generated Draft
-                          </h5>
-                          <div className="text-xs text-white/60 font-mono bg-black/30 p-2 rounded">
-                            Code suggestions will be generated here based on your task requirements.
-                          </div>
-                        </div>
-                      ) : null}
-
-                      {/* Action buttons - only in Digital Brain context */}
-                      {context === 'digital-brain' && (
-                        <div className="flex items-center gap-2 pt-2">
-                          <button
-                            onClick={() => handleTaskCompletion(task.id, !task.completed)}
-                            className="flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded text-xs text-white/70 transition-colors"
-                          >
-                            <Checkbox
-                              id={`task-${task.id}-expanded`}
-                              checked={task.completed}
-                              onCheckedChange={(checked) => handleTaskCompletion(task.id, checked === true)}
-                              className="h-3 w-3 border-white/20 data-[state=checked]:bg-[#ff7000] data-[state=checked]:border-[#ff7000]"
-                            />
-                            Mark Complete
-                          </button>
-                          <button
-                            onClick={() => handleTaskEdit(task.id, task.description)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded text-xs text-white/70 transition-colors"
-                          >
-                            <Edit3 size={12} />
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleTaskDelete(task.id, task.title)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 hover:bg-red-500/20 rounded text-xs text-white/70 hover:text-red-400 transition-colors"
-                          >
-                            <X size={12} />
-                            Delete
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Delete only button for Dashboard */}
-                      {context === 'dashboard' && (
+                    <div className="border-t border-white/10 bg-slate-900/40 px-4 pb-4">
+                      <div className="flex items-start justify-between py-3 border-b border-white/10">
                         <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => handleTaskCompletion(task.id, !task.completed)}
-                            className="flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded text-xs text-white/70 transition-colors"
-                          >
-                            <Checkbox
-                              id={`task-${task.id}-expanded`}
-                              checked={task.completed}
-                              onCheckedChange={(checked) => handleTaskCompletion(task.id, checked === true)}
-                              className="h-3 w-3 border-white/20 data-[state=checked]:bg-[#ff7000] data-[state=checked]:border-[#ff7000]"
-                            />
-                            Mark Complete
-                          </button>
-                          <button
-                            onClick={() => handleTaskDelete(task.id, task.title)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 hover:bg-red-500/20 rounded text-xs text-white/70 hover:text-red-400 transition-colors"
-                          >
-                            <X size={12} />
-                            Delete
-                          </button>
+                          <Checkbox
+                            checked={task.completed}
+                            onCheckedChange={(checked) => handleTaskCompletion(task.id, Boolean(checked))}
+                            className="h-4 w-4 border-white/20 data-[state=checked]:bg-[#ff7000] data-[state=checked]:border-[#ff7000]"
+                          />
+                          <span className="text-xs text-white/70">Mark Complete</span>
+                        </div>
+                      </div>
+
+                      {task.description && (
+                        <div className="py-3 border-b border-white/10">
+                          <h5 className="text-xs font-semibold text-white/60 mb-2 uppercase tracking-wide">Task Details</h5>
+                          <p className="text-xs text-white/70 whitespace-pre-line">
+                            {task.description}
+                          </p>
                         </div>
                       )}
+
+                      <div className="flex items-center gap-2 mt-3">
+                        <button
+                          onClick={() => handleTaskCompletion(task.id, !task.completed)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded text-xs text-white/70"
+                        >
+                          <Checkbox
+                            checked={task.completed}
+                            className="h-3 w-3 border-white/20 data-[state=checked]:bg-[#ff7000] data-[state=checked]:border-[#ff7000]"
+                          />
+                          Mark Complete
+                        </button>
+                        <button
+                          onClick={() => handleTaskDelete(task.id, task.title)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 hover:bg-red-500/20 rounded text-xs text-white/70 hover:text-red-400 transition-colors"
+                        >
+                          <X size={12} />
+                          Delete
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>

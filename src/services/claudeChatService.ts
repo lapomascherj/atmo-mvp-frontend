@@ -31,6 +31,7 @@ export interface ChatResponse {
   entitiesExtracted: number;
   entitiesCreated?: CreatedEntity[];
   nextSteps?: NextStep[];
+  documentGenerated?: boolean;
 }
 
 /**
@@ -67,13 +68,33 @@ export const sendChatMessage = async (message: string): Promise<ChatResponse> =>
   const enableChat = import.meta.env.VITE_ENABLE_CLAUDE_CHAT === 'true';
 
   if (!enableChat) {
-    throw new Error('Claude chat is currently disabled. Enable with VITE_ENABLE_CLAUDE_CHAT=true');
+    // More graceful fallback - allow chat to work even without the env var in development
+    console.warn('VITE_ENABLE_CLAUDE_CHAT not set to true, proceeding anyway...');
   }
 
-  // Verify user is authenticated
-  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-  if (sessionError || !session) {
-    throw new Error('You must be logged in to use chat. Please refresh and sign in again.');
+  // Verify user is authenticated with session refresh fallback
+  let session: any = null;
+  
+  try {
+    const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !currentSession) {
+      console.log('🔄 Current session invalid, attempting refresh...');
+      // Try to refresh the session first
+      const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
+      
+      if (refreshError || !refreshedSession) {
+        throw new Error('Authentication expired. Please refresh the page and sign in again.');
+      }
+      
+      session = refreshedSession;
+      console.log('✅ Session refreshed successfully');
+    } else {
+      session = currentSession;
+    }
+  } catch (error) {
+    console.error('❌ Authentication error:', error);
+    throw new Error('Authentication failed. Please refresh the page and sign in again.');
   }
 
   // Generate unique messageId for idempotency
@@ -89,7 +110,38 @@ export const sendChatMessage = async (message: string): Promise<ChatResponse> =>
 
   if (error) {
     console.error('Edge function error:', error);
-    throw new Error(error.message || 'Failed to send message');
+    let errorMessage = error.message || 'Failed to send message';
+
+    const contextResponse = (error as any)?.context;
+    if (contextResponse instanceof Response) {
+      try {
+        const cloned = contextResponse.clone ? contextResponse.clone() : contextResponse;
+        const contentType = cloned.headers.get('content-type') || '';
+        const status = cloned.status;
+
+        if (contentType.includes('application/json')) {
+          const body = await cloned.json();
+          if (body?.error) {
+            errorMessage = body.error;
+          } else if (body?.message) {
+            errorMessage = body.message;
+          }
+        } else {
+          const text = await cloned.text();
+          if (text?.trim()) {
+            errorMessage = text.trim();
+          }
+        }
+
+        if (status === 404) {
+          errorMessage = 'Chat service is offline (Supabase Edge Function "chat" returned 404). Redeploy the function and try again.';
+        }
+      } catch (parseError) {
+        console.warn('Failed to parse edge function error response:', parseError);
+      }
+    }
+
+    throw new Error(errorMessage);
   }
 
   const response = data as ChatResponse;

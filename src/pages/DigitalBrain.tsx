@@ -19,6 +19,7 @@ import { generateProfessionalDescription } from '@/utils/professionalDescription
 import { analyzeFocusAreaInsights, type FocusAreaInsight } from '@/utils/focusAreaInsights';
 import { FocusAreaCard } from '@/components/molecules/FocusAreaCard';
 import { PersonalSnapshotOverlay } from '@/components/organisms/PersonalSnapshotOverlay';
+import { PersonalDataCard } from '@/components/organisms/PersonalDataCard';
 import { getTimeHorizonSummary } from '@/utils/timeHorizonCalculator';
 import type { Project } from '@/models/Project';
 
@@ -46,6 +47,9 @@ const DigitalBrain: React.FC = () => {
 
   // Personal snapshot overlay state
   const [showPersonalSnapshot, setShowPersonalSnapshot] = useState(false);
+  
+  // Personal data card state
+  const [showPersonalDataCard, setShowPersonalDataCard] = useState(false);
 
   // Check for URL parameters to auto-open chat
   useEffect(() => {
@@ -892,7 +896,9 @@ const DigitalBrain: React.FC = () => {
                   <div className="flex-1 min-w-0">
                     <h3
                       onClick={() => setShowPersonalSnapshot(true)}
+                      onDoubleClick={() => setShowPersonalDataCard(true)}
                       className="text-sm font-semibold text-white cursor-pointer hover:text-purple-300 transition-colors"
+                      title="Click for snapshot, double-click for full data card"
                     >
                       {user?.nickname || user?.preferredName || user?.email?.split('@')[0] || 'User'}
                     </h3>
@@ -1407,6 +1413,14 @@ const DigitalBrain: React.FC = () => {
           focusAreas={focusAreas}
           userLevel={userLevel}
           onClose={() => setShowPersonalSnapshot(false)}
+        />
+      )}
+
+      {/* Personal Data Card */}
+      {showPersonalDataCard && user && (
+        <PersonalDataCard
+          user={user}
+          onClose={() => setShowPersonalDataCard(false)}
         />
       )}
     </div>

@@ -20,6 +20,7 @@ import { analyzeFocusAreaInsights, type FocusAreaInsight } from '@/utils/focusAr
 import { FocusAreaCard } from '@/components/molecules/FocusAreaCard';
 import { PersonalSnapshotOverlay } from '@/components/organisms/PersonalSnapshotOverlay';
 import { PersonalDataCard } from '@/components/organisms/PersonalDataCard';
+import { OnboardingStatusCard } from '@/components/onboarding/OnboardingStatusCard';
 import { getTimeHorizonSummary } from '@/utils/timeHorizonCalculator';
 import type { Project } from '@/models/Project';
 
@@ -873,6 +874,8 @@ const DigitalBrain: React.FC = () => {
           <p className="text-white/60 text-sm">Your personal knowledge ecosystem</p>
         </div>
 
+
+
         {/* 2x2 Grid of Cards - Full Width */}
         <div className="grid grid-cols-2 grid-rows-2 gap-6 flex-1 min-h-0">
 
@@ -1338,7 +1341,7 @@ const DigitalBrain: React.FC = () => {
           </AtmoCard>
 
           {/* Card 3 - Knowledge Graph */}
-          <ObsidianKnowledgeGraph className="w-full h-full" />
+          <ObsidianKnowledgeGraph className="w-full h-full" user={user} />
 
           {/* Card 4 - Priority Stream */}
           <PriorityStreamEnhanced context="digital-brain" className="w-full h-full" />

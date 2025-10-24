@@ -16,6 +16,7 @@ import {
   type Challenge,
 } from '@/utils/personalSnapshotAnalyzer';
 import { supabase } from '@/lib/supabase';
+import { OnboardingStatusCard } from '@/components/onboarding/OnboardingStatusCard';
 
 interface PersonalSnapshotOverlayProps {
   user: any;
@@ -208,6 +209,9 @@ export const PersonalSnapshotOverlay: React.FC<PersonalSnapshotOverlayProps> = (
                 </div>
               </div>
             </div>
+
+            {/* Onboarding Status Card */}
+            <OnboardingStatusCard user={user} />
 
             {/* Stats Grid */}
             <div className="grid grid-cols-3 gap-4">

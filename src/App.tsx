@@ -13,6 +13,9 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import ForgotPassword from "./pages/ForgotPassword";
 import Onboarding from "./pages/Onboarding";
+import EnhancedOnboarding from "./pages/EnhancedOnboarding";
+import TestOnboarding from "./pages/TestOnboarding";
+import MockAuthBypass from "./components/auth/MockAuthBypass";
 import DigitalBrain from "./pages/DigitalBrain";
 import Profile from "./pages/Profile";
 
@@ -58,12 +61,26 @@ const AppContent: React.FC = () => {
             <Route path="/auth/signup" element={<Signup />} />
             <Route path="/auth/forgot-password" element={<ForgotPassword />} />
 
-            {/* Onboarding Route (Protected) */}
+            {/* Onboarding Routes (Protected) */}
             <Route path="/onboarding" element={
+                <ProtectedRoute>
+                    <EnhancedOnboarding />
+                </ProtectedRoute>
+            } />
+            
+            <Route path="/onboarding/legacy" element={
                 <ProtectedRoute>
                     <Onboarding />
                 </ProtectedRoute>
             } />
+            
+            <Route path="/test-onboarding" element={
+                <ProtectedRoute>
+                    <TestOnboarding />
+                </ProtectedRoute>
+            } />
+            
+            <Route path="/demo" element={<MockAuthBypass />} />
 
             {/* Protected App Routes */}
             <Route path="/app" element={

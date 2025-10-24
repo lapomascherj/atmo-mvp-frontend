@@ -261,6 +261,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ userName }) => {
                   minWidth: '600px' // Ensure cards don't collapse
                 }}
               >
+
                 {/* Title - at top */}
                 <div className="text-center mt-12 mb-2 flex-shrink-0">
                   <h1 className="text-xl font-bold text-white mb-0.5">Daily Roadmap</h1>

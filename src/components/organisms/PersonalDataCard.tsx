@@ -948,6 +948,7 @@ export const PersonalDataCard: React.FC<PersonalDataCardProps> = ({
                 </CardContent>
               </Card>
             ))}
+            
           </div>
         </div>
 

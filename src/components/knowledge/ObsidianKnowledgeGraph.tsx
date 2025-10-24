@@ -1,9 +1,11 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { AtmoCard } from '@/components/molecules/AtmoCard';
-import { Brain, Maximize2, X, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { Brain, Maximize2, X, ZoomIn, ZoomOut, RotateCcw, BookOpen } from 'lucide-react';
+import { PersonalDataCard } from '@/components/organisms/PersonalDataCard';
 
 interface ObsidianKnowledgeGraphProps {
   className?: string;
+  user?: any;
 }
 
 // Main categories with sub-nodes - All Orange Shades with Varying Sizes
@@ -66,7 +68,7 @@ const MAIN_CATEGORIES = [
   }
 ];
 
-export const ObsidianKnowledgeGraph: React.FC<ObsidianKnowledgeGraphProps> = ({ className }) => {
+export const ObsidianKnowledgeGraph: React.FC<ObsidianKnowledgeGraphProps> = ({ className, user }) => {
   // State management
   const [expandedGraph, setExpandedGraph] = useState(false);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
@@ -74,6 +76,7 @@ export const ObsidianKnowledgeGraph: React.FC<ObsidianKnowledgeGraphProps> = ({ 
   const [isDragging, setIsDragging] = useState(false);
   const [draggedNode, setDraggedNode] = useState<string | null>(null);
   const [nodePositions, setNodePositions] = useState<Record<string, {x: number, y: number}>>({});
+  const [showPersonalDataCard, setShowPersonalDataCard] = useState(false);
   
   // Pan and zoom state for both compact and expanded views
   const [compactViewBox, setCompactViewBox] = useState({ x: 0, y: 0, scale: 1 });
@@ -337,13 +340,24 @@ export const ObsidianKnowledgeGraph: React.FC<ObsidianKnowledgeGraphProps> = ({ 
               <Brain size={14} className="text-blue-400" />
               <h3 className="text-sm font-semibold text-white">Knowledge Graph</h3>
             </div>
-            <button 
-              onClick={() => setExpandedGraph(true)}
-              className="w-6 h-6 rounded-md bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors"
-              title="Expand Cosmos"
-            >
-              <Maximize2 size={12} className="text-white/60" />
-            </button>
+            <div className="flex items-center gap-1">
+              {user && (
+                <button 
+                  onClick={() => setShowPersonalDataCard(true)}
+                  className="w-6 h-6 rounded-md bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors group"
+                  title="Open Personal Data Card"
+                >
+                  <BookOpen size={12} className="text-white/60 group-hover:text-blue-400 transition-colors" />
+                </button>
+              )}
+              <button 
+                onClick={() => setExpandedGraph(true)}
+                className="w-6 h-6 rounded-md bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors"
+                title="Expand Cosmos"
+              >
+                <Maximize2 size={12} className="text-white/60" />
+              </button>
+            </div>
           </div>
 
           <CompactGraphPreview />
@@ -364,6 +378,16 @@ export const ObsidianKnowledgeGraph: React.FC<ObsidianKnowledgeGraphProps> = ({ 
                 <h2 className="text-lg font-semibold text-white">ATMO Knowledge Cosmos</h2>
               </div>
               <div className="flex items-center gap-2">
+                {/* Personal Data Card Button */}
+                {user && (
+                  <button 
+                    onClick={() => setShowPersonalDataCard(true)}
+                    className="w-8 h-8 bg-white/5 hover:bg-white/10 rounded-md flex items-center justify-center transition-colors group"
+                    title="Open Personal Data Card"
+                  >
+                    <BookOpen size={14} className="text-white/60 group-hover:text-blue-400 transition-colors" />
+                  </button>
+                )}
                 {/* Graph Controls */}
                 <button 
                   onClick={zoomIn}
@@ -565,6 +589,14 @@ export const ObsidianKnowledgeGraph: React.FC<ObsidianKnowledgeGraphProps> = ({ 
             </div>
           </div>
         </div>
+      )}
+
+      {/* Personal Data Card */}
+      {showPersonalDataCard && user && (
+        <PersonalDataCard
+          user={user}
+          onClose={() => setShowPersonalDataCard(false)}
+        />
       )}
     </>
   );

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   MessageCircle, 
   User, 
@@ -35,6 +35,8 @@ import { Progress } from '@/components/atoms/Progress';
 import { Card, CardContent } from '@/components/atoms/Card';
 import { Badge } from '@/components/atoms/Badge';
 import { cn } from '@/utils/utils';
+import { OnboardingProgressService } from '@/services/onboardingProgressService';
+import type { OnboardingMessage } from '@/models/OnboardingProgress';
 
 interface OnboardingData {
   // Personal Basics (15%)
@@ -467,6 +469,7 @@ const conversationSteps: ConversationStep[] = [
 
 export const MinimalConversationalOnboarding: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { completeOnboarding, user } = useAuth();
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -511,12 +514,110 @@ export const MinimalConversationalOnboarding: React.FC = () => {
   
   // Initialize with welcome message or restore progress
   useEffect(() => {
-    // Check for saved progress
+    const initializeOnboarding = async () => {
+      const isContinue = new URLSearchParams(location.search).get('continue') === 'true';
+      const isResume = new URLSearchParams(location.search).get('resume') === 'true';
+      const stepParam = new URLSearchParams(location.search).get('step');
+      
+      console.log('🔄 MinimalConversationalOnboarding mounted, checking for saved progress...');
+      console.log('🔗 URL parameters:', { isContinue, isResume, stepParam });
+      
+      if (!user?.id) {
+        console.log('❌ No authenticated user, starting fresh');
+        if (currentQuestion) {
+          addMessage('ai', currentQuestion.text);
+        }
+        return;
+      }
+      
+      try {
+        // Try to load progress from Supabase
+        const savedProgress = await OnboardingProgressService.loadProgress(user.id);
+        
+        if (savedProgress) {
+          console.log('✅ Found saved progress in Supabase:', savedProgress);
+          
+          // Restore all state
+          setOnboardingData(savedProgress.onboarding_data || {});
+          setCurrentStepIndex(savedProgress.current_step || 0);
+          setCurrentQuestionIndex(0); // Start from first question of the step
+          
+          // Restore messages
+          if (savedProgress.messages && savedProgress.messages.length > 0) {
+            const restoredMessages = savedProgress.messages.map(msg => ({
+              id: msg.id,
+              type: msg.type,
+              content: msg.content,
+              timestamp: new Date(msg.timestamp),
+              isTyping: msg.isTyping
+            }));
+            setMessages(restoredMessages);
+          }
+          
+          console.log('✅ Progress restored successfully from Supabase');
+          return; // Don't add welcome message if we restored progress
+        }
+        
+        // Fallback to localStorage for backward compatibility
+        const localProgress = localStorage.getItem('atmo_onboarding_progress');
+        if (localProgress) {
+          try {
+            const progressData = JSON.parse(localProgress);
+            console.log('🔄 Restoring from localStorage:', progressData);
+            
+            if (progressData.data && Object.keys(progressData.data).length > 0) {
+              setOnboardingData(progressData.data);
+              setCurrentStepIndex(progressData.stepIndex || 0);
+              setCurrentQuestionIndex(progressData.questionIndex || 0);
+              if (progressData.messages && progressData.messages.length > 0) {
+                setMessages(progressData.messages);
+              }
+              console.log('✅ Progress restored from localStorage');
+              return;
+            }
+          } catch (error) {
+            console.error('Failed to restore from localStorage:', error);
+          }
+        }
+        
+        // Start from specific step if provided
+        if (stepParam) {
+          const stepIndex = parseInt(stepParam) - 1; // Convert to 0-based index
+          if (stepIndex >= 0 && stepIndex < conversationSteps.length) {
+            setCurrentStepIndex(stepIndex);
+            setCurrentQuestionIndex(0);
+            console.log(`📍 Starting from step ${stepIndex + 1}`);
+          }
+        }
+        
+        // Initialize with welcome message if no saved progress
+        console.log('🆕 No saved progress, starting fresh onboarding');
+        setTimeout(() => {
+          if (messages.length === 0 && currentQuestion) {
+            addMessage('ai', currentQuestion.text);
+          }
+        }, 100);
+        
+      } catch (error) {
+        console.error('Failed to initialize onboarding:', error);
+        // Fallback to fresh start
+        if (currentQuestion) {
+          addMessage('ai', currentQuestion.text);
+        }
+      }
+    };
+    
+    initializeOnboarding();
+  }, [location.search, user?.id]); // Add user.id as dependency
+
+  // Additional restoration effect to handle cases where initial restoration fails
+  useEffect(() => {
     const savedProgress = localStorage.getItem('atmo_onboarding_progress');
-    if (savedProgress) {
+    if (savedProgress && messages.length === 0 && currentStepIndex === 0) {
       try {
         const progressData = JSON.parse(savedProgress);
         if (progressData.data && Object.keys(progressData.data).length > 0) {
+          console.log('🔄 Secondary restoration attempt...');
           setOnboardingData(progressData.data);
           setCurrentStepIndex(progressData.stepIndex || 0);
           setCurrentQuestionIndex(progressData.questionIndex || 0);
@@ -525,15 +626,38 @@ export const MinimalConversationalOnboarding: React.FC = () => {
           }
         }
       } catch (error) {
-        console.error('Failed to restore progress:', error);
+        console.error('Failed secondary restoration:', error);
       }
     }
-    
-    // Initialize with welcome message if no messages
-    if (messages.length === 0 && currentQuestion) {
-      addMessage('ai', currentQuestion.text);
+  }, [messages.length, currentStepIndex]);
+  
+  // Additional effect to handle restoration after state updates
+  useEffect(() => {
+    if (currentStepIndex > 0 && messages.length > 0) {
+      console.log('🎯 Onboarding state updated:', {
+        step: currentStepIndex,
+        question: currentQuestionIndex,
+        messages: messages.length,
+        data: Object.keys(onboardingData).length
+      });
     }
-  }, [currentQuestion, messages.length]);
+  }, [currentStepIndex, currentQuestionIndex, messages.length, Object.keys(onboardingData).length]);
+
+  // Force restoration if we have saved progress but no messages
+  useEffect(() => {
+    const savedProgress = localStorage.getItem('atmo_onboarding_progress');
+    if (savedProgress && messages.length === 0) {
+      try {
+        const progressData = JSON.parse(savedProgress);
+        if (progressData.messages && progressData.messages.length > 0) {
+          console.log('🔄 Force restoring messages from saved progress');
+          setMessages(progressData.messages);
+        }
+      } catch (error) {
+        console.error('Failed to force restore progress:', error);
+      }
+    }
+  }, [messages.length]);
   
   const addMessage = (type: 'ai' | 'user', content: string, isTyping = false) => {
     const message: Message = {
@@ -544,19 +668,65 @@ export const MinimalConversationalOnboarding: React.FC = () => {
       isTyping
     };
     setMessages(prev => [...prev, message]);
+    
+    // Save message to Supabase if user is authenticated
+    if (user?.id) {
+      const onboardingMessage: OnboardingMessage = {
+        id: message.id,
+        type: message.type,
+        content: message.content,
+        timestamp: message.timestamp.toISOString(),
+        isTyping: message.isTyping
+      };
+      
+      // Save progress asynchronously
+      saveProgressToSupabase(onboardingMessage);
+    }
   };
   
-  const handleSendMessage = () => {
+  const saveProgressToSupabase = async (newMessage?: OnboardingMessage) => {
+    if (!user?.id) return;
+    
+    try {
+      const completedSteps = Array.from({ length: currentStepIndex }, (_, i) => i);
+      const onboardingMessages: OnboardingMessage[] = messages.map(msg => ({
+        id: msg.id,
+        type: msg.type,
+        content: msg.content,
+        timestamp: msg.timestamp.toISOString(),
+        isTyping: msg.isTyping
+      }));
+      
+      if (newMessage) {
+        onboardingMessages.push(newMessage);
+      }
+      
+      await OnboardingProgressService.updateStep(
+        user.id,
+        currentStepIndex,
+        completedSteps,
+        onboardingData,
+        onboardingMessages
+      );
+      
+      console.log('✅ Progress saved to Supabase');
+    } catch (error) {
+      console.error('Failed to save progress to Supabase:', error);
+    }
+  };
+  
+  const handleSendMessage = async () => {
     if (!inputValue.trim() || !currentQuestion) return;
     
     // Add user message
     addMessage('user', inputValue.trim());
     
     // Update data
-    setOnboardingData(prev => ({
-      ...prev,
+    const updatedData = {
+      ...onboardingData,
       [currentQuestion.id]: inputValue.trim()
-    }));
+    };
+    setOnboardingData(updatedData);
     
     // Clear input
     setInputValue('');
@@ -565,7 +735,7 @@ export const MinimalConversationalOnboarding: React.FC = () => {
     setIsTyping(true);
     
     // Simulate AI response delay
-    setTimeout(() => {
+    setTimeout(async () => {
       setIsTyping(false);
       
       // Move to next question or step
@@ -574,11 +744,38 @@ export const MinimalConversationalOnboarding: React.FC = () => {
         const nextQuestion = currentStep.questions[currentQuestionIndex + 1];
         addMessage('ai', nextQuestion.text);
       } else if (currentStepIndex < conversationSteps.length - 1) {
-        setCurrentStepIndex(prev => prev + 1);
+        const nextStepIndex = currentStepIndex + 1;
+        setCurrentStepIndex(nextStepIndex);
         setCurrentQuestionIndex(0);
-        const nextStep = conversationSteps[currentStepIndex + 1];
+        const nextStep = conversationSteps[nextStepIndex];
         const nextQuestion = nextStep.questions[0];
         addMessage('ai', nextQuestion.text);
+        
+        // Save progress after completing a step
+        if (user?.id) {
+          try {
+            const completedSteps = Array.from({ length: nextStepIndex }, (_, i) => i);
+            const onboardingMessages: OnboardingMessage[] = messages.map(msg => ({
+              id: msg.id,
+              type: msg.type,
+              content: msg.content,
+              timestamp: msg.timestamp.toISOString(),
+              isTyping: msg.isTyping
+            }));
+            
+            await OnboardingProgressService.updateStep(
+              user.id,
+              nextStepIndex,
+              completedSteps,
+              updatedData,
+              onboardingMessages
+            );
+            
+            console.log('✅ Step completed and saved to Supabase');
+          } catch (error) {
+            console.error('Failed to save step completion:', error);
+          }
+        }
       } else {
         // Complete onboarding
         handleComplete();
@@ -589,8 +786,20 @@ export const MinimalConversationalOnboarding: React.FC = () => {
   const handleComplete = async () => {
     try {
       await completeOnboarding(onboardingData);
+      
       // Clear saved progress on completion
       localStorage.removeItem('atmo_onboarding_progress');
+      
+      // Clear Supabase progress
+      if (user?.id) {
+        try {
+          await OnboardingProgressService.completeOnboarding(user.id);
+          console.log('✅ Onboarding progress cleared from Supabase');
+        } catch (error) {
+          console.error('Failed to clear Supabase progress:', error);
+        }
+      }
+      
       navigate('/app');
     } catch (error) {
       console.error('Failed to complete onboarding:', error);
@@ -599,7 +808,7 @@ export const MinimalConversationalOnboarding: React.FC = () => {
   
   const handleContinueLater = async () => {
     try {
-      // Save current progress to localStorage
+      // Save current progress to localStorage (for backward compatibility)
       const progressData = {
         data: onboardingData,
         stepIndex: currentStepIndex,
@@ -610,6 +819,32 @@ export const MinimalConversationalOnboarding: React.FC = () => {
         completionPercentage: progress
       };
       localStorage.setItem('atmo_onboarding_progress', JSON.stringify(progressData));
+      
+      // Save progress to Supabase
+      if (user?.id) {
+        try {
+          const completedSteps = Array.from({ length: currentStepIndex }, (_, i) => i);
+          const onboardingMessages: OnboardingMessage[] = messages.map(msg => ({
+            id: msg.id,
+            type: msg.type,
+            content: msg.content,
+            timestamp: msg.timestamp.toISOString(),
+            isTyping: msg.isTyping
+          }));
+          
+          await OnboardingProgressService.updateStep(
+            user.id,
+            currentStepIndex,
+            completedSteps,
+            onboardingData,
+            onboardingMessages
+          );
+          
+          console.log('✅ Progress saved to Supabase for continuation');
+        } catch (error) {
+          console.error('Failed to save progress to Supabase:', error);
+        }
+      }
       
       // Save partial data to user profile
       if (Object.keys(onboardingData).length > 0) {

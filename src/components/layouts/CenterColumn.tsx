@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import useMockAuth from '@/hooks/useMockAuth';
 import useVoiceRecognition from '@/hooks/useVoiceRecognition.ts';
 import SphereChat from '../atoms/SphereChat.tsx';
@@ -12,6 +13,11 @@ import { useSidebar } from '@/context/SidebarContext';
 import { usePersonasStore } from '@/stores/usePersonasStore';
 import { ChatArchiveModal } from '@/components/organisms/ChatArchiveModal';
 import { useChatSessionsStore } from '@/stores/chatSessionsStore';
+import { OnboardingChatService } from '@/services/onboardingChatService';
+import { PersonalDataOnboardingService } from '@/services/personalDataOnboardingService';
+import { OnboardingProgressService } from '@/services/onboardingProgressService';
+import { OnboardingAgent } from '@/services/onboardingAgent';
+import OnboardingStatusIndicator from '@/components/onboarding/OnboardingStatusIndicator';
 
 interface CenterColumnProps {
     maxWidthPercent?: number;
@@ -23,8 +29,11 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100, init
     const { user } = useMockAuth();
     const { toast } = useToast();
     const { sidebarWidth } = useSidebar();
+    const location = useLocation();
     const [isCapturing, setIsCapturing] = useState(false);
     const [isTranscribing, setIsTranscribing] = useState(false);
+    const [isOnboardingMode, setIsOnboardingMode] = useState(false);
+    const [showOnboardingIndicator, setShowOnboardingIndicator] = useState(false);
     const transcriptTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const inputRef = useRef<HTMLTextAreaElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -139,6 +148,91 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100, init
         void initializeChatSessions();
     }, [initializeChatSessions]);
 
+    // Handle onboarding continuation from URL parameters
+    useEffect(() => {
+        const handleOnboardingContinuation = async () => {
+            const urlParams = new URLSearchParams(location.search);
+            const onboardingContinue = urlParams.get('onboarding_continue');
+            const onboardingStart = urlParams.get('onboarding_start');
+
+            if (onboardingContinue || onboardingStart) {
+                console.log('🔄 Onboarding continuation detected in chat');
+                setIsOnboardingMode(true);
+                
+                if (user?.id) {
+                    try {
+                    if (onboardingContinue) {
+                        console.log('📋 Continuing existing onboarding in chat');
+                        await OnboardingAgent.initializeOnboarding(user.id);
+                        setShowOnboardingIndicator(true);
+                    } else if (onboardingStart) {
+                        console.log('🆕 Starting fresh onboarding in chat');
+                        await OnboardingAgent.initializeOnboarding(user.id);
+                        setShowOnboardingIndicator(true);
+                    }
+                        
+                        // Clear URL parameters after initialization
+                        const newUrl = new URL(window.location.href);
+                        newUrl.searchParams.delete('onboarding_continue');
+                        newUrl.searchParams.delete('onboarding_start');
+                        window.history.replaceState({}, '', newUrl.toString());
+
+                    } catch (error) {
+                        console.error('❌ Failed to initialize onboarding in chat:', error);
+                        toast({
+                            title: "Onboarding Error",
+                            description: "Failed to load your onboarding progress. Please try again.",
+                            variant: "destructive"
+                        });
+                    }
+                }
+            }
+        };
+
+        handleOnboardingContinuation();
+    }, [location.search, user?.id, toast]);
+
+    // Check if onboarding is already active when component loads
+    useEffect(() => {
+        const checkActiveOnboarding = async () => {
+            if (user?.id && !isOnboardingMode) {
+                try {
+                    const savedProgress = await OnboardingProgressService.loadProgress(user.id);
+                    if (savedProgress && savedProgress.messages.length > 0) {
+                        console.log('🔄 Active onboarding detected, resuming...');
+                        setIsOnboardingMode(true);
+                        await OnboardingAgent.initializeOnboarding(user.id);
+                    }
+                } catch (error) {
+                    console.error('❌ Failed to check active onboarding:', error);
+                }
+            }
+        };
+
+        checkActiveOnboarding();
+    }, [user?.id, isOnboardingMode]);
+
+    // Periodic check to ensure onboarding continues
+    useEffect(() => {
+        if (!isOnboardingMode || !user?.id) return;
+
+        const checkOnboardingStatus = async () => {
+            try {
+                const isActive = OnboardingAgent.isOnboardingActive();
+                if (!isActive) {
+                    console.log('🔄 OnboardingAgent: Onboarding not active, ensuring it continues...');
+                    await OnboardingAgent.ensureOnboardingContinues(user.id);
+                }
+            } catch (error) {
+                console.error('❌ Failed to check onboarding status:', error);
+            }
+        };
+
+        // Check every 5 seconds
+        const interval = setInterval(checkOnboardingStatus, 5000);
+        return () => clearInterval(interval);
+    }, [isOnboardingMode, user?.id]);
+
     // Note: initialMessage is no longer used - questions are now added directly via promptStore
 
     const handleAIResponse = async (userMessage: string) => {
@@ -149,29 +243,77 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100, init
         let response: any = null;
 
         try {
-            // Use real Claude AI via Supabase edge function
-            response = await sendChatMessage(userMessage);
-
-            // Add AI response to history using addAIResponse function
-            const { addAIResponse } = promptStore.getState();
-
-            // Debug log the response
-            console.log('📊 Chat Response:', {
-                response: response.response,
-                entitiesExtracted: response.entitiesExtracted,
-                entitiesCreated: response.entitiesCreated
-            });
-
-            // If entities were created, add a note about it
-            const createdEntities = (response.entitiesCreated || []).filter(entity => entity.mode !== 'deleted');
-            if (createdEntities.length > 0) {
-                const createdList = createdEntities
-                    .map(e => `✓ ${e.type}: "${e.name}"`)
-                    .join('\n');
-                addAIResponse(`${response.response}\n\n**Created:**\n${createdList}`);
-                window.dispatchEvent(new Event('atmo:outputs:refresh'));
+            // Check if we're in onboarding mode
+            if (isOnboardingMode && user?.id) {
+                console.log('🤖 OnboardingAgent: Processing user response');
+                
+                try {
+                    // Use the dedicated onboarding agent
+                    const onboardingResponse = await OnboardingAgent.processUserResponse(
+                        user.id,
+                        userMessage
+                    );
+                    
+                    console.log('📊 OnboardingAgent Response:', onboardingResponse);
+                    
+                    // Add AI response to history
+                    const { addAIResponse } = promptStore.getState();
+                    addAIResponse(onboardingResponse.response);
+                    
+                    // Check if onboarding is complete
+                    if (onboardingResponse.isComplete) {
+                        console.log('🎉 Onboarding completion detected');
+                        setIsOnboardingMode(false);
+                        setShowOnboardingIndicator(false);
+                        toast({
+                            title: "Onboarding Complete!",
+                            description: "Your Personal Data Card has been fully populated with all your information.",
+                            variant: "default"
+                        });
+                    } else {
+                        // Ensure onboarding continues
+                        console.log('🔄 OnboardingAgent: Ensuring onboarding continues...');
+                        await OnboardingAgent.ensureOnboardingContinues(user.id);
+                    }
+                    
+                } catch (error) {
+                    console.error('❌ OnboardingAgent: Error processing response:', error);
+                    
+                    // Fallback: try to continue onboarding
+                    try {
+                        await OnboardingAgent.ensureOnboardingContinues(user.id);
+                    } catch (fallbackError) {
+                        console.error('❌ OnboardingAgent: Fallback failed:', fallbackError);
+                        const { addAIResponse } = promptStore.getState();
+                        addAIResponse("I'm having trouble processing your response. Could you tell me more about yourself?");
+                    }
+                }
+                
             } else {
-                addAIResponse(response.response);
+                // Regular chat mode - use existing AI
+                response = await sendChatMessage(userMessage);
+
+                // Add AI response to history using addAIResponse function
+                const { addAIResponse } = promptStore.getState();
+
+                // Debug log the response
+                console.log('📊 Chat Response:', {
+                    response: response.response,
+                    entitiesExtracted: response.entitiesExtracted,
+                    entitiesCreated: response.entitiesCreated
+                });
+
+                // If entities were created, add a note about it
+                const createdEntities = (response.entitiesCreated || []).filter(entity => entity.mode !== 'deleted');
+                if (createdEntities.length > 0) {
+                    const createdList = createdEntities
+                        .map(e => `✓ ${e.type}: "${e.name}"`)
+                        .join('\n');
+                    addAIResponse(`${response.response}\n\n**Created:**\n${createdList}`);
+                    window.dispatchEvent(new Event('atmo:outputs:refresh'));
+                } else {
+                    addAIResponse(response.response);
+                }
             }
 
         } catch (error) {
@@ -252,6 +394,16 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100, init
         addToHistory();
         clearInput(); // Clear input immediately after adding to history
         resetInputHeight();
+
+        // Save onboarding progress if in onboarding mode
+        if (isOnboardingMode && user?.id) {
+            try {
+                await OnboardingChatService.saveOnboardingProgress(user.id, messageText);
+                console.log('✅ Onboarding progress saved from chat');
+            } catch (error) {
+                console.error('❌ Failed to save onboarding progress:', error);
+            }
+        }
 
         await handleAIResponse(messageText);
     };
@@ -586,6 +738,31 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100, init
                 onClose={() => setShowArchiveModal(false)}
                 onLoadSession={handleLoadArchivedChat}
             />
+            
+            {/* Onboarding Status Indicator */}
+            {showOnboardingIndicator && user?.id && (
+                <OnboardingStatusIndicator
+                    userId={user.id}
+                    onContinueLater={() => {
+                        setShowOnboardingIndicator(false);
+                        setIsOnboardingMode(false);
+                        toast({
+                            title: "Onboarding Saved",
+                            description: "Your onboarding progress has been saved. You can continue later.",
+                            variant: "default"
+                        });
+                    }}
+                    onComplete={() => {
+                        setShowOnboardingIndicator(false);
+                        setIsOnboardingMode(false);
+                        toast({
+                            title: "Onboarding Complete!",
+                            description: "Your Personal Data Card has been fully populated with all your information.",
+                            variant: "default"
+                        });
+                    }}
+                />
+            )}
         </div>
     );
 };

@@ -588,26 +588,31 @@ export class OnboardingAgent {
     try {
       console.log('🔄 OnboardingAgent: Updating user profile with onboarding data...');
       
-      // This would integrate with your existing user profile update system
-      // For now, we'll just log the data that would be updated
-      console.log('📊 Profile data to update:', {
-        name: onboardingData.name,
-        age: onboardingData.age,
-        location: onboardingData.location,
-        bio: onboardingData.bio,
-        jobTitle: onboardingData.jobTitle,
-        company: onboardingData.company,
-        industry: onboardingData.industry,
-        skills: onboardingData.skills,
-        careerGoals: onboardingData.careerGoals,
-        personalGoals: onboardingData.personalGoals,
-        hobbies: onboardingData.hobbies,
-        // ... and so on for all fields
-      });
+      // Import the updateUserProfile function from supabaseDataService
+      const { updateUserProfile } = await import('@/services/supabaseDataService');
       
-      // TODO: Integrate with your existing user profile update system
-      // This would update the user's profile in Supabase with the onboarding data
-      // so it appears in all the Personal Data Card components
+      // Map onboarding data to profile update format
+      const profileUpdates: {
+        nickname?: string;
+        bio?: string;
+        job_title?: string;
+        mainPriority?: string;
+        focusAreas?: string[];
+        growthTracker?: string;
+      } = {};
+      
+      // Map onboarding fields to profile fields
+      if (onboardingData.name) profileUpdates.nickname = onboardingData.name as string;
+      if (onboardingData.bio) profileUpdates.bio = onboardingData.bio as string;
+      if (onboardingData.jobTitle) profileUpdates.job_title = onboardingData.jobTitle as string;
+      if (onboardingData.careerGoals) profileUpdates.mainPriority = onboardingData.careerGoals as string;
+      if (onboardingData.skills) profileUpdates.focusAreas = Array.isArray(onboardingData.skills) ? onboardingData.skills as string[] : [onboardingData.skills as string];
+      if (onboardingData.personalGoals) profileUpdates.growthTracker = onboardingData.personalGoals as string;
+      
+      console.log('📊 Profile data to update:', profileUpdates);
+      
+      // Update the user profile in Supabase
+      await updateUserProfile(userId, profileUpdates);
       
       console.log('✅ OnboardingAgent: User profile updated with onboarding data');
       
@@ -702,6 +707,26 @@ Your Personal Data Card is now fully populated and will help me provide you with
     } catch (error) {
       console.error('❌ OnboardingAgent: Failed to ensure onboarding continues:', error);
       return false;
+    }
+  }
+
+  /**
+   * Public method to save current onboarding progress
+   */
+  static async saveCurrentProgress(userId: string): Promise<void> {
+    try {
+      console.log('💾 OnboardingAgent: Saving current progress...');
+      
+      // Get current progress
+      const savedProgress = await OnboardingProgressService.loadProgress(userId);
+      if (savedProgress && savedProgress.onboarding_data) {
+        // Update user profile with current onboarding data
+        await this.updateUserProfile(userId, savedProgress.onboarding_data);
+        
+        console.log('✅ OnboardingAgent: Current progress saved');
+      }
+    } catch (error) {
+      console.error('❌ OnboardingAgent: Failed to save current progress:', error);
     }
   }
 }

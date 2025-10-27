@@ -14,6 +14,7 @@ import { cn } from '@/utils/utils';
 import { OnboardingProgressService } from '@/services/onboardingProgressService';
 import { OnboardingAgent } from '@/services/onboardingAgent';
 import { promptStore } from '@/stores/promptStore';
+import { useChatSessionsStore } from '@/stores/chatSessionsStore';
 
 interface OnboardingStatusIndicatorProps {
   userId: string;
@@ -30,6 +31,7 @@ export const OnboardingStatusIndicator: React.FC<OnboardingStatusIndicatorProps>
   const [currentStep, setCurrentStep] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
+  const { startNewChatSession } = useChatSessionsStore();
 
   // Load progress data
   useEffect(() => {
@@ -70,16 +72,22 @@ export const OnboardingStatusIndicator: React.FC<OnboardingStatusIndicatorProps>
           );
           setProgress(progressPercentage);
           setCurrentStep(savedProgress.current_step);
+          
+          // Check if completed
+          if (OnboardingProgressService.isCompleted(savedProgress.current_step, 13)) {
+            setIsCompleted(true);
+            onComplete();
+          }
         }
       } catch (error) {
         console.error('Failed to update progress:', error);
       }
     };
 
-    // Update progress every 2 seconds
-    const interval = setInterval(updateProgress, 2000);
+    // Update progress every 1 second for real-time updates
+    const interval = setInterval(updateProgress, 1000);
     return () => clearInterval(interval);
-  }, [userId]);
+  }, [userId, onComplete]);
 
   const handleContinueLater = async () => {
     setIsSaving(true);
@@ -90,9 +98,12 @@ export const OnboardingStatusIndicator: React.FC<OnboardingStatusIndicatorProps>
       // Get current conversation history
       const currentHistory = promptStore.getState().history;
       
-      // Save current progress
+      // Save current progress using OnboardingAgent
       const savedProgress = await OnboardingProgressService.loadProgress(userId);
       if (savedProgress) {
+        // Use OnboardingAgent to save progress with all data extraction
+        await OnboardingAgent.saveCurrentProgress(userId);
+        
         // Update the progress with current conversation
         await OnboardingProgressService.updateStep(
           userId,
@@ -108,6 +119,18 @@ export const OnboardingStatusIndicator: React.FC<OnboardingStatusIndicatorProps>
         );
         
         console.log('✅ Onboarding progress saved for later');
+        console.log('📊 Personal Data Card will be updated with collected data');
+        
+        // Create a new chat conversation
+        try {
+          console.log('🔄 Creating new chat conversation...');
+          await startNewChatSession();
+          console.log('✅ New chat conversation created');
+        } catch (error) {
+          console.error('❌ Failed to create new chat conversation:', error);
+        }
+        
+        // Call the callback to close onboarding and remove the card
         onContinueLater();
       }
     } catch (error) {

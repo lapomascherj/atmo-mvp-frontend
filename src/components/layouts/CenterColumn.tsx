@@ -58,14 +58,13 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100, init
 
     const { startListening, stopListening, transcript, isListening, error: voiceError, isSupported } = useVoiceRecognition({
         onResult: (result) => {
-            const cleanedTranscript = cleanTranscript(result);
-
-            // Always do voice-to-voice: Add to history and get AI response
-            addMessageToPrompt(cleanedTranscript, 'user');
-            addToHistory();
-            handleAIResponse(cleanedTranscript);
-
-            setIsTranscribing(false);
+            // Don't auto-process the result here - let the user decide with OK button
+            // This allows for better control over when to send the message
+            console.log('Voice recognition final result:', result);
+        },
+        onInterimResult: (result) => {
+            // Handle interim results for real-time display
+            console.log('Voice recognition interim result:', result);
         }
     });
 
@@ -108,24 +107,48 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100, init
 
     // Connect voice recognition to isCapturing state
     useEffect(() => {
-        if (isCapturing && isSupported && !isResponding && !isTranscribing) {
-            if (!isConversationStarted) {
-                toggleConversationStarted();
+        const handleVoiceCapture = async () => {
+            if (isCapturing && isSupported && !isResponding && !isTranscribing) {
+                if (!isConversationStarted) {
+                    toggleConversationStarted();
+                }
+                try {
+                    await startListening();
+                } catch (error) {
+                    console.error('Failed to start voice recognition:', error);
+                    toast({
+                        title: "Microphone Error",
+                        description: "Please allow microphone access to use voice input.",
+                        variant: "destructive"
+                    });
+                }
+            } else if (!isCapturing) {
+                // Always stop when not capturing, regardless of other states
+                stopListening();
             }
-            startListening();
-        } else if (!isCapturing) {
-            // Always stop when not capturing, regardless of other states
-            stopListening();
-        }
-    }, [isCapturing, isSupported, isResponding, isTranscribing, isConversationStarted, startListening, stopListening, toggleConversationStarted]);
+        };
+
+        handleVoiceCapture();
+    }, [isCapturing, isSupported, isResponding, isTranscribing, isConversationStarted, startListening, stopListening, toggleConversationStarted, toast]);
 
     const cleanTranscript = (text: string): string => {
         return text
             .trim()
+            // Remove common filler words and hesitations
+            .replace(/\b(um|uh|er|ah|like|you know|so|well)\b/gi, '')
+            // Clean up multiple spaces
             .replace(/\s+/g, ' ')
-            .replace(/^(um|uh|er|ah)\s+/i, '')
-            .replace(/\s+(um|uh|er|ah)(\s+|$)/gi, ' ')
-            .trim();
+            // Remove leading/trailing spaces
+            .trim()
+            // Capitalize first letter
+            .replace(/^./, str => str.toUpperCase())
+            // Ensure proper punctuation
+            .replace(/([.!?])?\s*$/, match => {
+                if (match.includes('.') || match.includes('!') || match.includes('?')) {
+                    return match;
+                }
+                return '.';
+            });
     };
 
     const handleQuickCapture = () => {
@@ -518,17 +541,57 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100, init
                         <div className="absolute inset-0 -z-30 bg-gradient-to-r from-[#CC5500]/3 to-indigo-500/2 rounded-full blur-[80px] scale-200 animate-pulse-soft"></div>
                     </div>
 
-                    {/* Voice Control X Button */}
+                    {/* Minimal Voice Control Interface */}
                     {isCapturing && (
-                        <div className="absolute -bottom-24 -left-6">
-                            <Button
-                                onClick={() => setIsCapturing(false)}
-                                variant="ghost"
-                                size="sm"
-                                className="w-10 h-10 rounded-full bg-slate-800/60 hover:bg-slate-700/80 border border-slate-600/40 text-white/80 hover:text-white transition-all duration-200 backdrop-blur-sm shadow-lg"
-                            >
-                                ✕
-                            </Button>
+                        <div className="absolute -bottom-20 left-1/2 transform -translate-x-1/2">
+                            {/* Minimal transcript display */}
+                            {transcript ? (
+                                <div className="mb-3 text-center">
+                                    <div className="text-white/70 text-sm max-w-xs mx-auto px-3 py-2 bg-black/20 backdrop-blur-md rounded-full border border-white/10">
+                                        {transcript}
+                                        {isListening && (
+                                            <span className="inline-block w-1 h-3 bg-orange-400 ml-1 animate-pulse"></span>
+                                        )}
+                                    </div>
+                                </div>
+                            ) : isListening ? (
+                                <div className="mb-3 text-center">
+                                    <div className="text-white/50 text-sm max-w-xs mx-auto px-3 py-2 bg-black/20 backdrop-blur-md rounded-full border border-white/10">
+                                        Listening...
+                                        <span className="inline-block w-1 h-3 bg-orange-400 ml-1 animate-pulse"></span>
+                                    </div>
+                                </div>
+                            ) : null}
+                            
+                            {/* Minimal control buttons */}
+                            <div className="flex justify-center gap-4">
+                                {/* OK Button - Minimal Apple style */}
+                                <button
+                                    onClick={() => {
+                                        setIsCapturing(false);
+                                        // Process the final transcript
+                                        if (transcript.trim()) {
+                                            const cleanedTranscript = cleanTranscript(transcript);
+                                            addMessageToPrompt(cleanedTranscript, 'user');
+                                            addToHistory();
+                                            handleAIResponse(cleanedTranscript);
+                                        }
+                                    }}
+                                    className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/20 text-white transition-all duration-200 flex items-center justify-center text-lg font-light hover:scale-105"
+                                    title="Send"
+                                >
+                                    ✓
+                                </button>
+                                
+                                {/* X Button - Minimal Apple style */}
+                                <button
+                                    onClick={() => setIsCapturing(false)}
+                                    className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/20 text-white transition-all duration-200 flex items-center justify-center text-lg font-light hover:scale-105"
+                                    title="Cancel"
+                                >
+                                    ✕
+                                </button>
+                            </div>
                         </div>
                     )}
                 </div>

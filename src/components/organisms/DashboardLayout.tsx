@@ -23,6 +23,7 @@ import { PriorityStreamEnhanced } from '@/components/organisms/PriorityStreamEnh
 import TodaysActionsCard from '@/components/organisms/TodaysActionsCard';
 import { saveAIMessage } from '@/services/chatSessionService.ts';
 import { useChatSessionsStore } from '@/stores/chatSessionsStore.ts';
+import { generateMorningAnalysis } from '@/services/morningAnalysisService';
 
 interface DashboardLayoutProps {
   userName: string;
@@ -76,10 +77,61 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ userName }) => {
   // Add modal state for project creation
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   
+  // Morning analysis state
+  const [morningAnalysisRunning, setMorningAnalysisRunning] = useState(false);
+  const [lastMorningAnalysis, setLastMorningAnalysis] = useState<Date | null>(null);
+  
   // Sacred geometry modal state
   const [showSacredModal, setShowSacredModal] = useState(false);
   const [isFlowerActive, setIsFlowerActive] = useState(false);
   const [hasNewContent, setHasNewContent] = useState(false);
+
+  // Morning analysis function
+  const runMorningAnalysis = async () => {
+    if (morningAnalysisRunning) return;
+    
+    setMorningAnalysisRunning(true);
+    try {
+      console.log('🌅 Running morning analysis...');
+      const result = await generateMorningAnalysis();
+      
+      if (result.success) {
+        console.log(`✅ Morning analysis complete: ${result.documentsCreated} documents created`);
+        setLastMorningAnalysis(new Date());
+      } else {
+        console.error('❌ Morning analysis failed:', result.error);
+      }
+    } catch (error) {
+      console.error('❌ Morning analysis error:', error);
+    } finally {
+      setMorningAnalysisRunning(false);
+    }
+  };
+
+  // Check if morning analysis should run (once per day at 6 AM)
+  useEffect(() => {
+    const checkMorningAnalysis = () => {
+      const now = new Date();
+      const lastRun = lastMorningAnalysis;
+      
+      // Check if it's morning (6 AM - 10 AM) and we haven't run today
+      const isMorning = now.getHours() >= 6 && now.getHours() <= 10;
+      const hasRunToday = lastRun && lastRun.toDateString() === now.toDateString();
+      
+      if (isMorning && !hasRunToday && currentPersona) {
+        console.log('🌅 Triggering morning analysis...');
+        runMorningAnalysis();
+      }
+    };
+
+    // Check immediately
+    checkMorningAnalysis();
+    
+    // Check every hour
+    const interval = setInterval(checkMorningAnalysis, 60 * 60 * 1000);
+    
+    return () => clearInterval(interval);
+  }, [lastMorningAnalysis, currentPersona]);
 
   // Interactive divider state
   const [dividerPosition, setDividerPosition] = useState(50);

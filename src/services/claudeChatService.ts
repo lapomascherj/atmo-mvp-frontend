@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { createDocumentFromChat, detectDocumentRequest } from './documentCreationService';
 
 export interface ChatMessage {
   id: string;
@@ -145,6 +146,42 @@ export const sendChatMessage = async (message: string): Promise<ChatResponse> =>
   }
 
   const response = data as ChatResponse;
+
+  // Check if user is requesting document creation
+  const documentRequest = detectDocumentRequest(message);
+  if (documentRequest.isRequest) {
+    console.log('📄 Document creation request detected:', documentRequest);
+    
+    try {
+      const documentResult = await createDocumentFromChat({
+        userMessage: message,
+        assistantResponse: response.response,
+        documentType: documentRequest.documentType || 'strategic_plan',
+        context: {
+          // Add any relevant context from the response
+          priority: 'high'
+        }
+      });
+
+      if (documentResult.success) {
+        console.log('✅ Document created successfully:', documentResult.documentId);
+        // Add document creation info to response
+        response.documentGenerated = true;
+        response.documentId = documentResult.documentId;
+
+        // Notify UI to refresh ATMO Outputs immediately
+        try {
+          window.dispatchEvent(new CustomEvent('atmo:outputs:refresh'));
+        } catch (e) {
+          console.warn('Unable to dispatch outputs refresh event:', e);
+        }
+      } else {
+        console.error('❌ Document creation failed:', documentResult.error);
+      }
+    } catch (error) {
+      console.error('❌ Document creation error:', error);
+    }
+  }
 
   // If entities were extracted but not created, process them via the process-entities function
   if (response.entitiesExtracted > 0 && (!response.entitiesCreated || response.entitiesCreated.length === 0)) {

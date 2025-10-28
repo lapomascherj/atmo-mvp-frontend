@@ -42,6 +42,7 @@ import {
   type ChatMessage,
   type ChatResponse,
 } from '@/services/claudeChatService';
+import { updateProjectsProgress } from '@/utils/progressCalculator';
 
 const buildKnowledgeItems = (projects: Project[]): KnowledgeItem[] =>
   projects.flatMap((project) => project.items ?? []);
@@ -189,8 +190,27 @@ export const usePersonasStore = create<PersonasStoreState>((set, get) => {
     const integrations = get().integrations;
 
     console.log(`   → Calling fetchWorkspaceGraph...`);
-    const { projects, knowledgeItems, insights } = await fetchWorkspaceGraph(ownerId);
-    console.log(`   → fetchWorkspaceGraph returned: ${projects.length} projects, ${knowledgeItems.length} knowledge items`);
+    const { projects: rawProjects, knowledgeItems, insights } = await fetchWorkspaceGraph(ownerId);
+    console.log(`   → fetchWorkspaceGraph returned: ${rawProjects.length} projects, ${knowledgeItems.length} knowledge items`);
+
+    // Calculate progress for all projects based on task completion
+    const projects = updateProjectsProgress(rawProjects).filter((project) => {
+      const totalTasks = (project.goals ?? []).reduce(
+        (count, goal) => count + (goal.tasks ?? []).length,
+        0
+      );
+      if (totalTasks > 0) {
+        return true;
+      }
+
+      const hasMilestones = (project.milestones ?? []).length > 0;
+      const hasKnowledge = (project.items ?? []).length > 0;
+      const hasDescription = Boolean(project.description && project.description.trim().length > 0);
+      const hasNotes = Boolean(project.notes && project.notes.trim().length > 0);
+
+      return hasMilestones || hasKnowledge || hasDescription || hasNotes;
+    });
+    console.log(`   → Progress calculated for ${projects.length} projects`);
 
     // Deduplicate: check if data has actually changed
     const newDataHash = hashData({ projects, knowledgeItems, insights });

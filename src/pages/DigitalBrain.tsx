@@ -999,14 +999,17 @@ const DigitalBrain: React.FC = () => {
                         <div className="text-xs text-white/50 truncate mb-1">
                           {getTimeHorizonSummary((project.goals || []).filter(g => g.status !== 'deleted' && g.status !== 'Completed'))}
                         </div>
-                        <div className="w-full bg-white/10 rounded-full h-1">
-                          <div
-                            className="h-1 rounded-full transition-all duration-300"
-                            style={{
-                              width: `${project.progress || 0}%`,
-                              backgroundColor: project.color || '#a855f7'
-                            }}
-                          ></div>
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 bg-white/10 rounded-full h-1">
+                            <div
+                              className="h-1 rounded-full transition-all duration-300"
+                              style={{
+                                width: `${project.progress || 0}%`,
+                                backgroundColor: project.color || '#a855f7'
+                              }}
+                            ></div>
+                          </div>
+                          <span className="text-xs text-white/40 font-mono">{project.progress || 0}%</span>
                         </div>
                       </div>
                     ))}
@@ -1175,7 +1178,7 @@ const DigitalBrain: React.FC = () => {
                   </div>
 
                   {/* Album Tabs with Create Button */}
-                  <div className="flex gap-1 mb-4 overflow-x-auto scrollbar-hide flex-shrink-0">
+                  <div className="flex gap-1 mb-4 flex-wrap flex-shrink-0">
                     {albums.map(album => (
                       <div key={album.id} className="relative group">
                         <button
@@ -1265,7 +1268,7 @@ const DigitalBrain: React.FC = () => {
                   /* AI Insights View */
                   <>
                   {/* Tag Filter Pills */}
-                  <div className="flex gap-2 overflow-x-auto mb-3 pb-2 scrollbar-hide flex-shrink-0">
+                  <div className="flex gap-2 mb-3 pb-2 flex-wrap flex-shrink-0">
                     {getCurrentTags().map(tag => (
                       <button
                         key={tag.id}

@@ -33,9 +33,9 @@ const AppLayout: React.FC<{children: React.ReactNode}> = ({children}) => {
     const { sidebarWidth } = useSidebar();
 
     return (
-        <div className="flex h-screen overflow-hidden">
+        <div className="h-screen w-screen overflow-hidden fixed inset-0">
             <NavSidebar/>
-            <main className="flex-1 h-full overflow-hidden" style={{ marginLeft: sidebarWidth }}>
+            <main className="fixed top-0 bottom-0 right-0 overflow-hidden overflow-y-auto" style={{ left: sidebarWidth }}>
                 {children}
             </main>
             <Toaster/>

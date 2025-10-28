@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { createDocumentFromChat, detectDocumentRequest } from './documentCreationService';
-import { createPriorityStream, detectPriorityStreamRequest, createMilestonesForProject, detectMilestoneRequest } from './priorityStreamService';
+import { createPriorityStream, createPriorityTask, detectPriorityStreamRequest, createMilestonesForProject, detectMilestoneRequest } from './priorityStreamService';
 
 /**
  * Extract multiple stream names from a message like "add 2 priority stream for ATMO, first one is finishing the mvp development, and second one is do the smoke test"
@@ -285,26 +285,34 @@ export const sendChatMessage = async (message: string): Promise<ChatResponse> =>
         results.push(streamResult);
       }
 
-      const successCount = results.filter(r => r.success).length;
-      if (successCount > 0) {
-        console.log(`✅ ${successCount} priority stream(s) created successfully`);
-        // Add priority stream creation info to response
-        response.priorityStreamCreated = true;
-        response.priorityStreamCount = successCount;
+      // Create the priority task instead of a project
+      const projectMatch = message.match(/for\s+(\w+)\s+project|on\s+(\w+)\s+project|project\s+(\w+)/i);
+      const projectName = projectMatch ? (projectMatch[1] || projectMatch[2] || projectMatch[3]) : undefined;
 
-        // Notify UI to refresh Priority Stream immediately
+      const taskResult = await createPriorityTask({
+        name: priorityStreamRequest.streamName || 'New Task',
+        description: `Task created from chat: "${message}"`,
+        priority: priorityStreamRequest.priority as 'high' | 'medium' | 'low' || 'high',
+        projectName: projectName,
+        context: message
+      });
+
+      if (taskResult.success) {
+        console.log('✅ Priority task created successfully');
+        response.priorityStreamCreated = true;
+        response.priorityStreamCount = 1;
+
         try {
           window.dispatchEvent(new CustomEvent('atmo:priority-stream:refresh'));
         } catch (e) {
           console.warn('Unable to dispatch priority stream refresh event:', e);
         }
       } else {
-        const errors = results.map(r => r.error).filter(Boolean);
-        console.error('❌ Priority stream creation failed:', errors);
-        response.priorityStreamError = errors.join('; ');
+        console.error('❌ Priority task creation failed:', taskResult.error);
+        response.priorityStreamError = taskResult.error;
       }
     } catch (error) {
-      console.error('❌ Priority stream creation error:', error);
+      console.error('❌ Priority task creation error:', error);
       response.priorityStreamError = error instanceof Error ? error.message : 'Unknown error';
     }
   }

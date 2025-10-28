@@ -8,6 +8,7 @@ export interface Milestone {
   due_date?: string;
   status: string;
   goals?: Goal[];
+  progress?: number;  // Calculated progress 0-100
   created?: string;
   updated?: string;
 }
@@ -19,6 +20,7 @@ export const MilestoneSchema = z.object({
   due_date: z.string().optional(),
   status: z.string().default("active"),
   goals: z.array(z.any()).optional().default([]),
+  progress: z.number().min(0).max(100).optional(),
   created: z.string().optional(),
   updated: z.string().optional(),
 });

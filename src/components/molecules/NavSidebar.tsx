@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import {Link, useLocation} from 'react-router-dom';
 import {Brain, ChevronLeft, ChevronRight, LayoutDashboard, LogOut} from 'lucide-react';
 import useRealAuth from '@/hooks/useRealAuth';
@@ -42,7 +42,7 @@ const NavItem = ({icon, label, to, isActive, isCollapsed}: NavItemProps) => {
 
             {isCollapsed && (
                 <div
-                    className="absolute left-full ml-2 py-1 px-2 bg-[#010024]/80 text-[#E3E3E3] text-[10px] rounded-md opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-50">
+                    className="absolute left-full ml-2 py-1 px-2 bg-[#010024]/80 text-[#E3E3E3] text-[10px] rounded-md opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-50 pointer-events-none">
                     {label}
                 </div>
             )}
@@ -62,6 +62,22 @@ const NavSidebar: React.FC = () => {
     const {isCollapsed, toggleCollapse} = useSidebar();
     const location = useLocation();
     const {profile, signOut} = useRealAuth();
+    const sidebarRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const element = sidebarRef.current;
+        if (!element) return;
+
+        const handleWheel = (event: WheelEvent) => {
+            if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+        };
+
+        element.addEventListener('wheel', handleWheel, { passive: false });
+        return () => element.removeEventListener('wheel', handleWheel);
+    }, []);
 
     // Determine if we're in demo mode
     const isDemoMode = location.pathname.startsWith('/demo');
@@ -80,6 +96,7 @@ const NavSidebar: React.FC = () => {
 
     return (
         <aside
+            ref={sidebarRef}
             className={cn(
                 'h-screen flex flex-col bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border-r border-white/5 fixed left-0 top-0 z-40',
                 isCollapsed ? 'w-[60px]' : 'w-[180px]'
@@ -87,6 +104,8 @@ const NavSidebar: React.FC = () => {
             style={{
                 transition: 'width 300ms ease-in-out',
                 willChange: 'width',
+                touchAction: 'pan-y',
+                overflowX: 'hidden',
             }}
         >
             {/* Collapse toggle button - Outside sidebar */}
@@ -165,7 +184,7 @@ const NavSidebar: React.FC = () => {
                     )}
                     {isCollapsed && (
                         <div
-                            className="absolute left-full ml-2 py-1 px-2 bg-[#010024]/80 text-[#E3E3E3] text-[10px] rounded-md opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-50">
+                            className="absolute left-full ml-2 py-1 px-2 bg-[#010024]/80 text-[#E3E3E3] text-[10px] rounded-md opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-50 pointer-events-none">
                             Profile Settings
                         </div>
                     )}
@@ -185,7 +204,7 @@ const NavSidebar: React.FC = () => {
                     )}
                     {isCollapsed && (
                         <div
-                            className="absolute left-full ml-2 py-1 px-2 bg-[#010024]/80 text-[#E3E3E3] text-[10px] rounded-md opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-50">
+                            className="absolute left-full ml-2 py-1 px-2 bg-[#010024]/80 text-[#E3E3E3] text-[10px] rounded-md opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-50 pointer-events-none">
                             Sign Out
                         </div>
                     )}

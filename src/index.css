@@ -363,12 +363,17 @@
   * {
     @apply border-border;
   }
+  html {
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
   body {
     @apply bg-background text-foreground font-work-sans;
     background: linear-gradient(135deg, hsl(var(--atmo-burgundy)) 0%, hsl(var(--atmo-deep-purple)) 100%);
     color: hsl(var(--atmo-light));
     min-height: 100vh;
     overflow-x: hidden;
+    max-width: 100vw;
   }
   h1, h2, h3, h4, h5, h6 {
     @apply font-work-sans font-semibold tracking-tight;

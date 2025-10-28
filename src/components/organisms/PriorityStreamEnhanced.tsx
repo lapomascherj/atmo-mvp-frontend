@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { cn } from '@/utils/utils';
 import { Menu, Grid3x3, Calendar, ChevronDown, X, Edit3 } from 'lucide-react';
 import { usePersonasStore } from '@/stores/usePersonasStore';
@@ -43,6 +43,45 @@ export const PriorityStreamEnhanced: React.FC<PriorityStreamProps> = ({ classNam
   const projects = usePersonasStore((state) => state.projects);
   const updateTask = usePersonasStore((state) => state.updateTask);
   const removeTask = usePersonasStore((state) => state.removeTask);
+  const synchronizeWorkspace = usePersonasStore((state) => state.synchronizeWorkspace);
+
+  // Create YourSelf project for personal goals and tasks
+  const yourSelfProject = useMemo(() => ({
+    id: 'yourself-project',
+    name: 'YourSelf',
+    description: 'Personal development, health, learning, and life goals',
+    status: 'active',
+    priority: 'high',
+    color: '#10b981', // emerald-500
+    active: true,
+    goals: [],
+    milestones: [],
+    tasks: []
+  }), []);
+
+  // Combine regular projects with YourSelf project
+  const allProjects = useMemo(() => {
+    return [yourSelfProject, ...projects];
+  }, [projects, yourSelfProject]);
+
+  // Listen for priority stream refresh events
+  useEffect(() => {
+    const handlePriorityStreamRefresh = async () => {
+      console.log('🔄 Priority stream refresh event received');
+      try {
+        const profile = usePersonasStore.getState().currentPersona;
+        if (profile) {
+          await synchronizeWorkspace(profile.id);
+          console.log('✅ Priority stream data refreshed');
+        }
+      } catch (error) {
+        console.error('❌ Failed to refresh priority stream data:', error);
+      }
+    };
+
+    window.addEventListener('atmo:priority-stream:refresh', handlePriorityStreamRefresh);
+    return () => window.removeEventListener('atmo:priority-stream:refresh', handlePriorityStreamRefresh);
+  }, [synchronizeWorkspace]);
 
   // Task interaction handlers with optimistic updates
   const handleTaskCompletion = async (taskId: string, completed: boolean) => {
@@ -332,147 +371,166 @@ export const PriorityStreamEnhanced: React.FC<PriorityStreamProps> = ({ classNam
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-4">
-        {tasksToShow.length ? (
-          <div className="space-y-3">
-            {tasksToShow.map((task) => {
-              const isExpanded = expandedTasks.has(task.id);
-              const statusBadge = task.priority === Priority.High ? 'Launch Blocker' : task.priority === Priority.Medium ? 'Ready to Execute' : 'Context Ready';
+        {allProjects.length > 0 ? (
+          <div className="space-y-6">
+            {allProjects.map((project) => {
+              const projectTasks = sortedTasks.filter(task => task.project === project.name);
+              const projectMilestones = project.milestones || [];
+              const isProjectExpanded = expandedTasks.has(`project-${project.id}`);
 
               return (
-                <div
-                  key={task.id}
-                  className="relative rounded-lg border transition-all duration-200"
-                  style={{
-                    borderColor: task.projectColor || '#3b82f6',
-                    borderLeftWidth: '4px',
-                    borderTopWidth: '1px',
-                    borderRightWidth: '1px',
-                    borderBottomWidth: '1px',
-                    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-                  }}
-                >
-                  <button
-                    className="w-full text-left"
-                    onClick={() => toggleTaskExpansion(task.id)}
+                <div key={project.id} className="space-y-3">
+                  {/* Project Header */}
+                  <div
+                    className="relative rounded-lg border transition-all duration-200 cursor-pointer"
+                    style={{
+                      borderColor: project.color || '#3b82f6',
+                      borderLeftWidth: '4px',
+                      borderTopWidth: '1px',
+                      borderRightWidth: '1px',
+                      borderBottomWidth: '1px',
+                      backgroundColor: 'rgba(0, 0, 0, 0.3)',
+                    }}
+                    onClick={() => toggleTaskExpansion(`project-${project.id}`)}
                   >
                     <div className="p-4">
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex items-center gap-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
                           <div
-                            className="w-2 h-2 rounded-full"
-                            style={{ backgroundColor: task.projectColor || '#3b82f6' }}
+                            className="w-3 h-3 rounded-full"
+                            style={{ backgroundColor: project.color || '#3b82f6' }}
                           />
-                          <span className="text-xs font-semibold text-white/90 uppercase tracking-wide">
-                            {task.project || 'Uncategorized'}
-                          </span>
+                          <div>
+                            <h3 className="text-base font-semibold text-white/90">{project.name}</h3>
+                            <p className="text-xs text-white/60">{project.description || 'No description'}</p>
+                          </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          {task.time && (
-                            <span className="text-xs text-white/50">{task.time}</span>
-                          )}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleTaskEdit(task.id, task.description);
-                            }}
-                            className="p-1 rounded hover:bg-white/10 transition-colors text-white/50"
-                          >
-                            <Edit3 size={14} />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleTaskDelete(task.id, task.title);
-                            }}
-                            className="p-1 rounded hover:bg-white/10 transition-colors text-white/50"
-                          >
-                            <X size={14} />
-                          </button>
+                          <span className="text-xs text-white/50">
+                            {projectTasks.length} task{projectTasks.length !== 1 ? 's' : ''}
+                          </span>
+                          <ChevronDown
+                            size={16}
+                            className={cn(
+                              'text-white/40 transition-transform duration-200',
+                              isProjectExpanded && 'rotate-180 text-white/60'
+                            )}
+                          />
                         </div>
-                      </div>
-
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1 pr-4">
-                          <h4 className="text-sm font-medium text-white/90 mb-1">
-                            {task.title}
-                          </h4>
-                          {task.description && (
-                            <p className="text-xs text-white/60 line-clamp-2">
-                              {task.description}
-                            </p>
-                          )}
-                        </div>
-                        <ChevronDown
-                          size={16}
-                          className={cn(
-                            'text-white/40 transition-transform duration-200',
-                            isExpanded && 'rotate-180 text-white/60'
-                          )}
-                        />
-                      </div>
-
-                      <div className="flex items-center gap-2 mt-3">
-                        <span
-                          className={cn(
-                            'px-2 py-1 rounded text-[10px] font-semibold uppercase',
-                            priorityTheme[task.priority].className
-                          )}
-                        >
-                          {statusBadge}
-                        </span>
-                        <span
-                          className={cn(
-                            'px-2 py-1 rounded text-[10px] font-semibold uppercase',
-                            priorityTheme[task.priority].className
-                          )}
-                        >
-                          {priorityTheme[task.priority].label}
-                        </span>
                       </div>
                     </div>
-                  </button>
+                  </div>
 
-                  {isExpanded && (
-                    <div className="border-t border-white/10 bg-slate-900/40 px-4 pb-4">
-                      <div className="flex items-start justify-between py-3 border-b border-white/10">
-                        <div className="flex items-center gap-2">
-                          <Checkbox
-                            checked={task.completed}
-                            onCheckedChange={(checked) => handleTaskCompletion(task.id, Boolean(checked))}
-                            className="h-4 w-4 border-white/20 data-[state=checked]:bg-[#ff7000] data-[state=checked]:border-[#ff7000]"
-                          />
-                          <span className="text-xs text-white/70">Mark Complete</span>
-                        </div>
-                      </div>
-
-                      {task.description && (
-                        <div className="py-3 border-b border-white/10">
-                          <h5 className="text-xs font-semibold text-white/60 mb-2 uppercase tracking-wide">Task Details</h5>
-                          <p className="text-xs text-white/70 whitespace-pre-line">
-                            {task.description}
-                          </p>
+                  {/* Project Details (Expanded) */}
+                  {isProjectExpanded && (
+                    <div className="ml-4 space-y-4">
+                      {/* Milestones Section */}
+                      {projectMilestones.length > 0 && (
+                        <div className="space-y-2">
+                          <h4 className="text-sm font-medium text-white/70 flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-amber-400" />
+                            Milestones ({projectMilestones.length})
+                          </h4>
+                          <div className="space-y-2">
+                            {projectMilestones.map((milestone) => (
+                              <div
+                                key={milestone.id}
+                                className="ml-4 p-3 rounded-lg bg-white/5 border border-white/10"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <h5 className="text-sm font-medium text-white/80">{milestone.name}</h5>
+                                    <p className="text-xs text-white/60">{milestone.description || 'No description'}</p>
+                                  </div>
+                                  {milestone.due_date && (
+                                    <span className="text-xs text-white/50">
+                                      {new Date(milestone.due_date).toLocaleDateString()}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       )}
 
-                      <div className="flex items-center gap-2 mt-3">
-                        <button
-                          onClick={() => handleTaskCompletion(task.id, !task.completed)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded text-xs text-white/70"
-                        >
-                          <Checkbox
-                            checked={task.completed}
-                            className="h-3 w-3 border-white/20 data-[state=checked]:bg-[#ff7000] data-[state=checked]:border-[#ff7000]"
-                          />
-                          Mark Complete
-                        </button>
-                        <button
-                          onClick={() => handleTaskDelete(task.id, task.title)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 hover:bg-red-500/20 rounded text-xs text-white/70 hover:text-red-400 transition-colors"
-                        >
-                          <X size={12} />
-                          Delete
-                        </button>
-                      </div>
+                      {/* Tasks Section */}
+                      {projectTasks.length > 0 && (
+                        <div className="space-y-2">
+                          <h4 className="text-sm font-medium text-white/70 flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-blue-400" />
+                            Tasks ({projectTasks.length})
+                          </h4>
+                          <div className="space-y-2">
+                            {projectTasks.map((task) => {
+                              const isTaskExpanded = expandedTasks.has(task.id);
+                              const statusBadge = task.priority === Priority.High ? 'Launch Blocker' : task.priority === Priority.Medium ? 'Ready to Execute' : 'Context Ready';
+
+                              return (
+                                <div
+                                  key={task.id}
+                                  className="ml-4 p-3 rounded-lg bg-white/5 border border-white/10"
+                                >
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex-1">
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <Checkbox
+                                          checked={task.completed}
+                                          onCheckedChange={(checked) => handleTaskCompletion(task.id, Boolean(checked))}
+                                          className="h-4 w-4 border-white/20 data-[state=checked]:bg-[#ff7000] data-[state=checked]:border-[#ff7000]"
+                                        />
+                                        <h5 className="text-sm font-medium text-white/80">{task.title}</h5>
+                                        <span
+                                          className={cn(
+                                            'px-2 py-1 rounded text-[10px] font-semibold uppercase',
+                                            priorityTheme[task.priority].className
+                                          )}
+                                        >
+                                          {statusBadge}
+                                        </span>
+                                      </div>
+                                      {task.description && (
+                                        <p className="text-xs text-white/60 ml-6">{task.description}</p>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                      {task.time && (
+                                        <span className="text-xs text-white/50">{task.time}</span>
+                                      )}
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleTaskEdit(task.id, task.description);
+                                        }}
+                                        className="p-1 rounded hover:bg-white/10 transition-colors text-white/50"
+                                      >
+                                        <Edit3 size={12} />
+                                      </button>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleTaskDelete(task.id, task.title);
+                                        }}
+                                        className="p-1 rounded hover:bg-white/10 transition-colors text-white/50"
+                                      >
+                                        <X size={12} />
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Empty State for Project */}
+                      {projectMilestones.length === 0 && projectTasks.length === 0 && (
+                        <div className="ml-4 p-4 rounded-lg bg-white/5 border border-white/10 text-center">
+                          <p className="text-sm text-white/60">No milestones or tasks yet</p>
+                          <p className="text-xs text-white/40 mt-1">Add some to get started with this project</p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -480,8 +538,16 @@ export const PriorityStreamEnhanced: React.FC<PriorityStreamProps> = ({ classNam
             })}
           </div>
         ) : (
-          <div className="h-full flex items-center justify-center text-sm text-white/40 text-center">
-            No tasks for today. Chat with ATMO to plan your next steps.
+          <div className="flex-1 flex flex-col items-center justify-center">
+            <div className="text-center">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-white/5 flex items-center justify-center">
+                <Menu size={24} className="text-white/20" />
+              </div>
+              <h4 className="text-sm font-medium text-white/60 mb-2">No projects found</h4>
+              <p className="text-xs text-white/40 max-w-xs">
+                Create a project to start organizing your priorities and tasks.
+              </p>
+            </div>
           </div>
         )}
       </div>

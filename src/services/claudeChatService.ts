@@ -1,5 +1,47 @@
 import { supabase } from '@/lib/supabase';
 import { createDocumentFromChat, detectDocumentRequest } from './documentCreationService';
+import { createPriorityStream, detectPriorityStreamRequest, createMilestonesForProject, detectMilestoneRequest } from './priorityStreamService';
+
+/**
+ * Extract multiple stream names from a message like "add 2 priority stream for ATMO, first one is finishing the mvp development, and second one is do the smoke test"
+ */
+const extractMultipleStreamNames = (message: string): string[] => {
+  const lowerMessage = message.toLowerCase();
+  
+  // Look for patterns like "first one is X, second one is Y"
+  const firstMatch = message.match(/first\s+one\s+is\s+([^,]+)/i);
+  const secondMatch = message.match(/second\s+one\s+is\s+([^,]+)/i);
+  
+  if (firstMatch && secondMatch) {
+    return [
+      firstMatch[1].trim(),
+      secondMatch[1].trim()
+    ];
+  }
+  
+  // Look for numbered patterns like "1. X 2. Y"
+  const numberedMatches = message.match(/(\d+)\.\s*([^0-9]+?)(?=\s*\d+\.|$)/gi);
+  if (numberedMatches && numberedMatches.length >= 2) {
+    return numberedMatches.map(match => {
+      const parts = match.match(/\d+\.\s*(.+)/);
+      return parts ? parts[1].trim() : match.trim();
+    });
+  }
+  
+  // Look for "and" patterns like "X and Y"
+  const andMatch = message.match(/([^,]+?)\s+and\s+([^,]+)/i);
+  if (andMatch) {
+    return [andMatch[1].trim(), andMatch[2].trim()];
+  }
+  
+  // Fallback: extract from context after "priority stream for"
+  const contextMatch = message.match(/priority\s+stream\s+for\s+([^,]+)/i);
+  if (contextMatch) {
+    return [contextMatch[1].trim()];
+  }
+  
+  return ['New Priority'];
+};
 
 export interface ChatMessage {
   id: string;
@@ -33,6 +75,12 @@ export interface ChatResponse {
   entitiesCreated?: CreatedEntity[];
   nextSteps?: NextStep[];
   documentGenerated?: boolean;
+  priorityStreamCreated?: boolean;
+  priorityStreamCount?: number;
+  priorityStreamError?: string;
+  milestonesCreated?: boolean;
+  milestoneCount?: number;
+  milestoneError?: string;
 }
 
 /**
@@ -180,6 +228,84 @@ export const sendChatMessage = async (message: string): Promise<ChatResponse> =>
       }
     } catch (error) {
       console.error('❌ Document creation error:', error);
+    }
+  }
+
+  // Check if user is requesting milestone creation for existing projects
+  const milestoneRequest = detectMilestoneRequest(message);
+  if (milestoneRequest.isRequest) {
+    console.log('🎯 Milestone creation request detected:', milestoneRequest);
+    
+    try {
+      const milestoneResult = await createMilestonesForProject(
+        milestoneRequest.projectName || 'ATMO',
+        milestoneRequest.milestoneNames || []
+      );
+
+      if (milestoneResult.success) {
+        console.log(`✅ ${milestoneResult.milestoneIds?.length || 0} milestone(s) created successfully`);
+        // Add milestone creation info to response
+        response.milestonesCreated = true;
+        response.milestoneCount = milestoneResult.milestoneIds?.length || 0;
+
+        // Notify UI to refresh Priority Stream immediately
+        try {
+          window.dispatchEvent(new CustomEvent('atmo:priority-stream:refresh'));
+        } catch (e) {
+          console.warn('Unable to dispatch priority stream refresh event:', e);
+        }
+      } else {
+        console.error('❌ Milestone creation failed:', milestoneResult.error);
+        response.milestoneError = milestoneResult.error;
+      }
+    } catch (error) {
+      console.error('❌ Milestone creation error:', error);
+      response.milestoneError = error instanceof Error ? error.message : 'Unknown error';
+    }
+  }
+
+  // Check if user is requesting priority stream creation (new projects)
+  const priorityStreamRequest = detectPriorityStreamRequest(message);
+  if (priorityStreamRequest.isRequest) {
+    console.log('🎯 Priority stream creation request detected:', priorityStreamRequest);
+    
+    try {
+      // Create multiple priority streams if requested
+      const streamNames = extractMultipleStreamNames(message);
+      const results = [];
+      
+      for (const streamName of streamNames) {
+        const streamResult = await createPriorityStream({
+          name: streamName,
+          description: `Priority stream created from chat: "${message}"`,
+          priority: priorityStreamRequest.priority as 'high' | 'medium' | 'low' || 'high',
+          context: message
+        });
+        
+        results.push(streamResult);
+      }
+
+      const successCount = results.filter(r => r.success).length;
+      if (successCount > 0) {
+        console.log(`✅ ${successCount} priority stream(s) created successfully`);
+        // Add priority stream creation info to response
+        response.priorityStreamCreated = true;
+        response.priorityStreamCount = successCount;
+
+        // Notify UI to refresh Priority Stream immediately
+        try {
+          window.dispatchEvent(new CustomEvent('atmo:priority-stream:refresh'));
+        } catch (e) {
+          console.warn('Unable to dispatch priority stream refresh event:', e);
+        }
+      } else {
+        const errors = results.map(r => r.error).filter(Boolean);
+        console.error('❌ Priority stream creation failed:', errors);
+        response.priorityStreamError = errors.join('; ');
+      }
+    } catch (error) {
+      console.error('❌ Priority stream creation error:', error);
+      response.priorityStreamError = error instanceof Error ? error.message : 'Unknown error';
     }
   }
 

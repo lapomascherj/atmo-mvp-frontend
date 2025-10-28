@@ -1864,6 +1864,22 @@ export const ChatOverlay: React.FC<ChatOverlayProps> = ({
           responseText = `${response.response}\n\n**Created:**\n${createdList}`;
         }
 
+        // Add milestone creation feedback
+        if (response.milestonesCreated) {
+          const count = response.milestoneCount || 1;
+          responseText += `\n\n🎯 **${count} Milestone${count > 1 ? 's' : ''} Created!** Added to your project in Priority Stream panel.`;
+        } else if (response.milestoneError) {
+          responseText += `\n\n❌ **Milestone Error:** ${response.milestoneError}`;
+        }
+
+        // Add priority stream creation feedback
+        if (response.priorityStreamCreated) {
+          const count = response.priorityStreamCount || 1;
+          responseText += `\n\n🎯 **${count} Priority Stream${count > 1 ? 's' : ''} Created!** Check your Priority Stream panel to see the new stream${count > 1 ? 's' : ''}.`;
+        } else if (response.priorityStreamError) {
+          responseText += `\n\n❌ **Priority Stream Error:** ${response.priorityStreamError}`;
+        }
+
         // Add AI response
         const aiMessage = {
           id: (Date.now() + 1).toString(),
@@ -1877,6 +1893,12 @@ export const ChatOverlay: React.FC<ChatOverlayProps> = ({
         if (response.documentGenerated) {
           console.log('📄 Document generated! Refreshing ATMO Outputs card...');
           window.dispatchEvent(new Event('atmo:outputs:refresh'));
+        }
+
+        // CRITICAL: If a priority stream was created, refresh the Priority Stream panel
+        if (response.priorityStreamCreated) {
+          console.log('🎯 Priority stream created! Refreshing Priority Stream panel...');
+          window.dispatchEvent(new Event('atmo:priority-stream:refresh'));
         }
 
         // CRITICAL FIX: Wait for entity creation and synchronize properly

@@ -178,6 +178,12 @@ const DigitalBrain: React.FC = () => {
     const analyzeAndUpdateFocusAreas = async () => {
       if (!user?.id) return;
 
+      // Check if we're in demo mode
+      const isDemoMode = !import.meta.env.VITE_SUPABASE_URL || 
+                        import.meta.env.VITE_SUPABASE_URL.includes('placeholder') ||
+                        !import.meta.env.VITE_SUPABASE_ANON_KEY ||
+                        import.meta.env.VITE_SUPABASE_ANON_KEY.includes('placeholder');
+
       // Prevent multiple concurrent analyses
       if (isAnalyzingFocusAreas) {
         console.log('⏳ DIGITAL BRAIN: Focus area analysis already in progress, skipping');
@@ -212,45 +218,57 @@ const DigitalBrain: React.FC = () => {
         // Get role from onboarding or profile
         const role = onboardingData?.work?.role || onboardingData?.identity?.role || 'Professional';
 
-        // Get recent chat messages
-        const chatMessages = await getRecentMessagesFromActiveSession(50);
-        setRecentChatMessages(chatMessages); // Cache for focus area insights
+        let chatMessages: any[] = [];
+        let intelligentAreas: string[] = [];
 
-        // Analyze using intelligent algorithm
-        const intelligentAreas = analyzeIntelligentFocusAreas(
-          storeProjects,
-          chatMessages,
-          role,
-          5 // Max 5 areas
-        );
-
-        if (intelligentAreas.length > 0) {
+        if (isDemoMode) {
+          console.log('🎭 Demo mode: Using mock focus areas');
+          // Use mock data for demo mode
+          intelligentAreas = ['Development', 'Design', 'Product Management', 'Marketing', 'Operations'];
           setFocusAreas(intelligentAreas);
-
-          // Save to database with timestamp
-          await updateUserProfile(user.id, {
-            focusAreas: intelligentAreas,
-          });
-
-          // Also update the timestamp in onboarding_data
-          await supabase
-            .from('profiles')
-            .update({
-              onboarding_data: {
-                ...onboardingData,
-                work: {
-                  ...(onboardingData?.work || {}),
-                  focusAreas: intelligentAreas,
-                  focusAreasUpdatedAt: new Date().toISOString(),
-                }
-              }
-            })
-            .eq('id', user.id);
-
           focusAreasAnalyzedRef.current = user.id;
-          console.log('✅ Automatically updated focus areas:', intelligentAreas);
+          console.log('✅ Demo focus areas set:', intelligentAreas);
         } else {
-          console.warn('⚠️ No focus areas detected from analysis');
+          // Get recent chat messages
+          chatMessages = await getRecentMessagesFromActiveSession(50);
+          setRecentChatMessages(chatMessages); // Cache for focus area insights
+
+          // Analyze using intelligent algorithm
+          intelligentAreas = analyzeIntelligentFocusAreas(
+            storeProjects,
+            chatMessages,
+            role,
+            5 // Max 5 areas
+          );
+
+          if (intelligentAreas.length > 0) {
+            setFocusAreas(intelligentAreas);
+
+            // Save to database with timestamp
+            await updateUserProfile(user.id, {
+              focusAreas: intelligentAreas,
+            });
+
+            // Also update the timestamp in onboarding_data
+            await supabase
+              .from('profiles')
+              .update({
+                onboarding_data: {
+                  ...onboardingData,
+                  work: {
+                    ...(onboardingData?.work || {}),
+                    focusAreas: intelligentAreas,
+                    focusAreasUpdatedAt: new Date().toISOString(),
+                  }
+                }
+              })
+              .eq('id', user.id);
+
+            focusAreasAnalyzedRef.current = user.id;
+            console.log('✅ Automatically updated focus areas:', intelligentAreas);
+          } else {
+            console.warn('⚠️ No focus areas detected from analysis');
+          }
         }
       } catch (error) {
         console.error('Failed to analyze focus areas:', error);
@@ -321,6 +339,18 @@ const DigitalBrain: React.FC = () => {
 
     console.log('📊 Computing user level for user:', user.id);
 
+    // Check if we're in demo mode
+    const isDemoMode = !import.meta.env.VITE_SUPABASE_URL || 
+                      import.meta.env.VITE_SUPABASE_URL.includes('placeholder') ||
+                      !import.meta.env.VITE_SUPABASE_ANON_KEY ||
+                      import.meta.env.VITE_SUPABASE_ANON_KEY.includes('placeholder');
+
+    if (isDemoMode) {
+      console.log('🎭 Demo mode: Using mock user level');
+      setUserLevel(3); // Mock level for demo
+      return;
+    }
+
     supabase.rpc('compute_user_level', { user_id: user.id })
       .then(({ data, error }) => {
         if (error) {
@@ -374,10 +404,24 @@ const DigitalBrain: React.FC = () => {
   const handleRecalculateFocusAreas = async () => {
     if (!user?.id || isAnalyzingFocusAreas) return;
 
+    // Check if we're in demo mode
+    const isDemoMode = !import.meta.env.VITE_SUPABASE_URL || 
+                      import.meta.env.VITE_SUPABASE_URL.includes('placeholder') ||
+                      !import.meta.env.VITE_SUPABASE_ANON_KEY ||
+                      import.meta.env.VITE_SUPABASE_ANON_KEY.includes('placeholder');
+
     setIsAnalyzingFocusAreas(true);
     console.log('🔄 Manually triggered focus area recalculation...');
 
     try {
+      if (isDemoMode) {
+        console.log('🎭 Demo mode: Using mock focus areas for recalculation');
+        const mockAreas = ['Development', 'Design', 'Product Management', 'Marketing', 'Operations'];
+        setFocusAreas(mockAreas);
+        console.log('✅ Demo focus areas recalculated:', mockAreas);
+        return;
+      }
+
       const onboardingData = user.onboarding_data as any;
       const role = onboardingData?.work?.role || onboardingData?.identity?.role || 'Professional';
       const chatMessages = await getRecentMessagesFromActiveSession(50);
@@ -419,7 +463,20 @@ const DigitalBrain: React.FC = () => {
 
   const handleSaveGrowthTracker = async () => {
     if (!user?.id) return;
+    
+    // Check if we're in demo mode
+    const isDemoMode = !import.meta.env.VITE_SUPABASE_URL || 
+                      import.meta.env.VITE_SUPABASE_URL.includes('placeholder') ||
+                      !import.meta.env.VITE_SUPABASE_ANON_KEY ||
+                      import.meta.env.VITE_SUPABASE_ANON_KEY.includes('placeholder');
+
     try {
+      if (isDemoMode) {
+        console.log('🎭 Demo mode: Growth tracker saved locally');
+        setEditingGrowthTracker(false);
+        return;
+      }
+
       await updateUserProfile(user.id, { growthTracker: growthTrackerInput });
       setEditingGrowthTracker(false);
     } catch (error) {
@@ -429,10 +486,23 @@ const DigitalBrain: React.FC = () => {
 
   const handleToggleGrowthTracker = async () => {
     if (!user?.id) return;
+    
+    // Check if we're in demo mode
+    const isDemoMode = !import.meta.env.VITE_SUPABASE_URL || 
+                      import.meta.env.VITE_SUPABASE_URL.includes('placeholder') ||
+                      !import.meta.env.VITE_SUPABASE_ANON_KEY ||
+                      import.meta.env.VITE_SUPABASE_ANON_KEY.includes('placeholder');
+
     const newDismissedState = !growthTrackerDismissed;
     try {
       // Optimistic update
       setGrowthTrackerDismissed(newDismissedState);
+      
+      if (isDemoMode) {
+        console.log('🎭 Demo mode: Growth tracker toggle saved locally');
+        return;
+      }
+
       await toggleGrowthTrackerDismissed(user.id, newDismissedState);
     } catch (error) {
       // Rollback on failure
@@ -448,7 +518,20 @@ const DigitalBrain: React.FC = () => {
       return;
     }
 
+    // Check if we're in demo mode
+    const isDemoMode = !import.meta.env.VITE_SUPABASE_URL || 
+                      import.meta.env.VITE_SUPABASE_URL.includes('placeholder') ||
+                      !import.meta.env.VITE_SUPABASE_ANON_KEY ||
+                      import.meta.env.VITE_SUPABASE_ANON_KEY.includes('placeholder');
+
     console.log('📝 Loading growth tracker data for user:', user.id);
+
+    if (isDemoMode) {
+      console.log('🎭 Demo mode: Using mock growth tracker data');
+      setGrowthTrackerInput('Demo growth tracker - focus on personal development and skill building');
+      setGrowthTrackerDismissed(false);
+      return;
+    }
 
     supabase
       .from('profiles')
@@ -509,9 +592,20 @@ const DigitalBrain: React.FC = () => {
   useEffect(() => {
     if (!editingGrowthTracker || !user?.id) return;
 
+    // Check if we're in demo mode
+    const isDemoMode = !import.meta.env.VITE_SUPABASE_URL || 
+                      import.meta.env.VITE_SUPABASE_URL.includes('placeholder') ||
+                      !import.meta.env.VITE_SUPABASE_ANON_KEY ||
+                      import.meta.env.VITE_SUPABASE_ANON_KEY.includes('placeholder');
+
     const debounceTimer = setTimeout(async () => {
       if (growthTrackerInput.trim()) {
         try {
+          if (isDemoMode) {
+            console.log(`💾 [${new Date().toLocaleTimeString()}] Growth Tracker auto-saved locally (demo mode)`);
+            return;
+          }
+
           await updateUserProfile(user.id, { growthTracker: growthTrackerInput });
           console.log(`💾 [${new Date().toLocaleTimeString()}] Growth Tracker auto-saved`);
         } catch (error) {

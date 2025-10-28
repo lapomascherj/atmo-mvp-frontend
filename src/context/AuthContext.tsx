@@ -12,6 +12,180 @@ import { Session, User, AuthError, PostgrestError } from '@supabase/supabase-js'
 import { supabase, UserProfile, SUPABASE_STORAGE_KEY, isSupabaseConfigured } from '@/lib/supabase';
 import { PROFILE_SCHEMA_VERSION, ProfileDraft } from '@/types/profile';
 import SupabaseConfigurationError from '@/components/organisms/SupabaseConfigurationError';
+import { Focus } from '@/models/Focus';
+import { JobTitle } from '@/models/JobTitle';
+
+// Demo Auth Provider for development without Supabase
+const DemoAuthProvider = ({ children }: { children: ReactNode }) => {
+  const [session, setSession] = useState<any>(null);
+  const [user, setUser] = useState<any>(null);
+  const [profile, setProfile] = useState<any>(null);
+  const [hydratedProfile, setHydratedProfile] = useState({
+    id: 'demo-user',
+    iam: 'demo-user',
+    email: 'demo@example.com',
+    nickname: 'ATMO Explorer',
+    onboarding_completed: true,
+    focus: Focus.ProjectExecution,
+    job_title: JobTitle.Developer,
+    avatar_url: null,
+    professional_role: 'Builder',
+    bio: 'Demo user for development',
+    location: '',
+    website: '',
+    company: '',
+    phone: '',
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    aiPreferences: 'detailed',
+    communicationStyle: 'detailed',
+    focusAreas: [],
+    mainPriority: '',
+  });
+  const [initializing] = useState(false);
+  const [profileLoading] = useState(false);
+  const [lastError, setLastError] = useState<string | null>(null);
+
+  // Demo login function that simulates successful authentication
+  const demoSignIn = async (email: string, password: string) => {
+    console.log('🔐 Demo login attempt:', email);
+    
+    // Simulate a brief loading state
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Create a mock session and user
+    const mockSession = {
+      access_token: 'demo-token',
+      refresh_token: 'demo-refresh-token',
+      expires_at: Date.now() + 3600000, // 1 hour
+      user: {
+        id: 'demo-user',
+        email: email,
+        created_at: new Date().toISOString(),
+      }
+    };
+    
+    const mockUser = {
+      id: 'demo-user',
+      email: email,
+      created_at: new Date().toISOString(),
+    };
+    
+    // Create a mock profile that matches the expected structure
+    const mockProfile = {
+      id: 'demo-user',
+      email: email,
+      display_name: 'ATMO Explorer',
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      onboarding_completed: true,
+      onboarding_data: {
+        personal: {
+          nickname: 'ATMO Explorer',
+          preferredName: 'ATMO Explorer',
+          bio: 'Demo user for development'
+        },
+        work: {
+          role: 'Builder',
+          company: 'ATMO',
+          focusAreas: ['Development', 'Design', 'Product Management']
+        },
+        performance: {
+          northStar: 'Build amazing products',
+          weeklyCommitment: 'Focus on user experience'
+        }
+      },
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      avatar_url: null,
+    };
+    
+    setSession(mockSession);
+    setUser(mockUser);
+    setProfile(mockProfile);
+    setHydratedProfile({
+      id: 'demo-user',
+      iam: 'demo-user',
+      email: email,
+      nickname: 'ATMO Explorer',
+      onboarding_completed: true,
+      focus: Focus.ProjectExecution,
+      job_title: JobTitle.Developer,
+      avatar_url: null,
+      professional_role: 'Builder',
+      bio: 'Demo user for development',
+      location: '',
+      website: '',
+      company: 'ATMO',
+      phone: '',
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      aiPreferences: 'detailed',
+      communicationStyle: 'detailed',
+      focusAreas: ['Development', 'Design', 'Product Management'],
+      mainPriority: 'Build amazing products',
+    });
+    setLastError(null);
+    
+    console.log('✅ Demo login successful');
+    return {}; // No error
+  };
+
+  // Demo signup function
+  const demoSignUp = async (email: string, password: string) => {
+    console.log('📝 Demo signup attempt:', email);
+    
+    // Simulate a brief loading state
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // For demo, just redirect to login
+    return demoSignIn(email, password);
+  };
+
+  // Demo signout function
+  const demoSignOut = async () => {
+    console.log('🚪 Demo signout');
+    setSession(null);
+    setUser(null);
+    setProfile(null);
+    setHydratedProfile(null);
+  };
+
+  // Demo profile update function
+  const demoUpdateProfile = async (updates: any) => {
+    console.log('👤 Demo profile update:', updates);
+    setHydratedProfile(prev => ({ ...prev, ...updates }));
+    return {}; // No error
+  };
+
+  // Demo onboarding completion function
+  const demoCompleteOnboarding = async (data: any) => {
+    console.log('🎯 Demo onboarding completion:', data);
+    setHydratedProfile(prev => ({ ...prev, onboarding_completed: true, ...data }));
+    return {}; // No error
+  };
+
+  const authContextValue = {
+    session,
+    user,
+    profile,
+    hydratedProfile,
+    initializing,
+    profileLoading,
+    lastError,
+    signUp: demoSignUp,
+    signIn: demoSignIn,
+    signOut: demoSignOut,
+    updateProfile: demoUpdateProfile,
+    completeOnboarding: demoCompleteOnboarding,
+    requestPasswordReset: async () => ({ error: 'Demo mode - password reset not available' }),
+    refreshProfile: async () => {},
+    clearError: () => setLastError(null),
+  };
+
+  return (
+    <AuthContext.Provider value={authContextValue}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
 
 interface BasicProfileUpdates {
   display_name?: string;
@@ -67,6 +241,14 @@ export interface HydratedProfile {
   avatar_url?: string | null;
   company?: string;
   bio?: string;
+  // Additional properties for compatibility with useMockAuth
+  iam?: string;
+  professional_role?: string;
+  location?: string;
+  website?: string;
+  phone?: string;
+  aiPreferences?: string;
+  communicationStyle?: string;
 }
 
 type RawOnboardingData = {
@@ -174,6 +356,14 @@ const transformProfile = (profile: UserProfile | null): HydratedProfile | null =
       avatar_url: profile.avatar_url,
       company: work.company,
       bio: personal.bio || (data.bio as string | undefined),
+      // Additional properties for compatibility
+      iam: profile.id,
+      professional_role: work.role,
+      location: personal.location as string | undefined,
+      website: connections.website as string | undefined,
+      phone: personal.phone as string | undefined,
+      aiPreferences: (data.aiPreferences as string | undefined) ?? undefined,
+      communicationStyle: (data.assistantTone as string | undefined) ?? undefined,
     };
   }
 
@@ -213,6 +403,14 @@ const transformProfile = (profile: UserProfile | null): HydratedProfile | null =
     avatar_url: profile.avatar_url ?? data.avatar_url ?? data.avatarUrl ?? null,
     company: identity?.company ?? data.company,
     bio: data.bio,
+    // Additional properties for compatibility
+    iam: profile.id,
+    professional_role: identity?.role ?? data.job_title ?? data.jobTitle,
+    location: data.location as string | undefined,
+    website: data.website as string | undefined,
+    phone: data.phone as string | undefined,
+    aiPreferences: data.workStyle ?? data.aiPreferences,
+    communicationStyle: data.assistantTone ?? data.communicationStyle,
   };
 };
 
@@ -249,6 +447,13 @@ const createFallbackProfile = (targetUser: User | null): UserProfile | null => {
 };
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  // For development, allow demo mode even without Supabase configuration
+  if (!isSupabaseConfigured && import.meta.env.DEV) {
+    console.warn('[AuthProvider] Running in demo mode - Supabase features disabled');
+    // Return a demo auth provider that works without Supabase
+    return <DemoAuthProvider>{children}</DemoAuthProvider>;
+  }
+  
   // Check Supabase configuration early and show error if not configured
   if (!isSupabaseConfigured) {
     return <SupabaseConfigurationError />;

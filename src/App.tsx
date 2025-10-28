@@ -28,6 +28,13 @@ import {AuthProvider} from "@/context/AuthContext";
 
 const queryClient = new QueryClient();
 
+// Router configuration with future flags
+const routerConfig = {
+  future: {
+    v7_relativeSplatPath: true,
+  },
+};
+
 // Simple layout component without authentication
 const AppLayout: React.FC<{children: React.ReactNode}> = ({children}) => {
     const { sidebarWidth } = useSidebar();
@@ -120,7 +127,7 @@ function App() {
         <ErrorBoundary>
             <QueryClientProvider client={queryClient}>
                 <TooltipProvider>
-                    <BrowserRouter>
+                    <BrowserRouter future={routerConfig.future}>
                         <AuthProvider>
                             <SidebarProvider>
                                 <DailyMapCtxProvider>

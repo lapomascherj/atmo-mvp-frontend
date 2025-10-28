@@ -189,9 +189,150 @@ export const usePersonasStore = create<PersonasStoreState>((set, get) => {
     const profile = get().profileSnapshot;
     const integrations = get().integrations;
 
-    console.log(`   → Calling fetchWorkspaceGraph...`);
-    const { projects: rawProjects, knowledgeItems, insights } = await fetchWorkspaceGraph(ownerId);
-    console.log(`   → fetchWorkspaceGraph returned: ${rawProjects.length} projects, ${knowledgeItems.length} knowledge items`);
+    // Check if we're in demo mode (no Supabase configuration)
+    const isDemoMode = !import.meta.env.VITE_SUPABASE_URL || 
+                      import.meta.env.VITE_SUPABASE_URL.includes('placeholder') ||
+                      !import.meta.env.VITE_SUPABASE_ANON_KEY ||
+                      import.meta.env.VITE_SUPABASE_ANON_KEY.includes('placeholder');
+
+    let rawProjects: any[] = [];
+    let knowledgeItems: any[] = [];
+    let insights: any[] = [];
+
+    if (isDemoMode) {
+      console.log(`   → Demo mode detected, using mock data...`);
+      // Use mock data for demo mode
+      rawProjects = [
+        {
+          id: 'demo-project-1',
+          name: 'Yourself',
+          description: 'Personal development and self-improvement',
+          status: 'active',
+          priority: 'high',
+          color: '#3b82f6',
+          progress: 65,
+          active: true,
+          start_date: new Date().toISOString(),
+          target_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          time_invested: 120,
+          last_update: new Date().toISOString(),
+          tags: ['personal', 'development'],
+          notes: 'Focus on personal growth and skill development',
+          goals: [
+            {
+              id: 'demo-goal-1',
+              name: 'Learn New Skills',
+              status: 'Active',
+              priority: 'High',
+              targetDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+              description: 'Master new technologies and improve existing skills',
+              order: 1,
+              tasks: [
+                {
+                  id: 'demo-task-1',
+                  name: 'Complete React Advanced Course',
+                  description: 'Finish the advanced React course on the platform',
+                  priority: 'High',
+                  completed: true,
+                  agency: 'Human',
+                  color: '30',
+                  estimated_time: 120,
+                  created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+                  updated_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+                  rollover_count: 0,
+                  archived_at: null
+                },
+                {
+                  id: 'demo-task-2',
+                  name: 'Practice TypeScript',
+                  description: 'Build a small project using TypeScript',
+                  priority: 'Medium',
+                  completed: false,
+                  agency: 'Human',
+                  color: '30',
+                  estimated_time: 90,
+                  created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+                  updated_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+                  rollover_count: 1,
+                  archived_at: null
+                }
+              ]
+            }
+          ],
+          items: [],
+          milestones: []
+        },
+        {
+          id: 'demo-project-2',
+          name: 'ATMO',
+          description: 'ATMO platform development and features',
+          status: 'active',
+          priority: 'high',
+          color: '#10b981',
+          progress: 40,
+          active: true,
+          start_date: new Date().toISOString(),
+          target_date: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
+          time_invested: 200,
+          last_update: new Date().toISOString(),
+          tags: ['platform', 'development'],
+          notes: 'Building the ATMO platform with advanced features',
+          goals: [
+            {
+              id: 'demo-goal-2',
+              name: 'Priority Stream Enhancement',
+              status: 'Active',
+              priority: 'High',
+              targetDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+              description: 'Implement the new hierarchical Priority Stream design',
+              order: 1,
+              tasks: [
+                {
+                  id: 'demo-task-3',
+                  name: 'Design Priority Stream UI',
+                  description: 'Create the Apple-style design for Priority Stream',
+                  priority: 'High',
+                  completed: true,
+                  agency: 'Human',
+                  color: '30',
+                  estimated_time: 180,
+                  created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+                  updated_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+                  rollover_count: 0,
+                  archived_at: null
+                },
+                {
+                  id: 'demo-task-4',
+                  name: 'Implement Data Synchronization',
+                  description: 'Connect Priority Stream with Project Card data',
+                  priority: 'High',
+                  completed: false,
+                  agency: 'Human',
+                  color: '30',
+                  estimated_time: 240,
+                  created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+                  updated_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+                  rollover_count: 0,
+                  archived_at: null
+                }
+              ]
+            }
+          ],
+          items: [],
+          milestones: []
+        }
+      ];
+      knowledgeItems = [];
+      insights = [];
+      console.log(`   → Demo data loaded: ${rawProjects.length} projects`);
+    } else {
+      console.log(`   → Calling fetchWorkspaceGraph...`);
+      const result = await fetchWorkspaceGraph(ownerId);
+      rawProjects = result.projects;
+      knowledgeItems = result.knowledgeItems;
+      insights = result.insights;
+      console.log(`   → fetchWorkspaceGraph returned: ${rawProjects.length} projects, ${knowledgeItems.length} knowledge items`);
+    }
 
     // Calculate progress for all projects based on task completion
     const projects = updateProjectsProgress(rawProjects).filter((project) => {

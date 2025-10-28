@@ -42,16 +42,49 @@ interface PromptState {
   setHistory: (entries: PromptInput[]) => void;
 }
 
-export const promptStore = create<PromptState>((set) => ({
-  history: new Array<PromptInput>(),
-  input: {
-    message: "",
-    sender: "user",
-  },
-  isConversationStarted: false,
-  isResponding: false,
-  isVoiceMessage: false,
-  context: [],
+// Load persisted state from localStorage
+const loadPersistedState = () => {
+  try {
+    const persisted = localStorage.getItem('atmo_prompt_store');
+    if (persisted) {
+      const parsed = JSON.parse(persisted);
+      return {
+        history: parsed.history || new Array<PromptInput>(),
+        input: parsed.input || { message: "", sender: "user" },
+        isConversationStarted: parsed.isConversationStarted || false,
+        isResponding: parsed.isResponding || false,
+        isVoiceMessage: parsed.isVoiceMessage || false,
+        currentTask: parsed.currentTask || undefined,
+        currentGoal: parsed.currentGoal || undefined,
+        context: parsed.context || [],
+      };
+    }
+  } catch (error) {
+    console.warn('Failed to load persisted prompt store state:', error);
+  }
+  return {
+    history: new Array<PromptInput>(),
+    input: { message: "", sender: "user" },
+    isConversationStarted: false,
+    isResponding: false,
+    isVoiceMessage: false,
+    currentTask: undefined,
+    currentGoal: undefined,
+    context: [],
+  };
+};
+
+// Save state to localStorage
+const savePersistedState = (state: Partial<PromptState>) => {
+  try {
+    localStorage.setItem('atmo_prompt_store', JSON.stringify(state));
+  } catch (error) {
+    console.warn('Failed to save prompt store state:', error);
+  }
+};
+
+export const promptStore = create<PromptState>((set, get) => ({
+  ...loadPersistedState(),
 
   passTaskToPrompt: (task: Task) =>
     set((state) => ({
@@ -294,8 +327,11 @@ Would you like me to help you think through any specific aspect of this task? I'
     }));
   },
 
-  resetConversationState: () =>
-    set(() => ({
+  resetConversationState: () => {
+    // Don't reset conversation state unless explicitly needed
+    // This prevents accidental state loss
+    console.log('⚠️ Conversation state reset requested - this should be used sparingly');
+    const newState = {
       history: new Array<PromptInput>(),
       input: {
         message: "",
@@ -307,5 +343,9 @@ Would you like me to help you think through any specific aspect of this task? I'
       currentTask: undefined,
       currentGoal: undefined,
       context: [],
-    })),
+    };
+    set(() => newState);
+    // Save to localStorage
+    savePersistedState(newState);
+  },
 }));

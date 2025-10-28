@@ -84,8 +84,8 @@ export const OnboardingStatusIndicator: React.FC<OnboardingStatusIndicatorProps>
       }
     };
 
-    // Update progress every 1 second for real-time updates
-    const interval = setInterval(updateProgress, 1000);
+    // Update progress every 5 seconds to reduce unnecessary calls
+    const interval = setInterval(updateProgress, 5000);
     return () => clearInterval(interval);
   }, [userId, onComplete]);
 

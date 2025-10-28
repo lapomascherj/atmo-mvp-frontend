@@ -832,7 +832,10 @@ const DigitalBrain: React.FC = () => {
           <h2 className="text-xl font-semibold text-white mb-2">Authentication Required</h2>
           <p className="text-white/60 text-sm mb-4">Please sign in to access your Digital Brain.</p>
           <button
-            onClick={() => window.location.reload()}
+            onClick={() => {
+              // Reset component state instead of reloading page
+              window.location.href = '/digital-brain';
+            }}
             className="px-4 py-2 bg-[#CC5500] hover:bg-[#CC5500]/80 text-white rounded-lg transition-colors"
           >
             Reload Page

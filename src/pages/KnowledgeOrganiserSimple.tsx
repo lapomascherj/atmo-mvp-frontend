@@ -58,7 +58,10 @@ const KnowledgeOrganiserSimple: React.FC = () => {
                         <div className="text-center py-24">
                             <p className="text-red-400 text-lg mb-4">Error: {error}</p>
                             <Button
-                                onClick={() => window.location.reload()}
+                                onClick={() => {
+                                  // Navigate to refresh the component state
+                                  window.location.href = '/knowledge-organiser';
+                                }}
                                 variant="outline"
                                 className="border-slate-700 text-slate-300 hover:bg-slate-800"
                             >

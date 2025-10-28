@@ -9,7 +9,8 @@ interface SupabaseConfigurationErrorProps {
 
 export const SupabaseConfigurationError: React.FC<SupabaseConfigurationErrorProps> = ({ onRetry }) => {
   const refreshPage = () => {
-    window.location.reload();
+    // Navigate to home instead of reloading
+    window.location.href = '/';
   };
 
   return (

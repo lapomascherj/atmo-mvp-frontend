@@ -46,19 +46,26 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
             </p>
             <div className="space-y-2">
               <button
-                onClick={() => window.location.reload()}
+                onClick={() => {
+                  // Reset error state instead of reloading page
+                  this.setState({ hasError: false, error: null });
+                }}
                 className="w-full px-4 py-2 bg-[#FF7000] text-white rounded-lg hover:bg-[#E5630A] transition-colors"
               >
-                Refresh Page
+                Try Again
               </button>
               <button
                 onClick={() => {
-                  localStorage.clear();
+                  // Clear only auth data, not all localStorage
+                  localStorage.removeItem("atmo_auth_token");
+                  localStorage.removeItem("atmo_token_data");
+                  localStorage.removeItem("atmo_user_data");
+                  // Use React Router navigation instead of page reload
                   window.location.href = '/auth/login';
                 }}
                 className="w-full px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors"
               >
-                Clear Data & Login
+                Clear Auth & Login
               </button>
             </div>
             {this.state.error && (

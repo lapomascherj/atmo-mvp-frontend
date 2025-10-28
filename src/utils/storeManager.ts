@@ -23,17 +23,15 @@ export const clearAllStoresAndRedirect = () => {
   try {
     clearAllStores();
 
-    // Force app restart by reloading the page
-    // This is the safest way to ensure all stores are cleared
-    setTimeout(() => {
-      window.location.href = "/auth/login";
-    }, 100);
-
+    // Use React Router navigation instead of page reload
+    // This prevents state loss and maintains app stability
+    console.log("✅ STORE MANAGER: Cleared stores, redirecting to login");
+    
+    // Return a flag that components can use to trigger navigation
+    // This prevents forced page reloads
     return true;
   } catch (error) {
     console.error("❌ STORE MANAGER: Error clearing stores:", error);
-    // Fallback - still try to redirect
-    window.location.href = "/auth/login";
     return false;
   }
 };

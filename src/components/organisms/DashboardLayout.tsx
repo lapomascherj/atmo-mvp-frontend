@@ -129,8 +129,8 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ userName }) => {
     };
     
     checkForNewContent();
-    // Check every hour for 6am reset
-    const interval = setInterval(checkForNewContent, 60 * 60 * 1000);
+    // Check every 2 hours instead of every hour to reduce unnecessary calls
+    const interval = setInterval(checkForNewContent, 2 * 60 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
 

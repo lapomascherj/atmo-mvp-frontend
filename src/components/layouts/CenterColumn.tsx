@@ -251,8 +251,8 @@ const CenterColumn: React.FC<CenterColumnProps> = ({ maxWidthPercent = 100, init
             }
         };
 
-        // Check every 5 seconds
-        const interval = setInterval(checkOnboardingStatus, 5000);
+        // Check every 30 seconds instead of 5 seconds to reduce unnecessary calls
+        const interval = setInterval(checkOnboardingStatus, 30000);
         return () => clearInterval(interval);
     }, [isOnboardingMode, user?.id]);
 
